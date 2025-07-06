@@ -1055,6 +1055,7 @@
 
         // Gameplay Constants
         const RESPAWN_TURN_TIMER = 10;
+        const MAX_BASE_CAMP_TURNS = 7;
         const MAX_UNITS_PER_PLAYER = 4;
         const UNIT_CAPS = {
             Melee: 2,
@@ -1129,16 +1130,16 @@
 
         const UNIT_SVGS = {
             MELEE: `<svg viewBox="170 60 110 280" fill="white">
-                        <path d="M 224.613 61.934 L 240.516 108.172 L 208.709 108.172 L 224.613 61.934 Z"/>
-                        <rect x="208.709" y="108.172" width="31.807" height="192.313"/>
-                        <rect x="172.161" y="233.27" width="103.853" height="22.254"/>
-                        <ellipse cx="224.526" cy="312.975" rx="20.582" ry="20.615"/>
+                        <path d="M 224.613 61.934 L 243.516 108 L 208.709 108.172 L 224.613 61.934 Z"></path>
+                        <rect x="210.709" y="108.172" width="31.807" height="192.313"></rect>
+                        <rect x="172.161" y="233.27" width="103.853" height="22.254"></rect>
+                        <ellipse cx="224.526" cy="312.975" rx="20.582" ry="20.615"></ellipse>
                     </svg>`,
             ARCHER: `<svg viewBox="-10 -18 20 36" fill="white">
                         <path d="M 0 -17.5 L -5 -10 L -1.875 -8.75 L -1.875 5 L -6.25 17.5 L 0 13.75 L 6.25 17.5 L 1.875 5 L 1.875 -8.75 L 5 -10 Z" />
                     </svg>`,
             PIKEMAN: `<svg viewBox="-14 -20 28 40" fill="white">
-                        <path d="M -1.35 16.875 L -1.35 1.125 Q -13.5 -3.375 -1.35 -11.25 L 0 -18 L 1.35 -11.25 L 1.35 -6.75 L 7.875 -4.5 L 1.35 -2.25 L 1.35 16.875 Z" />
+                        <path d="M -1.35 16.875 L -1.35 1.125 Q -13.5 -3.375 -1.35 -11.25 L 0 -18 L 1.35 -11.25 L 1.35 -7.5 L 8.75 -4.5 L 1.35 -2.25 L 1.35 16.875 Z" />
                     </svg>`,
             HORSEMAN: `<svg viewBox="-12 -16 24 32" fill="white">
                         <path d="M-6 10 L 6 10 L 6 3 L 3 -1 L 9 -3 L 9 -7 L 2 -7 L -2 -12 L -4 -8 L -6 2 Z" />
@@ -1379,6 +1380,19 @@
             return false;
         }
 
+        function isRoad(edgeKey) {
+            const edge = gameState.edges.get(edgeKey);
+            if (!edge) return false;
+
+            const tile1 = gameState.tiles.get(getTileKey(edge.q1, edge.r1));
+            const tile2 = gameState.tiles.get(getTileKey(edge.q2, edge.r2));
+
+            if (!tile1 || !tile2) return false;
+
+            // A road cannot be on an edge connected to a water tile.
+            return tile1.type !== TILE_TYPES.WATER && tile2.type !== TILE_TYPES.WATER;
+        }
+
         // --- LOS Helper Functions ---
         function getEdgesOfTile(q, r) {
             const edges = new Set(); 
@@ -1551,6 +1565,9 @@
                 currentMove: type.baseMove, positionType: 'edge', position: edgeKey,
                 isFortified: false, fortifiedTileKey: null, hasPerformedMajorAction: false,
                 isCarryingFlag: false,
+                turnsFortifiedAtBase: 0,
+                canHeal: true,
+                supplyLine: null,
                 lastAttackedByHostileOnTurn: 0 
             };
         }
@@ -1561,18 +1578,18 @@
 
             const isEdgeValidForSpawn = (edgeKey) => {
                 const edge = gameState.edges.get(edgeKey);
+                // A valid edge must exist, have less than 2 units, and have NO enemy units.
+                // Also ensure it's not the home flag edge itself.
+                if (edgeKey === homeBaseEdgeKey) return false;
                 return edge && edge.units.length < 2 && !edge.units.some(u => u.player !== player);
             };
 
-            if (isEdgeValidForSpawn(homeBaseEdgeKey)) {
-                spawnEdgeKey = homeBaseEdgeKey;
-            } else {
-                const adjacentEdges = getRotationallyAdjacentEdges(homeBaseEdgeKey);
-                for (const edgeKey of adjacentEdges) {
-                    if (isEdgeValidForSpawn(edgeKey)) {
-                        spawnEdgeKey = edgeKey;
-                        break; 
-                    }
+            // Search rotationally adjacent edges for a valid spawn point
+            const adjacentEdges = getRotationallyAdjacentEdges(homeBaseEdgeKey);
+            for (const edgeKey of adjacentEdges) {
+                if (isEdgeValidForSpawn(edgeKey)) {
+                    spawnEdgeKey = edgeKey;
+                    break; 
                 }
             }
 
@@ -1582,11 +1599,11 @@
                 const edge = gameState.edges.get(spawnEdgeKey);
                 edge.units.push(newUnit);
                 logAction(`P${player} ${unitType.name} has returned to the fight!`, player);
-                return true; 
+                return true;
             }
             
             logAction(`P${player} Base is blocked! Cannot respawn ${unitType.name}.`, player);
-            return false; 
+            return false;
         }
 
         // --- Drawing Functions ---
@@ -1681,19 +1698,51 @@
 
 
         function drawFortificationOutlines() {
+            const drawnTiles = new Set();
+
+            // Draw outlines for actively fortified units
             gameState.tiles.forEach(tile => {
                 if (tile.fortifiedByPlayer) {
-                    const { x, y } = axialToPixel(tile.q, tile.r); ctx.beginPath();
+                    const { x, y } = axialToPixel(tile.q, tile.r);
+                    ctx.beginPath();
                     for (let i = 0; i < 6; i++) {
                         const angle = Math.PI / 180 * (60 * i - 30);
-                        const vx = x + HEX_SIZE * Math.cos(angle); const vy = y + HEX_SIZE * Math.sin(angle);
+                        const vx = x + HEX_SIZE * Math.cos(angle);
+                        const vy = y + HEX_SIZE * Math.sin(angle);
                         if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
                     }
                     ctx.closePath();
                     ctx.strokeStyle = tile.fortifiedByPlayer === 1 ? UNIT_TYPES.MELEE.color : UNIT_TYPES.MELEE.enemyColor;
-                    ctx.lineWidth = 5; ctx.stroke();
+                    ctx.lineWidth = 5;
+                    ctx.stroke();
+                    drawnTiles.add(getTileKey(tile.q, tile.r));
                 }
             });
+
+            // Draw permanent outlines for Base Camp tiles
+            for (let playerNum = 1; playerNum <= 2; playerNum++) {
+                const baseEdgeKey = FLAG_HOME_POSITIONS[`player${playerNum}`];
+                const [h1, h2] = parseEdgeKey(baseEdgeKey);
+                [getTileKey(h1.q, h1.r), getTileKey(h2.q, h2.r)].forEach(tileKey => {
+                    if (!drawnTiles.has(tileKey)) { // Avoid double-drawing if a unit is fortified on base
+                         const tile = gameState.tiles.get(tileKey);
+                         if(tile){
+                            const { x, y } = axialToPixel(tile.q, tile.r);
+                            ctx.beginPath();
+                            for (let i = 0; i < 6; i++) {
+                                const angle = Math.PI / 180 * (60 * i - 30);
+                                const vx = x + HEX_SIZE * Math.cos(angle);
+                                const vy = y + HEX_SIZE * Math.sin(angle);
+                                if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+                            }
+                            ctx.closePath();
+                            ctx.strokeStyle = playerNum === 1 ? UNIT_TYPES.MELEE.color : UNIT_TYPES.MELEE.enemyColor;
+                            ctx.lineWidth = 5;
+                            ctx.stroke();
+                         }
+                    }
+                });
+            }
         }
 
         function drawContestedEdgeIndicator() {
@@ -1853,6 +1902,75 @@
                     ctx.closePath();
                     ctx.fillStyle = flagIconColor; 
                     ctx.fill(); 
+                    
+                    ctx.restore();
+                }
+            });
+        }
+
+        function drawSupplyLines() {
+            const currentTime = Date.now();
+            
+            gameState.units.forEach(unit => {
+                if (unit.isFortified && unit.supplyLine && unit.supplyLine.path) {
+                    const path = unit.supplyLine.path;
+                    if (path.length === 0) return;
+
+                    // Check for interception to determine color
+                    const isIntercepted = path.some(edgeKey => {
+                    const edge = gameState.edges.get(edgeKey);
+                    if (!edge) return false;
+                    // An edge is intercepted if it has an enemy unit that is NOT currently being dragged.
+                    return edge.units.some(u => u.player !== unit.player && (!gameState.isDragging || u.id !== gameState.draggingUnit.id));
+                });
+
+                    // Set line style based on status
+                    let lineColor, lineWidth, isDashed;
+                    if (isIntercepted) {
+                        lineColor = '#f39c12'; // Bright orange for broken supply
+                        lineWidth = 4;
+                        isDashed = true;
+                    } else {
+                        lineColor = unit.player === 1 ? 'rgba(91, 148, 255, 0.8)' : 'rgba(255, 99, 132, 0.8)';
+                        // Create a pulse effect for the line width
+                        const pulse = (Math.sin(currentTime / 300) + 1) / 2; // Varies between 0 and 1
+                        lineWidth = 2 + pulse * 3; // Varies between 2 and 5
+                        isDashed = false;
+                    }
+
+                    ctx.save();
+                    ctx.strokeStyle = lineColor;
+                    ctx.lineWidth = lineWidth;
+                    ctx.lineCap = 'round';
+                    if (isDashed) {
+                        ctx.setLineDash([15, 10]);
+                    }
+
+                    // Draw the supply line along the edges
+                    path.forEach(edgeKey => {
+                        const edge = gameState.edges.get(edgeKey);
+                        if(edge) {
+                            const p1_center = axialToPixel(edge.q1, edge.r1);
+                            const p2_center = axialToPixel(edge.q2, edge.r2);
+                            const edgeMidX = (p1_center.x + p2_center.x) / 2;
+                            const edgeMidY = (p1_center.y + p2_center.y) / 2;
+                            
+                            let perp_dx = -(p2_center.y - p1_center.y);
+                            let perp_dy = p2_center.x - p1_center.x;
+                            const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
+                            
+                            if (len_perp_vec > 0) {
+                                const scale = HEX_SIZE / 2;
+                                perp_dx = (perp_dx / len_perp_vec) * scale;
+                                perp_dy = (perp_dy / len_perp_vec) * scale;
+
+                                ctx.beginPath();
+                                ctx.moveTo(edgeMidX + perp_dx, edgeMidY + perp_dy);
+                                ctx.lineTo(edgeMidX - perp_dx, edgeMidY - perp_dy);
+                                ctx.stroke();
+                            }
+                        }
+                    });
                     
                     ctx.restore();
                 }
@@ -2296,6 +2414,7 @@
             drawContestedEdgeIndicator();
             drawBridges();
             drawFlags();
+            drawSupplyLines();
             
             drawDebugAttackRangeHighlights()
             drawMovementHighlights(); 
@@ -2553,6 +2672,8 @@
         
         // --- Game Logic Core ---
         function destroyUnit(unitToDestroy, reason = "destroyed") {
+            const activePlayer = gameState.currentPlayer;
+
             gameState.unitCounts[`player${unitToDestroy.player}`][unitToDestroy.type.name]--;
 
             if (unitToDestroy.isCarryingFlag) {
@@ -2561,7 +2682,7 @@
                     flag.status = 'at_base';
                     flag.carrierId = null;
                     unitToDestroy.isCarryingFlag = false; 
-                    logAction(`The P${flag.player} flag has been returned to base!`, gameState.currentPlayer);
+                    logAction(`The P${flag.player} flag has been returned to base!`, activePlayer);
                 }
             }
             
@@ -2573,11 +2694,11 @@
             updateRespawnQueueDisplay();
 
             if (reason === "bridge_collapse") {
-                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} fell as the bridge collapsed!`, gameState.currentPlayer, 3500);
+                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} fell as the bridge collapsed!`, activePlayer, 3500);
             } else if (reason === "zoc_move" || reason === "zoc_turn_start" || reason === "fort_zoc") {
-                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} destroyed by ZoC!`, gameState.currentPlayer, 3500);
+                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} destroyed by ZoC!`, activePlayer, 3500);
             } else {
-                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} has been destroyed!`, gameState.currentPlayer, 3000);
+                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} has been destroyed!`, activePlayer, 3000);
             }
 
             if (unitToDestroy.positionType === 'edge') {
@@ -2623,9 +2744,18 @@
                 else if (tile1.type === TILE_TYPES.FOREST || tile2.type === TILE_TYPES.FOREST) baseCost = TILE_TYPES.FOREST.baseMoveCost;
                 else baseCost = TILE_TYPES.PLAINS.baseMoveCost;
             }
-            let fortificationPenalty = 0; const enemyPlayer = unit.player === 1 ? 2 : 1;
+            let fortificationPenalty = 0; 
+            const enemyPlayer = unit.player === 1 ? 2 : 1;
+            const enemyBaseEdgeKey = FLAG_HOME_POSITIONS[`player${enemyPlayer}`];
+            const enemyBaseTiles = [enemyBaseEdgeKey.split('_')[0], enemyBaseEdgeKey.split('_')[1]];
+
             if ((tile1.fortifiedByPlayer && tile1.fortifiedByPlayer === enemyPlayer) ||
-                (tile2.fortifiedByPlayer && tile2.fortifiedByPlayer === enemyPlayer)) fortificationPenalty = 1;
+                (tile2.fortifiedByPlayer && tile2.fortifiedByPlayer === enemyPlayer) ||
+                enemyBaseTiles.includes(getTileKey(tile1.q, tile1.r)) ||
+                enemyBaseTiles.includes(getTileKey(tile2.q, tile2.r))) 
+            {
+                fortificationPenalty = 1;
+            }
             const finalCost = baseCost + fortificationPenalty;
             return Math.min(finalCost, MAX_MOVEMENT_COST);
         }
@@ -2658,14 +2788,26 @@
                     return new Map(); 
                 }
             }
+
+            const playerHomeFlagEdge = FLAG_HOME_POSITIONS[`player${unit.player}`];
             let reachable = new Map();
             let frontier = [{ edgeKey: unit.position, pathCost: 0, pathTaken: [unit.position] }];
             let minCostsFound = new Map(); minCostsFound.set(unit.position, 0);
+            
             while (frontier.length > 0) {
-                frontier.sort((a, b) => a.pathCost - b.pathCost); const current = frontier.shift();
+                frontier.sort((a, b) => a.pathCost - b.pathCost); 
+                const current = frontier.shift();
+
                 if (current.pathCost > (minCostsFound.get(current.edgeKey) || Infinity)) continue;
+                
                 const rotationallyAdjacentEdges = getRotationallyAdjacentEdges(current.edgeKey);
+
                 for (const nextAdjacentEdgeKey of rotationallyAdjacentEdges) {
+                    // A unit cannot move onto its own team's flag edge.
+                    if (nextAdjacentEdgeKey === playerHomeFlagEdge) {
+                        continue;
+                    }
+
                     if (nextAdjacentEdgeKey === unit.position && current.pathTaken.length === 1) continue;
                     const nextAdjacentEdgeObject = gameState.edges.get(nextAdjacentEdgeKey); if (!nextAdjacentEdgeObject) continue;
                     if (nextAdjacentEdgeObject.units.some(u => u.player !== unit.player)) continue;
@@ -2685,6 +2827,56 @@
                 }
             }
             return reachable;
+        }
+
+        function findSupplyPath(startFortTileKey, player) {
+            const baseEdgeKey = FLAG_HOME_POSITIONS[`player${player}`];
+            const [baseH1, baseH2] = parseEdgeKey(baseEdgeKey);
+            
+            // The "start" for our pathfinding are all edges adjacent to the fort
+            const startTile = gameState.tiles.get(startFortTileKey);
+            if (!startTile) return null;
+            const startEdges = getEdgesOfTile(startTile.q, startTile.r);
+            
+            // The "goals" are all edges adjacent to either base tile
+            const endEdges = new Set([...getEdgesOfTile(baseH1.q, baseH1.r), ...getEdgesOfTile(baseH2.q, baseH2.r)]);
+
+            let frontier = [];
+            for (const edge of startEdges) {
+                if (isRoad(edge)) {
+                     frontier.push({ edgeKey: edge, cost: getEdgeCost({player}, edge), path: [edge] });
+                }
+            }
+
+            let visited = new Map();
+            startEdges.forEach(edge => visited.set(edge, { cost: 0, path: [] }));
+
+            while (frontier.length > 0) {
+                frontier.sort((a, b) => a.cost - b.cost);
+                const current = frontier.shift();
+
+            if (endEdges.has(current.edgeKey)) {
+            // Return the path, but remove the first and last edge for a cleaner visual.
+                const visualPath = current.path.length > 2 ? current.path.slice(1, -1) : [];
+                return { path: visualPath, cost: current.cost };
+            }
+
+                const adjacentEdges = getRotationallyAdjacentEdges(current.edgeKey);
+                for (const neighborEdgeKey of adjacentEdges) {
+                    if (!isRoad(neighborEdgeKey)) continue;
+
+                    const costToNeighbor = getEdgeCost({ player }, neighborEdgeKey);
+                    const newCost = current.cost + costToNeighbor;
+
+                    if (!visited.has(neighborEdgeKey) || newCost < visited.get(neighborEdgeKey).cost) {
+                        const newPath = [...current.path, neighborEdgeKey];
+                        visited.set(neighborEdgeKey, { cost: newCost, path: newPath });
+                        frontier.push({ edgeKey: neighborEdgeKey, cost: newCost, path: newPath });
+                    }
+                }
+            }
+
+            return null; // No path found
         }
 
         // --- Action: Fortify / Unfortify ---
@@ -2722,6 +2914,17 @@
             selectedUnit.currentMove = 0; selectedUnit.hasPerformedMajorAction = true;
             targetTileObject.fortifiedByPlayer = fortifyingPlayer;
             logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, gameState.currentPlayer, 2500);
+            
+            // --- NEW: Calculate and store the supply line ---
+            const playerBaseEdgeKey = FLAG_HOME_POSITIONS[`player${fortifyingPlayer}`];
+            const playerBaseTiles = [playerBaseEdgeKey.split('_')[0], playerBaseEdgeKey.split('_')[1]];
+            
+            if (!playerBaseTiles.includes(targetTileKeyToFortify)) {
+                const supplyPathData = findSupplyPath(targetTileKeyToFortify, fortifyingPlayer);
+                selectedUnit.supplyLine = supplyPathData;
+            }
+            // --- END OF NEW LOGIC ---
+
             let unitsToDestroy = [];
             getNeighbors(targetTileObject.q, targetTileObject.r).forEach(neighborCoords => {
                  const edgeKey = getEdgeKey(targetTileObject.q, targetTileObject.r, neighborCoords.q, neighborCoords.r);
@@ -2775,9 +2978,14 @@
             }
             const oldFortifiedTile = gameState.tiles.get(selectedUnit.fortifiedTileKey);
             if (oldFortifiedTile) oldFortifiedTile.fortifiedByPlayer = null;
-            selectedUnit.isFortified = false; selectedUnit.fortifiedTileKey = null;
-            selectedUnit.positionType = 'edge'; selectedUnit.position = targetEdgeKey;
-            selectedUnit.currentMove = 0; selectedUnit.hasPerformedMajorAction = true;
+            selectedUnit.isFortified = false;
+            selectedUnit.turnsFortifiedAtBase = 0;
+            selectedUnit.supplyLine = null; // Clear the supply line
+            selectedUnit.fortifiedTileKey = null;
+            selectedUnit.positionType = 'edge'; 
+            selectedUnit.position = targetEdgeKey;
+            selectedUnit.currentMove = 0; 
+            selectedUnit.hasPerformedMajorAction = true;
             targetEdge.units.push(selectedUnit);
             logAction(`${selectedUnit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, gameState.currentPlayer, 2500);
             resetActionSelectionStates();
@@ -3523,6 +3731,7 @@
                 unitToMove.isCarryingFlag = true;
                 unitToMove.currentMove = 0;
                 logAction(`P${unitToMove.player} ${unitToMove.type.name} has picked up the flag!`, gameState.currentPlayer);
+                updateAllHealingStatus();
             }
 
             updateSelectedUnitInfoPanel(); 
@@ -3981,44 +4190,132 @@
 
         // --- Zone of Control Damage & Healing ---
         function applyStartOfTurnZoCDamage() {
-            const activePlayer = gameState.currentPlayer; const enemyPlayer = activePlayer === 1 ? 2 : 1;
+            const activePlayer = gameState.currentPlayer;
+            const enemyPlayer = activePlayer === 1 ? 2 : 1;
             let unitsToDestroy = [];
-            gameState.units.forEach(unit => {
-                if (unit.player !== enemyPlayer || unit.positionType !== 'edge' || unit.isFortified) return;
-                const edgeKey = unit.position; 
-                const edgeTileCoords = parseEdgeKey(edgeKey); 
-                
-                if (edgeTileCoords.some(coord => isNaN(coord.q))) return; 
 
+            // Get the active player's base camp tiles to apply damage to the enemy
+            const activePlayerBaseEdgeKey = FLAG_HOME_POSITIONS[`player${activePlayer}`];
+            const activePlayerBaseTiles = [activePlayerBaseEdgeKey.split('_')[0], activePlayerBaseEdgeKey.split('_')[1]];
+
+            gameState.units.forEach(unit => {
+                // We are checking for enemy units adjacent to the current player's forts/base
+                if (unit.player !== enemyPlayer || unit.positionType !== 'edge' || unit.isFortified) return;
+                
+                const edgeKey = unit.position;
+                const edgeTileCoords = parseEdgeKey(edgeKey);
+                if (edgeTileCoords.some(coord => isNaN(coord.q))) return;
+        
                 const tile1Key = getTileKey(edgeTileCoords[0].q, edgeTileCoords[0].r);
                 const tile2Key = getTileKey(edgeTileCoords[1].q, edgeTileCoords[1].r);
-                const tile1 = gameState.tiles.get(tile1Key); 
+                const tile1 = gameState.tiles.get(tile1Key);
                 const tile2 = gameState.tiles.get(tile2Key);
-                if ((tile1 && tile1.fortifiedByPlayer === activePlayer) || (tile2 && tile2.fortifiedByPlayer === activePlayer)) {
+                
+                // Check for damage from a standard fort OR from the active player's base camp fort effect
+                if ((tile1 && tile1.fortifiedByPlayer === activePlayer) || 
+                    (tile2 && tile2.fortifiedByPlayer === activePlayer) ||
+                    activePlayerBaseTiles.includes(tile1Key) || 
+                    activePlayerBaseTiles.includes(tile2Key)) 
+                {
                     unit.hp -= FORTIFICATION_DAMAGE;
-                    logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, gameState.currentPlayer, 3500);
-                    if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) unitsToDestroy.push(unit);
+                    // Correctly log that the action happened during the ACTIVE player's turn
+                    logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, activePlayer, 3500);
+                    if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
+                        unitsToDestroy.push(unit);
+                    }
                 }
             });
+
             if (unitsToDestroy.length > 0) unitsToDestroy.forEach(u => destroyUnit(u, "zoc_turn_start"));
         }
 
-        function applyStartOfTurnHealing() {
-            gameState.units.forEach(unit => {
-                if (unit.player === gameState.currentPlayer && unit.isFortified && unit.hp < (unit.maxHp + 1)) {
-                    const canHeal = (unit.lastAttackedByHostileOnTurn === 0 && gameState.globalTurnNumber >= 1) || 
-                                    (gameState.globalTurnNumber >= unit.lastAttackedByHostileOnTurn + 2);
+        function updateAllHealingStatus() {
+            // Check flag status for both players
+            const p1FlagStolen = gameState.flags.p1_flag.status === 'carried';
+            const p2FlagStolen = gameState.flags.p2_flag.status === 'carried';
 
-                    if (canHeal) {
-                        const oldHp = unit.hp;
-                        unit.hp++;
-                        if (oldHp < unit.maxHp && unit.hp === unit.maxHp) {
-                            logAction(`P${unit.player} ${unit.type.name} healed to full HP. HP: ${unit.hp}/${unit.maxHp}`, gameState.currentPlayer, 2500);
-                        } else if (unit.hp === unit.maxHp + 1) {
-                            logAction(`P${unit.player} ${unit.type.name} gained a shield! HP: ${unit.hp}/${unit.maxHp}`, gameState.currentPlayer, 2500);
-                        } else {
-                             logAction(`P${unit.player} ${unit.type.name} healed 1 HP. HP: ${unit.hp}/${unit.maxHp}`, gameState.currentPlayer, 2500);
-                        }
+            gameState.units.forEach(unit => {
+                if (unit.isFortified) {
+                    if (unit.player === 1) {
+                        unit.canHeal = !p1FlagStolen;
+                    } else { // unit.player === 2
+                        unit.canHeal = !p2FlagStolen;
+                    }
+                } else {
+                    unit.canHeal = false; // Unfortified units can't heal anyway
+                }
+            });
+            // Let players know what happened
+            if (p1FlagStolen) { logAction(`P1's flag is stolen! Healing is disabled.`, 2, 3000); }
+            if (p2FlagStolen) { logAction(`P2's flag is stolen! Healing is disabled.`, 1, 3000); }
+        }
+
+        function applyStartOfTurnHealing() {
+            const playerFlag = gameState.flags[`p${gameState.currentPlayer}_flag`];
+            if (playerFlag.status === 'carried') {
+                return; // No healing for anyone if their flag is stolen.
+            }
+
+            gameState.units.forEach(unit => {
+                if (unit.player !== gameState.currentPlayer || !unit.isFortified || unit.hp >= (unit.maxHp + 1)) {
+                    return;
+                }
+
+                const recentlyAttacked = gameState.globalTurnNumber < unit.lastAttackedByHostileOnTurn + 2;
+                if (recentlyAttacked) {
+                    return;
+                }
+                
+                let isSupplied = false;
+                const playerBaseTiles = [FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
+                
+                if (playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                    isSupplied = true;
+                } else if (unit.supplyLine && unit.supplyLine.path) {
+                    const isIntercepted = unit.supplyLine.path.some(edgeKey => {
+                        const edge = gameState.edges.get(edgeKey);
+                        return edge && edge.units.some(u => u.player !== unit.player);
+                    });
+                    if (!isIntercepted) {
+                        isSupplied = true;
+                    }
+                }
+
+                if (isSupplied) {
+                    const oldHp = unit.hp;
+                    unit.hp++;
+                    const activePlayer = gameState.currentPlayer;
+                    if (oldHp < unit.maxHp && unit.hp === unit.maxHp) {
+                        logAction(`P${unit.player} ${unit.type.name} healed to full HP.`, activePlayer, 2500);
+                    } else if (unit.hp === unit.maxHp + 1) {
+                        logAction(`P${unit.player} ${unit.type.name} gained a shield!`, activePlayer, 2500);
+                    } else {
+                         logAction(`P${unit.player} ${unit.type.name} healed 1 HP.`, activePlayer, 2500);
+                    }
+                }
+            });
+        }
+
+        function logSiegeStatus() {
+            const activePlayer = gameState.currentPlayer;
+            const playerFlag = gameState.flags[`p${activePlayer}_flag`];
+
+            if (playerFlag.status === 'carried') {
+                const existingLog = gameState.actionLog[gameState.actionLog.length - 1];
+                if (!existingLog || !existingLog.message.includes('Healing is disabled')) {
+                    logAction(`P${activePlayer}'s flag is stolen! All healing is disabled.`, activePlayer);
+                }
+            }
+
+            gameState.units.forEach(unit => {
+                if (unit.player === activePlayer && unit.isFortified && unit.supplyLine && unit.supplyLine.path) {
+                    const isIntercepted = unit.supplyLine.path.some(edgeKey => {
+                        const edge = gameState.edges.get(edgeKey);
+                        return edge && edge.units.some(u => u.player !== unit.player);
+                    });
+
+                    if (isIntercepted) {
+                         logAction(`P${unit.player} ${unit.type.name} is under siege and cannot heal!`, activePlayer);
                     }
                 }
             });
@@ -4026,7 +4323,8 @@
 
         function handleRespawnQueue() {
             const player = gameState.currentPlayer;
-            const queue = gameState.respawnQueue[`player${player}`];
+            const queueKey = `player${player}`;
+            const queue = gameState.respawnQueue[queueKey];
             
             if (queue.length === 0) {
                 return;
@@ -4125,15 +4423,26 @@
                         baseMoveForTurn -= 1; 
                     }
                     unit.currentMove = Math.max(0, baseMoveForTurn); 
+                    
+                    // --- Handle Cowardice Timer ---
+                    const playerBaseTiles = [FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
+                    if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                        unit.turnsFortifiedAtBase++;
+                        if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
+                            logAction(`P${unit.player} ${unit.type.name} was destroyed for cowardice!`, gameState.currentPlayer);
+                            destroyUnit(unit, "cowardice");
+                        }
+                    }
                 }
             });
             
             handleRespawnQueue();
 
             applyStartOfTurnZoCDamage(); 
+            logSiegeStatus();
             applyStartOfTurnHealing(); 
             
-            updateTurnDisplay(); 
+            updateTurnDisplay();
             updateSelectedUnitInfoPanel(); 
             
             showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
@@ -4515,6 +4824,7 @@
         canvas.addEventListener('touchcancel', handleCanvasTouchCancel);
 
         window.onload = function () {
+            // --- NEW: Add event listeners for the Respawn Modal Buttons ---
             const respawnChoicesDiv = document.getElementById('respawnChoices');
             if (respawnChoicesDiv) {
                 respawnChoicesDiv.addEventListener('click', (event) => {
