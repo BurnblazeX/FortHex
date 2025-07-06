@@ -343,7 +343,7 @@
         .modal-overlay.modal-visible { 
             opacity: 1;
             visibility: visible;
-            transition: opacity 0.3s ease-in-out, visibility 0s linear 0s;
+            transition: opacity 0.3s ease-in-out, visibility 0s linear 0s; 
         }
 
         .modal-content {
@@ -516,7 +516,6 @@
             font-weight: bold;
         }
         
-        /* NEW STYLES FOR ACTION LOG */
         #actionInfoContainer {
             flex-grow: 1;
             display: flex;
@@ -534,7 +533,6 @@
             justify-content: flex-start;
         }
 
-        /* Custom Scrollbar for Action Log */
         #actionLogContent::-webkit-scrollbar {
             width: 8px;
         }
@@ -561,11 +559,18 @@
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+        .log-entry.log-p1 {
+            border: 2px solid #5dade2; 
+        }
+        .log-entry.log-p2 {
+            border: 2px solid #e74c3c; 
+        }
+
         .log-icon {
             flex-shrink: 0;
             width: 20px;
             height: 20px;
-            margin-top: 2px;
+            margin-top: 0px;
         }
         .log-message {
             font-size: 0.9em;
@@ -574,15 +579,117 @@
             word-break: break-word;
         }
         .log-message strong { font-weight: bold; }
-        .log-message .p1-log { color: #5dade2; } 
-        .log-message .p2-log { color: #e74c3c; }
+        .p1-log { color: #5dade2 !important; } 
+        .p2-log { color: #e74c3c !important; }
         .log-message .damage-text { color: #f1c40f; }
         .log-message .heal-text { color: #2ecc71; }
         .log-message .shield-text { color: #30C4C4; }
         .log-message .advantage-text { color: #2ecc71; }
         .log-message .disadvantage-text { color: #e74c3c; }
         .log-message .keyword-text { color: #f39c12; }
-        /* END NEW STYLES */
+
+        .respawn-queue-container {
+            border-top: 1px solid #7f8c8d;
+            padding-top: 15px;
+            margin-top: 15px;
+        }
+        .respawn-queue-header {
+            text-align: center;
+            color: #f1c40f;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        .respawn-queue-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .respawn-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #2c3e50;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .respawn-unit-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .respawn-unit-symbol {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .respawn-timer {
+            font-weight: bold;
+            color: #f1c40f;
+        }
+
+        /* RESPAWN MODAL STYLES */
+        #respawnModalContent {
+            text-align: center;
+            width: auto;
+            max-width: 500px;
+            /* Border color will be set by JS */
+            transition: border-color 0.3s ease-in-out; 
+        }
+        #respawnModalContent.modal-p1 { border-color: #5dade2; }
+        #respawnModalContent.modal-p2 { border-color: #e74c3c; }
+
+        #respawnModalContent h3 {
+            font-family: 'Geostar', cursive;
+            font-size: 1.8em;
+            color: #f1c40f;
+            margin-bottom: 10px;
+        }
+        #respawnModalContent p {
+            font-size: 1.1em;
+            margin-bottom: 20px;
+        }
+        #respawnChoices {
+            display: flex; 
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .respawn-button {
+            background-color: #27ae60; 
+            color: white;
+            border: none;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%; 
+            font-family: 'Exo 2', sans-serif;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s, box-shadow 0.3s, transform 0.2s;
+            box-shadow: 0 4px #1e8449; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .respawn-button svg {
+            width: 40px;
+            height: 40px;
+            stroke: white;
+            fill: white;
+        }
+        .respawn-button:hover:not(:disabled) {
+            background-color: #229954;
+            transform: translateY(-2px);
+        }
+        .respawn-button:active:not(:disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 1px #1e8449;
+        }
+        .respawn-button:disabled {
+            background-color: #7f8c8d;
+            cursor: not-allowed;
+            box-shadow: 0 4px #525a5b;
+            opacity: 0.6;
+        }
 
     </style>
     <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.16 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.mb-6{margin-bottom:1.5rem}.text-center{text-align:center}.text-4xl{font-size:2.25rem;line-height:2.5rem}.font-bold{font-weight:700}.text-amber-400{--tw-text-opacity:1;color:rgb(251 191 36 / var(--tw-text-opacity, 1))}</style>
@@ -610,6 +717,11 @@
                 </div>
             </div>
             <!-- END OF STRUCTURE -->
+            <!-- UNIFIED Respawn Queue Display -->
+            <div id="reinforcementsContainer" class="respawn-queue-container" style="display: none;">
+                <h4 class="respawn-queue-header">Reinforcements</h4>
+                <div id="reinforcementsList" class="respawn-queue-list"></div>
+            </div>
         </div>
 
         <canvas id="gameCanvas"></canvas>
@@ -921,6 +1033,20 @@
         </div>
     </div>
 
+    <!-- NEW RESPAWN CHOICE MODAL -->
+    <div id="respawnModalOverlay" class="modal-overlay">
+        <div id="respawnModalContent" class="modal-content">
+            <h3>A Unit Has Fallen!</h3>
+            <p>Choose a reinforcement to deploy at your base.</p>
+            <div id="respawnChoices">
+                <button id="respawnMelee" class="respawn-button" data-unit-type="MELEE" title="Melee"></button>
+                <button id="respawnArcher" class="respawn-button" data-unit-type="ARCHER" title="Archer"></button>
+                <button id="respawnPikeman" class="respawn-button" data-unit-type="PIKEMAN" title="Pikeman"></button>
+                <button id="respawnHorseman" class="respawn-button" data-unit-type="HORSEMAN" title="Horseman"></button>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         // --- Game Configuration & Constants ---
@@ -928,6 +1054,14 @@
         const GRID_RADIUS = 3; 
 
         // Gameplay Constants
+        const RESPAWN_TURN_TIMER = 10;
+        const MAX_UNITS_PER_PLAYER = 4;
+        const UNIT_CAPS = {
+            Melee: 2,
+            Archer: 2,
+            Pikeman: 2,
+            Horseman: 2,
+        };
         const FORTIFICATION_DAMAGE = 1; 
         const BRIDGE_MAX_HP = 5;        
         const UNIT_ON_EDGE_OFFSET = HEX_SIZE * 0.2; 
@@ -993,6 +1127,24 @@
             HORSEMAN: { name: 'Horseman', hp: 11, baseMove: 5, attack: 3, color: '#4040C4', enemyColor: '#C44040', symbol: 'H', canBuildBridge: false, canFortify: false, fortificationBonus: 0, attackType: 'melee', defenseNegation: 0, canMoveAfterAttack: true,  strengths: ['Melee'],    weaknesses: ['Pikeman'] }
         };
 
+        const UNIT_SVGS = {
+            MELEE: `<svg viewBox="170 60 110 280" fill="white">
+                        <path d="M 224.613 61.934 L 240.516 108.172 L 208.709 108.172 L 224.613 61.934 Z"/>
+                        <rect x="208.709" y="108.172" width="31.807" height="192.313"/>
+                        <rect x="172.161" y="233.27" width="103.853" height="22.254"/>
+                        <ellipse cx="224.526" cy="312.975" rx="20.582" ry="20.615"/>
+                    </svg>`,
+            ARCHER: `<svg viewBox="-10 -18 20 36" fill="white">
+                        <path d="M 0 -17.5 L -5 -10 L -1.875 -8.75 L -1.875 5 L -6.25 17.5 L 0 13.75 L 6.25 17.5 L 1.875 5 L 1.875 -8.75 L 5 -10 Z" />
+                    </svg>`,
+            PIKEMAN: `<svg viewBox="-14 -20 28 40" fill="white">
+                        <path d="M -1.35 16.875 L -1.35 1.125 Q -13.5 -3.375 -1.35 -11.25 L 0 -18 L 1.35 -11.25 L 1.35 -6.75 L 7.875 -4.5 L 1.35 -2.25 L 1.35 16.875 Z" />
+                    </svg>`,
+            HORSEMAN: `<svg viewBox="-12 -16 24 32" fill="white">
+                        <path d="M-6 10 L 6 10 L 6 3 L 3 -1 L 9 -3 L 9 -7 L 2 -7 L -2 -12 L -4 -8 L -6 2 Z" />
+                    </svg>`
+        };
+
         // Hex Grid Directions (Axial Coordinates)
         const AXIAL_DIRECTIONS = [ { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 }, { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 } ];
         const MAP_DIRECTION_TO_EDGE_INDEX = [0, 5, 4, 3, 2, 1];
@@ -1014,7 +1166,11 @@
             // q=3
             ['3,-3', TILE_TYPES.MOUNTAIN], ['3,-2', TILE_TYPES.MOUNTAIN], ['3,-1', TILE_TYPES.WATER], ['3,0', TILE_TYPES.WATER]
         ]);
-
+        
+        const FLAG_HOME_POSITIONS = {
+            player1: getEdgeKey(-2, -1, -1, -2), // Edge between P1's base tiles
+            player2: getEdgeKey(1, 2, 2, 1)      // Edge between P2's base tiles
+        };
 
         // --- Canvas & UI Elements ---
         const canvas = document.getElementById('gameCanvas');
@@ -1066,6 +1222,9 @@
             gameOver: false,
             gridRadius: GRID_RADIUS,
             actionLog: [], 
+            flags: null,
+            respawnQueue: { player1: [], player2: [] },
+            unitCounts: null,
 
             // Physical UI states
             isDragging: false,
@@ -1288,8 +1447,32 @@
             gameState.currentReachableMoves.clear();
             resetActionSelectionStates();
             gameState.actionLog = [];
+            gameState.respawnQueue = { player1: [], player2: [] };
             updateActionLogDisplay();
             
+            gameState.unitCounts = {
+                player1: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 },
+                player2: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 }
+            };
+
+            // Initialize Flags
+            gameState.flags = {
+                'p1_flag': {
+                    id: 'p1_flag',
+                    player: 1,
+                    homePosition: FLAG_HOME_POSITIONS.player1,
+                    status: 'at_base', 
+                    carrierId: null
+                },
+                'p2_flag': {
+                    id: 'p2_flag',
+                    player: 2,
+                    homePosition: FLAG_HOME_POSITIONS.player2,
+                    status: 'at_base',
+                    carrierId: null
+                }
+            };
+
             if (tileLayoutMap) {
                 tileLayoutMap.forEach((type, key) => {
                     const [q, r] = key.split(',').map(Number);
@@ -1358,12 +1541,52 @@
 
         function createUnit(player, type, edgeKey) {
             const unitId = `unit_${player}_${type.name.toLowerCase()}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+            
+            if (gameState.unitCounts) {
+                gameState.unitCounts[`player${player}`][type.name]++;
+            }
+
             return {
                 id: unitId, player, type, hp: type.hp, maxHp: type.hp,
                 currentMove: type.baseMove, positionType: 'edge', position: edgeKey,
                 isFortified: false, fortifiedTileKey: null, hasPerformedMajorAction: false,
+                isCarryingFlag: false,
                 lastAttackedByHostileOnTurn: 0 
             };
+        }
+
+        function spawnUnit(player, unitType) {
+            const homeBaseEdgeKey = FLAG_HOME_POSITIONS[`player${player}`];
+            let spawnEdgeKey = null;
+
+            const isEdgeValidForSpawn = (edgeKey) => {
+                const edge = gameState.edges.get(edgeKey);
+                return edge && edge.units.length < 2 && !edge.units.some(u => u.player !== player);
+            };
+
+            if (isEdgeValidForSpawn(homeBaseEdgeKey)) {
+                spawnEdgeKey = homeBaseEdgeKey;
+            } else {
+                const adjacentEdges = getRotationallyAdjacentEdges(homeBaseEdgeKey);
+                for (const edgeKey of adjacentEdges) {
+                    if (isEdgeValidForSpawn(edgeKey)) {
+                        spawnEdgeKey = edgeKey;
+                        break; 
+                    }
+                }
+            }
+
+            if (spawnEdgeKey) {
+                const newUnit = createUnit(player, unitType, spawnEdgeKey);
+                gameState.units.push(newUnit);
+                const edge = gameState.edges.get(spawnEdgeKey);
+                edge.units.push(newUnit);
+                logAction(`P${player} ${unitType.name} has returned to the fight!`, player);
+                return true; 
+            }
+            
+            logAction(`P${player} Base is blocked! Cannot respawn ${unitType.name}.`, player);
+            return false; 
         }
 
         // --- Drawing Functions ---
@@ -1589,6 +1812,53 @@
             });
         }
 
+        function drawFlags() {
+            if (!gameState.flags) return;
+
+            Object.values(gameState.flags).forEach(flag => {
+                if (flag.status === 'at_base') {
+                    const edge = gameState.edges.get(flag.homePosition);
+                    if (!edge) return;
+                    
+                    const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                    const teamColor = flag.player === 1 ? '#5dade2' : '#e74c3c';
+                    const flagIconColor = '#ecf0f1'; 
+                    const flagPoleColor = '#2c3e50';
+                    const circleRadius = HEX_SIZE * 0.18;
+                    const flagSize = circleRadius * 1.2; 
+
+                    ctx.save();
+                    ctx.translate(mid.x, mid.y);
+
+                    ctx.beginPath();
+                    ctx.arc(0, 0, circleRadius, 0, 2 * Math.PI);
+                    ctx.fillStyle = teamColor; 
+                    ctx.fill();
+
+                    ctx.strokeStyle = '#1a252f';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(-3, flagSize * 0.5);
+                    ctx.lineTo(-3, -flagSize * 0.5);
+                    ctx.strokeStyle = flagPoleColor;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(-2, -flagSize * 0.5);
+                    ctx.lineTo(flagSize * 0.45, -flagSize * 0.3);
+                    ctx.lineTo(-2, -flagSize * 0);
+                    ctx.closePath();
+                    ctx.fillStyle = flagIconColor; 
+                    ctx.fill(); 
+                    
+                    ctx.restore();
+                }
+            });
+        }
+
         function drawUnitAttackHighlightsOnly(targetsToHighlight) {
             if (!targetsToHighlight || targetsToHighlight.length === 0) return;
             targetsToHighlight.forEach(targetInfo => {
@@ -1774,15 +2044,23 @@
             
             ctx.beginPath();
             ctx.arc(x, y, radius, 0, 2 * Math.PI);
-            let mainBorderColor = unit.isFortified ? '#FFF' : '#000';
-            let mainBorderWidth = unit.isFortified ? 2 : 1.5;
-            if (gameState.selectedUnit && gameState.selectedUnit.id === unit.id) {
+            
+            let mainBorderColor;
+            let mainBorderWidth = 3;
+
+            if (unit.isCarryingFlag) {
+                const enemyPlayer = unit.player === 1 ? 2 : 1;
+                mainBorderColor = enemyPlayer === 1 ? UNIT_TYPES.MELEE.color : UNIT_TYPES.MELEE.enemyColor;
+            } else if (gameState.selectedUnit && gameState.selectedUnit.id === unit.id) {
                 mainBorderColor = '#FFD700';
-                mainBorderWidth = 3;
             } else if (gameState.hoveredUnitId === unit.id && unit.player === gameState.currentPlayer) {
-                mainBorderColor = '#ADD8E6';
+                mainBorderColor = '#ADD8E6'; 
                 mainBorderWidth = 2.5;
+            } else {
+                mainBorderColor = unit.isFortified ? '#FFF' : '#000';
+                mainBorderWidth = unit.isFortified ? 2 : 1.5;
             }
+            
             ctx.strokeStyle = mainBorderColor;
             ctx.lineWidth = mainBorderWidth;
             ctx.stroke();
@@ -2017,6 +2295,7 @@
             drawFortificationOutlines();
             drawContestedEdgeIndicator();
             drawBridges();
+            drawFlags();
             
             drawDebugAttackRangeHighlights()
             drawMovementHighlights(); 
@@ -2085,7 +2364,6 @@
                 gameState.debugAttackRangeHighlights = [];
             }
             
-            // Show/hide unit info vs action log
             if (selectedUnit && !gameState.isDragging) {
                 ui.selectedUnitInfoContainer.style.display = 'block';
                 ui.actionInfoContainer.style.display = 'none';
@@ -2096,7 +2374,8 @@
                 ui.unitMovement.textContent = Math.floor(selectedUnit.currentMove);
                 ui.unitPosition.textContent = selectedUnit.positionType === 'edge' ? `Edge (${selectedUnit.position.substring(0,7)}...)` : `Center (${selectedUnit.position})`;
                 let statusText = "Ready";
-                if (selectedUnit.hp > selectedUnit.maxHp) statusText = "Shielded";
+                if (selectedUnit.isCarryingFlag) statusText = "Carrying Flag";
+                else if (selectedUnit.hp > selectedUnit.maxHp) statusText = "Shielded";
                 else if (selectedUnit.isFortified) statusText = `Fortified on ${selectedUnit.fortifiedTileKey}`;
                 else if (selectedUnit.hasPerformedMajorAction) statusText = "Action Taken";
                 else if (selectedUnit.currentMove < 1) statusText = "No MP Left";
@@ -2170,6 +2449,92 @@
             }
         }
 
+        function showRespawnModal(player) {
+            const overlay = document.getElementById('respawnModalOverlay');
+            const content = document.getElementById('respawnModalContent');
+            if (!overlay || !content) return;
+
+            // --- NEW: Check for total army size limit ---
+            const currentUnitCount = gameState.units.filter(u => u.player === player).length;
+            if (currentUnitCount >= MAX_UNITS_PER_PLAYER) {
+                logAction(`P${player} has reached the maximum army size! Cannot reinforce.`, player);
+                // Reset the timer for the unit in the queue so it can try again next turn.
+                const queueKey = `player${player}`;
+                if (gameState.respawnQueue[queueKey][0]) {
+                    gameState.respawnQueue[queueKey][0].turnsRemaining = 1;
+                }
+                updateRespawnQueueDisplay(); // Show the reset timer
+                return; // Exit without showing the modal
+            }
+
+            // --- Original Logic (now runs only if army size is okay) ---
+            content.className = `modal-content modal-p${player}`;
+
+            const counts = gameState.unitCounts[`player${player}`];
+            
+            const meleeButton = document.getElementById('respawnMelee');
+            meleeButton.disabled = counts.Melee >= UNIT_CAPS.Melee;
+            meleeButton.innerHTML = UNIT_SVGS.MELEE;
+
+            const archerButton = document.getElementById('respawnArcher');
+            archerButton.disabled = counts.Archer >= UNIT_CAPS.Archer;
+            archerButton.innerHTML = UNIT_SVGS.ARCHER;
+            
+            const pikemanButton = document.getElementById('respawnPikeman');
+            pikemanButton.disabled = counts.Pikeman >= UNIT_CAPS.Pikeman;
+            pikemanButton.innerHTML = UNIT_SVGS.PIKEMAN;
+
+            const horsemanButton = document.getElementById('respawnHorseman');
+            horsemanButton.disabled = counts.Horseman >= UNIT_CAPS.Horseman;
+            horsemanButton.innerHTML = UNIT_SVGS.HORSEMAN;
+
+            overlay.style.display = 'flex';
+            setTimeout(() => overlay.classList.add('modal-visible'), 10);
+        }
+
+        function hideRespawnModal() {
+            const overlay = document.getElementById('respawnModalOverlay');
+            if (!overlay) return;
+            
+            overlay.classList.remove('modal-visible');
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 300);
+        }
+
+        function updateRespawnQueueDisplay() {
+            const container = document.getElementById('reinforcementsContainer');
+            const listEl = document.getElementById('reinforcementsList');
+
+            if (!container || !listEl) return;
+
+            listEl.innerHTML = ''; 
+
+            const p1Queue = gameState.respawnQueue.player1.map(item => ({ ...item, player: 1 }));
+            const p2Queue = gameState.respawnQueue.player2.map(item => ({ ...item, player: 2 }));
+            const combinedQueue = [...p1Queue, ...p2Queue];
+
+            if (combinedQueue.length > 0) {
+                container.style.display = 'block';
+                combinedQueue.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `log-entry respawn-item log-p${item.player}`;
+                    
+                    const unitInfo = `
+                        <div class="respawn-unit-info">
+                            <span class="respawn-unit-symbol">${item.unitType.symbol}</span>
+                            <span>${item.unitType.name}</span>
+                        </div>`;
+                    const timerInfo = `<div class="respawn-timer">${item.turnsRemaining} Turns</div>`;
+                    
+                    itemDiv.innerHTML = unitInfo + timerInfo;
+                    listEl.appendChild(itemDiv);
+                });
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
         function showInstruction(message, duration = 3000) {
             ui.messageBox.textContent = message.replace(/<br>/g, ' '); 
             ui.messageBox.style.display = 'block';
@@ -2177,9 +2542,9 @@
             ui.messageBox.timeoutId = setTimeout(() => { ui.messageBox.style.display = 'none'; }, duration);
         }
 
-        function logAction(message, duration = 3000) {
+        function logAction(message, player, duration = 3000) {
             showInstruction(message, duration);
-            gameState.actionLog.push(message);
+            gameState.actionLog.push({ message: message, player: player });
             if (gameState.actionLog.length > 5) {
                 gameState.actionLog.shift();
             }
@@ -2187,10 +2552,34 @@
         }
         
         // --- Game Logic Core ---
-         function destroyUnit(unitToDestroy, reason = "destroyed") {
-            if (reason === "bridge_collapse") logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} fell as the bridge collapsed!`, 3500);
-            else if (reason === "zoc_move" || reason === "zoc_turn_start" || reason === "fort_zoc") logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} destroyed by ZoC!`, 3500);
-            else logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} has been destroyed!`, 3000);
+        function destroyUnit(unitToDestroy, reason = "destroyed") {
+            gameState.unitCounts[`player${unitToDestroy.player}`][unitToDestroy.type.name]--;
+
+            if (unitToDestroy.isCarryingFlag) {
+                const flag = Object.values(gameState.flags).find(f => f.carrierId === unitToDestroy.id);
+                if (flag) {
+                    flag.status = 'at_base';
+                    flag.carrierId = null;
+                    unitToDestroy.isCarryingFlag = false; 
+                    logAction(`The P${flag.player} flag has been returned to base!`, gameState.currentPlayer);
+                }
+            }
+            
+            const queueKey = `player${unitToDestroy.player}`;
+            gameState.respawnQueue[queueKey].push({
+                unitType: unitToDestroy.type,
+                turnsRemaining: RESPAWN_TURN_TIMER
+            });
+            updateRespawnQueueDisplay();
+
+            if (reason === "bridge_collapse") {
+                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} fell as the bridge collapsed!`, gameState.currentPlayer, 3500);
+            } else if (reason === "zoc_move" || reason === "zoc_turn_start" || reason === "fort_zoc") {
+                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} destroyed by ZoC!`, gameState.currentPlayer, 3500);
+            } else {
+                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} has been destroyed!`, gameState.currentPlayer, 3000);
+            }
+
             if (unitToDestroy.positionType === 'edge') {
                 const edgeOfUnit = gameState.edges.get(unitToDestroy.position);
                 if (edgeOfUnit) edgeOfUnit.units = edgeOfUnit.units.filter(u => u.id !== unitToDestroy.id);
@@ -2198,17 +2587,25 @@
                 const fortifiedTile = gameState.tiles.get(unitToDestroy.position);
                 if (fortifiedTile && fortifiedTile.fortifiedByPlayer === unitToDestroy.player) fortifiedTile.fortifiedByPlayer = null;
             }
+
             gameState.units = gameState.units.filter(u => u.id !== unitToDestroy.id);
+
             if (gameState.selectedUnit && gameState.selectedUnit.id === unitToDestroy.id) {
-                gameState.selectedUnit = null; gameState.currentReachableMoves.clear();
-                resetActionSelectionStates(); 
+                gameState.selectedUnit = null;
+                gameState.currentReachableMoves.clear();
+                resetActionSelectionStates();
                 updateSelectedUnitInfoPanel();
             }
-            if (gameState.hoveredUnitId === unitToDestroy.id) { gameState.hoveredUnitId = null; canvas.style.cursor = 'default'; }
-            if (gameState.draggingUnit && gameState.draggingUnit.id === unitToDestroy.id) {
-                gameState.isDragging = false; gameState.draggingUnit = null;
-                 canvas.style.cursor = 'default';
+            if (gameState.hoveredUnitId === unitToDestroy.id) {
+                gameState.hoveredUnitId = null;
+                canvas.style.cursor = 'default';
             }
+            if (gameState.draggingUnit && gameState.draggingUnit.id === unitToDestroy.id) {
+                gameState.isDragging = false;
+                gameState.draggingUnit = null;
+                canvas.style.cursor = 'default';
+            }
+
             checkVictoryCondition();
         }
 
@@ -2324,7 +2721,7 @@
             selectedUnit.positionType = 'center'; selectedUnit.position = targetTileKeyToFortify;
             selectedUnit.currentMove = 0; selectedUnit.hasPerformedMajorAction = true;
             targetTileObject.fortifiedByPlayer = fortifyingPlayer;
-            logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, 2500);
+            logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, gameState.currentPlayer, 2500);
             let unitsToDestroy = [];
             getNeighbors(targetTileObject.q, targetTileObject.r).forEach(neighborCoords => {
                  const edgeKey = getEdgeKey(targetTileObject.q, targetTileObject.r, neighborCoords.q, neighborCoords.r);
@@ -2333,7 +2730,7 @@
                      adjacentEdge.units.forEach(enemyUnit => {
                          if (enemyUnit.player !== fortifyingPlayer && enemyUnit.positionType === 'edge') {
                              enemyUnit.hp -= FORTIFICATION_DAMAGE;
-                             logAction(`P${enemyUnit.player} ${enemyUnit.type.name} takes ZoC. HP: ${enemyUnit.hp}`);
+                             logAction(`P${enemyUnit.player} ${enemyUnit.type.name} takes ZoC. HP: ${enemyUnit.hp}`, gameState.currentPlayer);
                              if (enemyUnit.hp <= 0 && !unitsToDestroy.find(u => u.id === enemyUnit.id)) unitsToDestroy.push(enemyUnit);
                          }
                      });
@@ -2382,7 +2779,7 @@
             selectedUnit.positionType = 'edge'; selectedUnit.position = targetEdgeKey;
             selectedUnit.currentMove = 0; selectedUnit.hasPerformedMajorAction = true;
             targetEdge.units.push(selectedUnit);
-            logAction(`${selectedUnit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, 2500);
+            logAction(`${selectedUnit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, gameState.currentPlayer, 2500);
             resetActionSelectionStates();
             updateSelectedUnitInfoPanel();
         }
@@ -2482,7 +2879,7 @@
             edgeToBridge.bridgeHp = BRIDGE_MAX_HP;
             selectedUnit.currentMove = 0; 
             selectedUnit.hasPerformedMajorAction = true;
-            logAction(`${selectedUnit.type.name} built bridge on ${targetEdgeKey.substring(0,7)}... HP: ${edgeToBridge.bridgeHp}`, 3000);
+            logAction(`${selectedUnit.type.name} built bridge on ${targetEdgeKey.substring(0,7)}... HP: ${edgeToBridge.bridgeHp}`, gameState.currentPlayer, 3000);
             resetActionSelectionStates();
             updateSelectedUnitInfoPanel();
         }
@@ -2496,7 +2893,7 @@
             const checkAndApply = (tile) => {
                 if (tile && tile.fortifiedByPlayer === enemyPlayer && !unitDestroyed) {
                     unitMoving.hp -= FORTIFICATION_DAMAGE;
-                    logAction(`P${unitMoving.player} ${unitMoving.type.name} takes ZoC. HP: ${unitMoving.hp}`, 3500);
+                    logAction(`P${unitMoving.player} ${unitMoving.type.name} takes ZoC. HP: ${unitMoving.hp}`, gameState.currentPlayer, 3500);
                     if (unitMoving.hp <= 0) { destroyUnit(unitMoving, "zoc_move"); unitDestroyed = true; }
                     return true;
                 } return false;
@@ -2872,7 +3269,10 @@
             
             const reversedLog = [...gameState.actionLog].reverse();
 
-            for (const originalMessage of reversedLog) {
+            for (const logObject of reversedLog) {
+                const originalMessage = logObject.message;
+                const activePlayer = logObject.player;
+
                 let formattedMessage = originalMessage.replace(/<br>/g, ' ');
 
                 formattedMessage = formattedMessage.replace(/(P1)/g, '<strong class="p1-log">$1</strong>');
@@ -2885,7 +3285,7 @@
                 formattedMessage = formattedMessage.replace(/(Spear Wall|Cavalry Screen|Combined arms|Damage split)/g, '<strong class="keyword-text">$1</strong>');
 
                 const logEntry = document.createElement('div');
-                logEntry.className = 'log-entry';
+                logEntry.className = `log-entry log-p${activePlayer}`; 
                 logEntry.innerHTML = getActionIcon(originalMessage) + `<div class="log-message">${formattedMessage}</div>`;
 
                 ui.actionLogContent.appendChild(logEntry);
@@ -3023,7 +3423,7 @@
             }
             if (hitAndRunMessage) logParts.push(hitAndRunMessage);
             
-            logAction(logParts.join('<br>'), 4500);
+            logAction(logParts.join('<br>'), gameState.currentPlayer, 4500);
 
             resetActionSelectionStates(); 
             updateSelectedUnitInfoPanel(); 
@@ -3100,10 +3500,11 @@
              if (!finalTargetEdgeData) { console.error("Target edge for move not found:", targetEdgeKey); return; }
             unitToMove.position = targetEdgeKey; unitToMove.positionType = 'edge'; unitToMove.currentMove -= costToMove;
             finalTargetEdgeData.units.push(unitToMove);
+
             const unitDestroyedByZoC = applyFortificationDamageOnMove(unitToMove, targetEdgeKey);
             clearDebugPath();
             if (!unitDestroyedByZoC && unitToMove.hp > 0) {
-                logAction(`${unitToMove.type.name} moved. MP: ${Math.floor(unitToMove.currentMove)}`);
+                logAction(`${unitToMove.type.name} moved. MP: ${Math.floor(unitToMove.currentMove)}`, gameState.currentPlayer);
                 if (unitToMove.currentMove >= 1 && (!unitToMove.hasPerformedMajorAction || unitToMove.type.canMoveAfterAttack)) {
                     gameState.currentReachableMoves = getPossibleMoves(unitToMove);
                 } else {
@@ -3114,7 +3515,20 @@
                  gameState.currentReachableMoves.clear();
                  if (gameState.selectedUnit && gameState.selectedUnit.id === unitToMove.id) gameState.selectedUnit = null;
             }
-             updateSelectedUnitInfoPanel(); 
+            
+            const enemyFlag = unitToMove.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+            if (enemyFlag.status === 'at_base' && targetEdgeKey === enemyFlag.homePosition) {
+                enemyFlag.status = 'carried';
+                enemyFlag.carrierId = unitToMove.id;
+                unitToMove.isCarryingFlag = true;
+                unitToMove.currentMove = 0;
+                logAction(`P${unitToMove.player} ${unitToMove.type.name} has picked up the flag!`, gameState.currentPlayer);
+            }
+
+            updateSelectedUnitInfoPanel(); 
+            checkVictoryCondition();
+
+
         }
 
         function handleMoveClick(x, y) {
@@ -3582,7 +3996,7 @@
                 const tile2 = gameState.tiles.get(tile2Key);
                 if ((tile1 && tile1.fortifiedByPlayer === activePlayer) || (tile2 && tile2.fortifiedByPlayer === activePlayer)) {
                     unit.hp -= FORTIFICATION_DAMAGE;
-                    logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, 3500);
+                    logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, gameState.currentPlayer, 3500);
                     if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) unitsToDestroy.push(unit);
                 }
             });
@@ -3599,44 +4013,87 @@
                         const oldHp = unit.hp;
                         unit.hp++;
                         if (oldHp < unit.maxHp && unit.hp === unit.maxHp) {
-                            logAction(`P${unit.player} ${unit.type.name} healed to full HP. HP: ${unit.hp}/${unit.maxHp}`, 2500);
+                            logAction(`P${unit.player} ${unit.type.name} healed to full HP. HP: ${unit.hp}/${unit.maxHp}`, gameState.currentPlayer, 2500);
                         } else if (unit.hp === unit.maxHp + 1) {
-                            logAction(`P${unit.player} ${unit.type.name} gained a shield! HP: ${unit.hp}/${unit.maxHp}`, 2500);
+                            logAction(`P${unit.player} ${unit.type.name} gained a shield! HP: ${unit.hp}/${unit.maxHp}`, gameState.currentPlayer, 2500);
                         } else {
-                             logAction(`P${unit.player} ${unit.type.name} healed 1 HP. HP: ${unit.hp}/${unit.maxHp}`, 2500);
+                             logAction(`P${unit.player} ${unit.type.name} healed 1 HP. HP: ${unit.hp}/${unit.maxHp}`, gameState.currentPlayer, 2500);
                         }
                     }
                 }
             });
         }
 
+        function handleRespawnQueue() {
+            const player = gameState.currentPlayer;
+            const queue = gameState.respawnQueue[`player${player}`];
+            
+            if (queue.length === 0) {
+                return;
+            }
+
+            const firstItem = queue[0];
+            firstItem.turnsRemaining--;
+
+            if (firstItem.turnsRemaining <= 0) {
+                showRespawnModal(player);
+            }
+            
+            updateRespawnQueueDisplay();
+        }
 
         // --- Game Flow & Event Listeners ---
-         function checkVictoryCondition() {
+        function checkVictoryCondition() {
             if (gameState.gameOver) return;
-            const player1Units = gameState.units.filter(u => u.player === 1);
-            const player2Units = gameState.units.filter(u => u.player === 2);
             let victoryText = null;
-            if (gameState.tiles.size > 0) { 
-                if (player1Units.length === 0 && player2Units.length > 0) victoryText = "Player 2 Wins!";
-                else if (player2Units.length === 0 && player1Units.length > 0) victoryText = "Player 1 Wins!";
-                else if (player1Units.length === 0 && player2Units.length === 0) victoryText = "It's a Draw!";
+
+            const flagCarrier = gameState.units.find(u => u.isCarryingFlag);
+            if (flagCarrier) {
+                const carrierPlayer = flagCarrier.player;
+                const carrierHomeBaseEdge = FLAG_HOME_POSITIONS[`player${carrierPlayer}`];
+
+                if (flagCarrier.position === carrierHomeBaseEdge) {
+                    victoryText = `Player ${carrierPlayer} captured the flag and wins!`;
+                }
             }
+            
+            if (!victoryText) {
+                const player1Units = gameState.units.filter(u => u.player === 1);
+                const player2Units = gameState.units.filter(u => u.player === 2);
+                
+                if (gameState.tiles.size > 0) { 
+                    if (player1Units.length === 0 && player2Units.length > 0) {
+                        victoryText = "Player 2 Wins by Annihilation!";
+                    } else if (player2Units.length === 0 && player1Units.length > 0) {
+                        victoryText = "Player 1 Wins by Annihilation!";
+                    } else if (player1Units.length === 0 && player2Units.length === 0) {
+                        victoryText = "It's a Draw!";
+                    }
+                }
+            }
+
             if (victoryText) {
-                ui.victoryMessage.textContent = victoryText; ui.victoryMessage.style.display = 'block';
+                ui.victoryMessage.textContent = victoryText;
+                ui.victoryMessage.style.display = 'block';
                 gameState.gameOver = true;
                 gameState.currentActionState = ACTION_STATES.IDLE;
-                ui.endTurnButton.disabled = true; 
-                ui.generateMapButton.disabled = true;
+                ui.endTurnButton.disabled = true;
+                ui.generateMapButton.disabled = false; 
                 if (gameState.selectedUnit) {
-                    ui.fortifyUnfortifyButton.disabled = true; ui.buildBridgeButton.disabled = true; ui.attackButton.disabled = true;
-                } else ui.actionsPanel.style.display = 'none';
+                    ui.fortifyUnfortifyButton.disabled = true;
+                    ui.buildBridgeButton.disabled = true;
+                    ui.attackButton.disabled = true;
+                } else {
+                    ui.actionsPanel.style.display = 'none';
+                }
                 canvas.style.cursor = 'default'; 
                 gameState.selectedUnit = null;
                 gameState.currentReachableMoves.clear(); 
                 updateSelectedUnitInfoPanel(); 
-            } else ui.generateMapButton.disabled = false;
-        }
+            } else {
+                ui.generateMapButton.disabled = false;
+            }
+        }                                                                           
 
         ui.fortifyUnfortifyButton.addEventListener('click', handleFortifyUnfortifyButtonClick);
         ui.buildBridgeButton.addEventListener('click', handleBuildBridgeAction);
@@ -3660,12 +4117,19 @@
             resetActionSelectionStates();
             
             gameState.units.forEach(unit => {
-                if (unit.player === gameState.currentPlayer) { 
-                    unit.currentMove = unit.type.baseMove; 
+                if (unit.player === gameState.currentPlayer) {
                     unit.hasPerformedMajorAction = false; 
+                    
+                    let baseMoveForTurn = unit.type.baseMove;
+                    if (unit.isCarryingFlag) {
+                        baseMoveForTurn -= 1; 
+                    }
+                    unit.currentMove = Math.max(0, baseMoveForTurn); 
                 }
             });
             
+            handleRespawnQueue();
+
             applyStartOfTurnZoCDamage(); 
             applyStartOfTurnHealing(); 
             
@@ -3673,6 +4137,7 @@
             updateSelectedUnitInfoPanel(); 
             
             showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
+            logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
             checkVictoryCondition();
         });
 
@@ -4050,11 +4515,35 @@
         canvas.addEventListener('touchcancel', handleCanvasTouchCancel);
 
         window.onload = function () {
+            const respawnChoicesDiv = document.getElementById('respawnChoices');
+            if (respawnChoicesDiv) {
+                respawnChoicesDiv.addEventListener('click', (event) => {
+                    const button = event.target.closest('.respawn-button');
+                    if (button) {
+                        const unitTypeName = button.dataset.unitType;
+                        const unitType = UNIT_TYPES[unitTypeName];
+                        
+                        if (unitType) {
+                            const spawnSuccess = spawnUnit(gameState.currentPlayer, unitType);
+
+                            if (spawnSuccess) {
+                                const queueKey = `player${gameState.currentPlayer}`;
+                                gameState.respawnQueue[queueKey].shift();
+                                
+                                hideRespawnModal();
+                                updateRespawnQueueDisplay();
+                            } else {
+                                showInstruction("Could not spawn unit, base is blocked!", 3000);
+                                hideRespawnModal();
+                            }
+                        }
+                    }
+                });
+            }
             gameState.gridRadius = GRID_RADIUS; 
             initializeGrid(); 
             gameLoop();
             showInstruction("Project Hexblade Loaded. Player 1's Turn.", 3000);
         };
     </script>
-
 </body></html>
