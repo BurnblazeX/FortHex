@@ -75,7 +75,6 @@
         canvas {
             background-color: #34495e;
             border-radius: 10px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.5);
             display: block;
             cursor: default;
             touch-action: none;
@@ -529,7 +528,7 @@
             margin-right: -10px; 
             min-height: 120px;
             display: flex;
-            flex-direction: column-reverse; 
+            flex-direction: column; 
             justify-content: flex-start;
         }
 
@@ -592,6 +591,7 @@
             border-top: 1px solid #7f8c8d;
             padding-top: 15px;
             margin-top: 15px;
+            margin-top: auto;
         }
         .respawn-queue-header {
             text-align: center;
@@ -698,7 +698,10 @@
     <h1 class="text-4xl font-bold mb-6 text-center text-amber-400">FortHex</h1>
     <div id="gameLayoutContainer">
         <div id="leftPanel" class="ui-panel">
-            <div id="globalTurnCounterDisplay" class="text-center" style="font-size: 1.2em; margin-bottom: 10px; color: #f1c40f;">Turn: 1</div>
+            <div>
+                <div id="globalTurnCounterDisplay" class="text-center" style="font-size: 1.5em; color: #f1c40f;">Turn: 1</div>
+                <hr style="width: 100%; border-color: #7F8C8D; margin-top: 10px;">
+            </div>
             <div id="selectedUnitInfoContainer" class="unit-info-container" style="display: none;">
                 <div id="selectedUnitInfo">
                     <p><strong>Selected Unit:</strong> <span id="unitName"></span></p>
@@ -709,7 +712,6 @@
                 </div>
             </div>
              <!-- ACTION INFO PANEL STRUCTURE -->
-            <hr id="actionInfoDivider" style="border-color: #4a6075; margin: 15px 0;">
             <div id="actionInfoContainer" class="unit-info-container">
                 <h3 class="action-info-header">Action Log</h3>
                 <div id="actionLogContent">
@@ -1203,7 +1205,6 @@
             tutorialModalOverlay: document.getElementById('tutorialModalOverlay'), 
             tutorialCloseButton: document.getElementById('tutorialCloseButton'), 
             tutorialSectionHeaders: document.querySelectorAll('.tutorial-section-header'), 
-            actionInfoDivider: document.getElementById('actionInfoDivider'),
             actionInfoContainer: document.getElementById('actionInfoContainer'),
             actionLogContent: document.getElementById('actionLogContent'),
         };
@@ -1698,51 +1699,69 @@
 
 
         function drawFortificationOutlines() {
-            const drawnTiles = new Set();
+            const fortifiedTilesP1 = new Set();
+            const fortifiedTilesP2 = new Set();
 
-            // Draw outlines for actively fortified units
-            gameState.tiles.forEach(tile => {
-                if (tile.fortifiedByPlayer) {
-                    const { x, y } = axialToPixel(tile.q, tile.r);
-                    ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const angle = Math.PI / 180 * (60 * i - 30);
-                        const vx = x + HEX_SIZE * Math.cos(angle);
-                        const vy = y + HEX_SIZE * Math.sin(angle);
-                        if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
-                    }
-                    ctx.closePath();
-                    ctx.strokeStyle = tile.fortifiedByPlayer === 1 ? UNIT_TYPES.MELEE.color : UNIT_TYPES.MELEE.enemyColor;
-                    ctx.lineWidth = 5;
-                    ctx.stroke();
-                    drawnTiles.add(getTileKey(tile.q, tile.r));
+            gameState.tiles.forEach((tile, key) => {
+                if (tile.fortifiedByPlayer === 1) {
+                    fortifiedTilesP1.add(key);
+                } else if (tile.fortifiedByPlayer === 2) {
+                    fortifiedTilesP2.add(key);
                 }
             });
 
-            // Draw permanent outlines for Base Camp tiles
-            for (let playerNum = 1; playerNum <= 2; playerNum++) {
-                const baseEdgeKey = FLAG_HOME_POSITIONS[`player${playerNum}`];
-                const [h1, h2] = parseEdgeKey(baseEdgeKey);
-                [getTileKey(h1.q, h1.r), getTileKey(h2.q, h2.r)].forEach(tileKey => {
-                    if (!drawnTiles.has(tileKey)) { // Avoid double-drawing if a unit is fortified on base
-                         const tile = gameState.tiles.get(tileKey);
-                         if(tile){
-                            const { x, y } = axialToPixel(tile.q, tile.r);
-                            ctx.beginPath();
-                            for (let i = 0; i < 6; i++) {
-                                const angle = Math.PI / 180 * (60 * i - 30);
-                                const vx = x + HEX_SIZE * Math.cos(angle);
-                                const vy = y + HEX_SIZE * Math.sin(angle);
-                                if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
-                            }
-                            ctx.closePath();
-                            ctx.strokeStyle = playerNum === 1 ? UNIT_TYPES.MELEE.color : UNIT_TYPES.MELEE.enemyColor;
-                            ctx.lineWidth = 5;
-                            ctx.stroke();
-                         }
+            const p1BaseEdgeKey = FLAG_HOME_POSITIONS.player1;
+            const [p1_h1, p1_h2] = parseEdgeKey(p1BaseEdgeKey);
+            const p1BaseTileKeys = [getTileKey(p1_h1.q, p1_h1.r), getTileKey(p1_h2.q, p1_h2.r)];
+            p1BaseTileKeys.forEach(key => fortifiedTilesP1.add(key));
+
+
+            const p2BaseEdgeKey = FLAG_HOME_POSITIONS.player2;
+            const [p2_h1, p2_h2] = parseEdgeKey(p2BaseEdgeKey);
+            const p2BaseTileKeys = [getTileKey(p2_h1.q, p2_h1.r), getTileKey(p2_h2.q, p2_h2.r)];
+            p2BaseTileKeys.forEach(key => fortifiedTilesP2.add(key));
+
+
+            const drawBordersForPlayer = (tileSet, color) => {
+                tileSet.forEach(tileKey => {
+                    const tile = gameState.tiles.get(tileKey);
+                    if (!tile) return;
+
+                    const { x: centerX, y: centerY } = axialToPixel(tile.q, tile.r);
+
+                    for (let i = 0; i < 6; i++) {
+                        const neighborDir = AXIAL_DIRECTIONS[i];
+                        const neighborQ = tile.q + neighborDir.q;
+                        const neighborR = tile.r + neighborDir.r;
+                        const neighborKey = getTileKey(neighborQ, neighborR);
+
+                        // Only draw the edge if the neighbor is not in the same player's fortified set.
+                        if (!tileSet.has(neighborKey)) {
+                             // FIX: Use the mapping constant to get the correct edge index for drawing
+                             const v1_idx = MAP_DIRECTION_TO_EDGE_INDEX[i];
+                             const v2_idx = (v1_idx + 1) % 6;
+                             
+                             const vert1_angle = Math.PI / 180 * (60 * v1_idx - 30);
+                             const edge_v1_x = centerX + HEX_SIZE * Math.cos(vert1_angle);
+                             const edge_v1_y = centerY + HEX_SIZE * Math.sin(vert1_angle);
+
+                             const vert2_angle = Math.PI / 180 * (60 * v2_idx - 30);
+                             const edge_v2_x = centerX + HEX_SIZE * Math.cos(vert2_angle);
+                             const edge_v2_y = centerY + HEX_SIZE * Math.sin(vert2_angle);
+                             
+                             ctx.beginPath();
+                             ctx.moveTo(edge_v1_x, edge_v1_y);
+                             ctx.lineTo(edge_v2_x, edge_v2_y);
+                             ctx.strokeStyle = color;
+                             ctx.lineWidth = 5;
+                             ctx.stroke();
+                        }
                     }
                 });
-            }
+            };
+
+            drawBordersForPlayer(fortifiedTilesP1, UNIT_TYPES.MELEE.color);
+            drawBordersForPlayer(fortifiedTilesP2, UNIT_TYPES.MELEE.enemyColor);
         }
 
         function drawContestedEdgeIndicator() {
@@ -2458,6 +2477,19 @@
             } else {
                 console.error('[UI Update] CRITICAL: ui.turnDisplay element is null or undefined!');
             }
+
+            // NEW: Update canvas outline color based on the current player
+            // Using the established UI colors for players
+            const player1Color = '#5dade2';
+            const player2Color = '#e74c3c';
+
+            if (gameState.currentPlayer === 1) {
+                canvas.style.outline = `4px solid ${player1Color}`;
+            } else {
+                canvas.style.outline = `4px solid ${player2Color}`;
+            }
+            // Add a small offset to make the outline look better
+            canvas.style.outlineOffset = '2px';
         }
 
         function updateGlobalTurnDisplay() {
@@ -2486,7 +2518,6 @@
             if (selectedUnit && !gameState.isDragging) {
                 ui.selectedUnitInfoContainer.style.display = 'block';
                 ui.actionInfoContainer.style.display = 'none';
-                ui.actionInfoDivider.style.display = 'none'; 
                 ui.actionsPanel.style.display = 'flex';
                 ui.unitName.textContent = `${selectedUnit.type.name} (P${selectedUnit.player})`;
                 ui.unitHP.textContent = selectedUnit.hp; ui.unitMaxHP.textContent = selectedUnit.maxHp;
@@ -2559,7 +2590,6 @@
             } else if (!gameState.isDragging) {
                 ui.selectedUnitInfoContainer.style.display = 'none';
                 ui.actionInfoContainer.style.display = 'block';
-                ui.actionInfoDivider.style.display = 'block'; 
                 ui.actionsPanel.style.display = 'none';
                 resetActionSelectionStates();
                 ui.fortifyUnfortifyButton.textContent = "Fortify"; ui.fortifyUnfortifyButton.classList.remove('selecting');
@@ -2664,7 +2694,7 @@
         function logAction(message, player, duration = 3000) {
             showInstruction(message, duration);
             gameState.actionLog.push({ message: message, player: player });
-            if (gameState.actionLog.length > 5) {
+            if (gameState.actionLog.length > 10) {
                 gameState.actionLog.shift();
             }
             updateActionLogDisplay();
@@ -2683,6 +2713,7 @@
                     flag.carrierId = null;
                     unitToDestroy.isCarryingFlag = false; 
                     logAction(`The P${flag.player} flag has been returned to base!`, activePlayer);
+                    recalculateSupplyLinesForPlayer(flag.player); // NEW: Recalculate supply lines for the flag's owner.
                 }
             }
             
@@ -2803,8 +2834,9 @@
                 const rotationallyAdjacentEdges = getRotationallyAdjacentEdges(current.edgeKey);
 
                 for (const nextAdjacentEdgeKey of rotationallyAdjacentEdges) {
-                    // A unit cannot move onto its own team's flag edge.
-                    if (nextAdjacentEdgeKey === playerHomeFlagEdge) {
+                    // Add exception for flag carriers
+                    // A unit cannot move onto its own team's flag edge, UNLESS it is carrying the enemy flag.
+                    if (nextAdjacentEdgeKey === playerHomeFlagEdge && !unit.isCarryingFlag) {
                         continue;
                     }
 
@@ -2830,6 +2862,12 @@
         }
 
         function findSupplyPath(startFortTileKey, player) {
+            // NEW: If the player's flag is stolen, they cannot have a supply line.
+            const playerFlag = gameState.flags[`p${player}`];
+            if (playerFlag && playerFlag.status === 'carried') {
+                return null;
+            }
+
             const baseEdgeKey = FLAG_HOME_POSITIONS[`player${player}`];
             const [baseH1, baseH2] = parseEdgeKey(baseEdgeKey);
             
@@ -2877,6 +2915,27 @@
             }
 
             return null; // No path found
+        }
+
+        function severSupplyLinesForPlayer(playerNum) {
+            logAction(`P${playerNum}'s flag was stolen! Supply lines have been cut.`, playerNum === 1 ? 2 : 1);
+            gameState.units.forEach(unit => {
+                if (unit.player === playerNum && unit.isFortified) {
+                    unit.supplyLine = null;
+                }
+            });
+        }
+
+        function recalculateSupplyLinesForPlayer(playerNum) {
+            logAction(`P${playerNum}'s flag has been returned! Supply lines are re-established.`, playerNum);
+            gameState.units.forEach(unit => {
+                if (unit.player === playerNum && unit.isFortified) {
+                    const playerBaseTiles = [FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
+                    if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                        unit.supplyLine = findSupplyPath(unit.fortifiedTileKey, unit.player);
+                    }
+                }
+            });
         }
 
         // --- Action: Fortify / Unfortify ---
@@ -3475,9 +3534,8 @@
 
             ui.actionLogContent.innerHTML = '';
             
-            const reversedLog = [...gameState.actionLog].reverse();
-
-            for (const logObject of reversedLog) {
+            // REMOVED: The reversal of the log array. We now loop through it directly.
+            for (const logObject of gameState.actionLog) {
                 const originalMessage = logObject.message;
                 const activePlayer = logObject.player;
 
@@ -3732,6 +3790,7 @@
                 unitToMove.currentMove = 0;
                 logAction(`P${unitToMove.player} ${unitToMove.type.name} has picked up the flag!`, gameState.currentPlayer);
                 updateAllHealingStatus();
+                severSupplyLinesForPlayer(enemyFlag.player); // NEW: Sever supply lines for the flag's owner.
             }
 
             updateSelectedUnitInfoPanel(); 
