@@ -700,7 +700,11 @@
         <div id="leftPanel" class="ui-panel">
             <div>
                 <div id="globalTurnCounterDisplay" class="text-center" style="font-size: 1.5em; color: #f1c40f;">Turn: 1</div>
-                <hr style="width: 100%; border-color: #7F8C8D; margin-top: 10px;">
+                <div id="supplyPointsContainer" class="text-center" style="font-size: 0.9em; margin-top: 8px;">
+                    <span style="color:#5dade2;">P1 Supply: <span id="p1Supply">10</span></span> | 
+                    <span style="color:#e74c3c;">P2 Supply: <span id="p2Supply">10</span></span>
+                </div>
+                <hr style="width: 100%; border-color: #4a6075; margin-top: 10px;">
             </div>
             <div id="selectedUnitInfoContainer" class="unit-info-container" style="display: none;">
                 <div id="selectedUnitInfo">
@@ -780,256 +784,132 @@
     </div>
 
     <div id="tutorialModalOverlay" style="display: none;"> <!-- Will be controlled by JS -->
-        <div id="tutorialModalContent">
-            <button id="tutorialCloseButton" class="tutorial-modal-close-button" title="Close Tutorial">&times;</button>
-            <h2>FortHex: Introduction & Tutorial</h2>
-            <p>Welcome to FortHex! This guide will explain the core mechanics and features of the game.</p>
-            <p><strong>Objective:</strong> The primary goal in FortHex is to eliminate all of your opponent's units.</p>
-            <p><strong>Gameplay:</strong> FortHex is a turn-based strategy game played on a hexagonal grid. Each player controls a set of units, taking turns to move them and perform actions.</p>
+                <div id="tutorialModalContent">
+            <button id="tutorialCloseButton" class="tutorial-modal-close-button" title="Close Tutorial">×</button>
+            <h2>FortHex: Complete Tutorial</h2>
+            <p>Welcome to FortHex! This is a turn-based strategy game of wits, warfare, and area control. This guide will teach you everything you need to know to claim victory.</p>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">1. The Game Board: Tiles & Edges <span class="tutorial-arrow">&#9658;</span></div>
+                <div class="tutorial-section-header">1. How to Play: The Basics <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
-                    <p>The battlefield is composed of hexagonal tiles and the edges between them.</p>
-                    <p><strong>1.1 Tile Types:</strong><br>Each tile has unique properties affecting gameplay:</p>
                     <ul>
-                        <li><strong>Plains:</strong>
-                            <ul>
-                                <li>Movement Cost: 1 MP (Movement Point).</li>
-                                <li>Fortifiable: Yes.</li>
-                                <li>Line of Sight (LOS): Does not block LOS.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Forest:</strong>
-                            <ul>
-                                <li>Movement Cost: 2 MP.</li>
-                                <li>Fortifiable: Yes.</li>
-                                <li>Line of Sight (LOS): Blocks LOS. Units cannot see <em>through</em> a forest tile unless they are on an edge of that forest tile or fortified within it.</li>
-                                <li><strong>Hidden Fortification:</strong> A unit fortified in a Forest tile is considered "hidden." It can only be targeted by archers on an edge immediately adjacent to that forest, or by melee units from an adjacent edge. Archers outside this immediate vicinity cannot target a unit hidden in a forest fortification.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Water:</strong>
-                            <ul>
-                                <li>Movement Cost: Impassable.</li>
-                                <li>Fortifiable: No.</li>
-                                <li>Line of Sight (LOS): Does not block LOS.</li>
-                                <li>Crossable: Only via a Bridge.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Mountain:</strong>
-                            <ul>
-                                <li>Movement Cost: 3 MP.</li>
-                                <li>Fortifiable: No.</li>
-                                <li>Line of Sight (LOS): Blocks LOS. Units cannot see <em>through</em> a mountain tile.</li>
-                            </ul>
-                        </li>
-                    </ul>
-                    <p><strong>1.2 Edges:</strong><br>Edges are the boundaries between two adjacent hexagonal tiles.</p>
-                    <ul>
-                        <li><strong>Unit Position:</strong> Units are primarily positioned <em>on edges</em>.</li>
-                        <li><strong>Capacity:</strong> Up to two friendly units can occupy the same edge. Enemy units cannot share an edge with your units.</li>
-                        <li><strong>Bridges:</strong>
-                            <ul>
-                                <li>Can be built by Melee units over Water edges.</li>
-                                <li>Cost: 1 action point.</li>
-                                <li>Health: Bridges have 5 HP (BRIDGE_MAX_HP).</li>
-                                <li>Movement: Allow movement across water as if it were a Plains edge (1 MP cost).</li>
-                                <li>Destroyable: Can be attacked and destroyed by units. If a bridge is destroyed, any units on it are eliminated.</li>
-                            </ul>
-                        </li>
+                        <li><strong>Selecting & Deselecting:</strong> Click on one of your units to select it. Its stats and available actions will appear in the UI panels. To deselect, click the unit again or any empty space.</li>
+                        <li><strong>Movement:</strong> With a unit selected, valid destinations will be highlighted in green. You can either <strong>drag-and-drop</strong> your unit to a highlighted road, or simply <strong>click</strong> on it.</li>
+                        <li><strong>Actions:</strong> With a unit selected, click an action button in the right panel (e.g., "Attack," "Fortify"). The game will highlight valid targets. Click a target to confirm. To cancel, click the action button again.</li>
+                        <li><strong>Ending Your Turn:</strong> When you have finished all your moves, click the "End Turn" button to pass control to your opponent.</li>
                     </ul>
                 </div>
             </div>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">2. Units & Stats <span class="tutorial-arrow">&#9658;</span></div>
+                <div class="tutorial-section-header">2. The Objective: How to Win <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
-                    <p>Each player controls two types of units: Melee and Archer.</p>
-                    <p><strong>2.1 General Unit Stats:</strong></p>
+                    <p>There are two paths to victory:</p>
                     <ul>
-                        <li><strong>HP (Health Points):</strong> Represents the unit's health. If a unit's HP reaches 0, it is destroyed and removed from the game.</li>
-                        <li><strong>Max HP:</strong> The normal maximum health of the unit.</li>
-                        <li><strong>Movement Points (MP):</strong> The distance a unit can travel in a turn. MP is spent moving between edges. Refreshes at the start of your turn.</li>
-                        <li><strong>Attack:</strong> The base amount of damage a unit deals when attacking.</li>
-                        <li><strong>Player Color:</strong> Player 1 units are typically blue; Player 2 units are red.</li>
-                    </ul>
-                    <p><strong>2.2 Unit Types:</strong></p>
-                    <ul>
-                        <li><strong>Melee Unit:</strong>
-                            <ul>
-                                <li>HP: 12</li>
-                                <li>Base Movement: 4 MP</li>
-                                <li>Attack: 3</li>
-                                <li>Special Ability: Can perform the "Build Bridge" action.</li>
-                                <li>Attack Type: Attacks targets on rotationally adjacent edges or adjacent fortified units.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Archer Unit:</strong>
-                            <ul>
-                                <li>HP: 10</li>
-                                <li>Base Movement: 3 MP</li>
-                                <li>Attack: 2</li>
-                                <li>Special Ability: Ranged attack.</li>
-                                <li>Attack Type: Attacks targets within its range and Line of Sight.
-                                    <ul>
-                                        <li><strong>Fortified Archer Bonus:</strong> Gains +1 Attack if attacking while fortified.</li>
-                                    </ul>
-                                </li>
-                            </ul>
-                        </li>
+                        <li><strong>Annihilation:</strong> Eliminate all of your opponent's units.</li>
+                        <li><strong>Capture the Flag (CTF):</strong> Move one of your units to the enemy's starting base to capture their flag. Successfully bring that unit back to your own starting base to win the game instantly.</li>
                     </ul>
                 </div>
             </div>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">3. Player Turn & Unit Actions <span class="tutorial-arrow">&#9658;</span></div>
+                <div class="tutorial-section-header">3. The Battlefield: Tiles & Roads <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
-                    <p>During your turn, each of your units can typically perform one "major action" (Attack, Fortify, Unfortify, Build Bridge) OR use its Movement Points to move. Once a major action is performed, the unit cannot move further or perform another major action in that turn (though it might still have MP remaining).</p>
-                    <p><strong>3.1 Movement:</strong></p>
+                    <p>The map is made of hexagonal tiles and the roads connecting them. Your units are positioned on roads.</p>
+                    <p><strong>Tiles:</strong> Each tile type affects gameplay.</p>
                     <ul>
-                        <li>Units move from one edge to another rotationally adjacent edge.</li>
-                        <li><strong>Movement Point Costs per Edge Traversed:</strong>
-                            <ul>
-                                <li>Plains Edge (both tiles Plains): 1 MP</li>
-                                <li>Forest Edge (at least one tile Forest, neither Water/Mountain): 2 MP</li>
-                                <li>Mountain Edge (at least one tile Mountain, neither Water): 3 MP</li>
-                                <li>Bridged Water Edge: 1 MP</li>
-                                <li>Unbridged Water Edge: Impassable.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Enemy Fortification Penalty:</strong> Moving onto an edge adjacent to an enemy-controlled fortified tile costs an additional +1 MP. This penalty stacks with terrain costs.</li>
-                        <li><strong>Maximum Movement Cost:</strong> Regardless of terrain and fortification penalties, the cost to move onto a single adjacent edge will not exceed 3 MP (MAX_MOVEMENT_COST).</li>
+                        <li><strong>Plains:</strong> Standard, open ground.</li>
+                        <li><strong>Forest:</strong> Provides cover, but slows movement. Blocks Line of Sight.</li>
+                        <li><strong>Mountain:</strong> Difficult to cross and blocks Line of Sight.</li>
+                        <li><strong>Water:</strong> Impassable.</li>
                     </ul>
-                    <p><strong>3.2 Attack Action:</strong></p>
+                    <p><strong>Roads:</strong> The paths your units travel on. Up to two friendly units can share a road.</p>
                     <ul>
-                        <li>Cost: 1 MP.</li>
-                        <li>Ends the unit's ability to perform other major actions or move further that turn.</li>
-                        <li><strong>Targets:</strong> Enemy units or enemy-controlled/neutral bridges.</li>
-                        <li><strong>Melee Attack:</strong>
-                            <ul>
-                                <li>Can target enemy units on any rotationally adjacent edge.</li>
-                                <li>Can target an enemy unit fortified on a tile adjacent to the Melee unit's current edge (unless the target is "hidden" in a Forest fortification and the Melee unit is not on an edge of that specific forest).</li>
-                                <li>Can target bridges on rotationally adjacent edges.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Archer Attack:</strong>
-                            <ul>
-                                <li><strong>Range:</strong> Archers can generally target edges around the two hexes they straddle, and one hex beyond that, subject to Line of Sight.</li>
-                                <li><strong>Line of Sight (LOS) Rules:</strong>
-                                    <ul>
-                                        <li><strong>General Blockers:</strong> Mountains always block LOS. Forests block LOS if the archer is not on an edge of that forest or fortified within it.</li>
-                                        <li><strong>Archer on an Edge:</strong>
-                                            <ul>
-                                                <li>The archer uses both tiles it straddles (Tile A and Tile B) for LOS determination.</li>
-                                                <li>To see a target edge: LOS must be clear from <em>both</em> Tile A and Tile B to the target edge. For example, if Tile A is a Forest, and the target edge is not rotationally adjacent to the archer's edge <em>on Tile A</em>, then Tile A blocks LOS from that "side." The same applies to Tile B. If <em>either</em> side is blocked by terrain like this, the shot is not possible. Mountains on Tile A or Tile B will block shots to edges <em>behind</em> that mountain relative to the archer.</li>
-                                                <li>To see a fortified unit: Similar rules apply. The archer must be able to "see" the tile the target is fortified on, considering the terrain of Tile A and Tile B and requiring rotational adjacency for shots originating from forest hexes. An archer on an edge cannot shoot into a "hidden" (Forest) fortification.</li>
-                                            </ul>
-                                        </li>
-                                        <li><strong>Fortified Archer (Plains/Mountain):</strong> Has a clear view of its own tile and all 6 adjacent tiles, and can shoot at units/bridges on edges connecting these tiles, or fortified units on these tiles, provided intervening terrain (further away Mountains/Forests) doesn't block LOS.</li>
-                                        <li><strong>Fortified Archer (Forest - "Hidden"):</strong>
-                                            <ul>
-                                                <li>Can only shoot at units on edges immediately adjacent to its own forest tile.</li>
-                                                <li>Can only shoot at fortified units on tiles immediately adjacent to its own forest tile (if the target is not <em>also</em> in a Forest fortification).</li>
-                                                <li>Is "hidden" and cannot be targeted by enemy archers unless they are on an edge immediately adjacent to this archer's forest tile.</li>
-                                            </ul>
-                                        </li>
-                                    </ul>
-                                </li>
-                                <li><strong>Split Damage:</strong> If an Archer attacks an enemy unit on an edge where <em>two</em> enemy units are present (and the primary target is not fortified), the Archer's damage is split between both enemy units (e.g., 2 damage becomes 1 damage to each). Each unit takes a minimum of 1 damage if the Archer's attack is 1.</li>
-                            </ul>
-                        </li>
+                        <li>Movement costs vary by the terrain on either side of a road (e.g., a road next to a Forest is slower to cross).</li>
+                        <li>Moving onto a road next to an enemy-controlled fort costs an extra Movement Point (MP).</li>
                     </ul>
-                    <p><strong>3.3 Fortify Action:</strong></p>
+                </div>
+            </div>
+            
+            <div class="tutorial-section">
+                <div class="tutorial-section-header">4. Core Mechanic: Fortification <span class="tutorial-arrow">►</span></div>
+                <div class="tutorial-section-content">
+                    <p>Fortifying is a key strategic action. A unit on a road can move into the center of an adjacent tile to fortify it.</p>
                     <ul>
-                        <li>Cost: 1 MP.</li>
-                        <li>Ends the unit's ability to perform other major actions or move further that turn.</li>
-                        <li><strong>Requirements:</strong>
-                            <ul>
-                                <li>Unit must be on an edge.</li>
-                                <li>One of the two tiles adjacent to the unit's edge must be Plains or Forest.</li>
-                                <li>The chosen tile must not already be fortified by any player.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Process:</strong> The unit moves from the edge to the center of the chosen tile. The tile becomes fortified by that unit's player.</li>
+                        <li><strong>Fortifiable Tiles:</strong> You can only fortify <strong>Plains</strong> and <strong>Forest</strong> tiles.</li>
                         <li><strong>Benefits of Fortification:</strong>
                             <ul>
-                                <li><strong>Defensive Bonus:</strong> When a fortified unit is attacked, the incoming damage is reduced by 1 (to a minimum of 0 damage).</li>
-                                <li><strong>Zone of Control (ZoC):</strong>
-                                    <ul>
-                                        <li>Immediately upon fortification, deals 1 damage (FORTIFICATION_DAMAGE) to all enemy units on edges adjacent to the newly fortified tile.</li>
-                                        <li>At the start of your subsequent turns, deals 1 damage to any enemy units still on edges adjacent to this fortified tile.</li>
-                                    </ul>
-                                </li>
-                                <li><strong>Healing:</strong> At the start of your turn, a fortified unit heals 1 HP if it was not damaged by an enemy attack during the opponent's last turn. (Specifically, if GlobalTurnNumber is at least unit.lastAttackedByHostileOnTurn + 2).</li>
-                                <li><strong>Shield:</strong> Healing can increase a unit's HP up to Max HP + 1. This extra point acts as a temporary shield, absorbing one point of damage before normal HP is affected.</li>
+                                <li><strong>Defense:</strong> Reduces incoming damage. A fortified Pikeman is especially tough.</li>
+                                <li><strong>Zone of Control (ZoC):</strong> Automatically damages adjacent enemies, creating a dangerous area for your opponent.</li>
+                                <li><strong>Healing & Supply:</strong> A fortified unit can heal 1 HP at the start of your turn. Healing can even grant a temporary 1 HP "shield" above its maximum health.</li>
                             </ul>
                         </li>
-                        <li><strong>Restrictions:</strong> A fortified unit cannot move or perform other actions (except Unfortify or Attack, if an Archer).</li>
-                    </ul>
-                     <p><strong>3.4 Unfortify Action:</strong></p>
-                    <ul>
-                        <li>Cost: 1 MP.</li>
-                        <li>Ends the unit's ability to perform other major actions or move further that turn.</li>
-                        <li><strong>Process:</strong> A fortified unit moves from its tile center to a valid, unoccupied (or occupied by only one other friendly unit) adjacent edge. The tile loses its fortified status.</li>
-                    </ul>
-                    <p><strong>3.5 Build Bridge Action (Melee Unit Only):</strong></p>
-                    <ul>
-                        <li>Cost: 1 MP.</li>
-                        <li>Ends the unit's ability to perform other major actions or move further that turn.</li>
-                        <li><strong>Process:</strong> A Melee unit on an edge can build a bridge on a rotationally adjacent edge that is currently unbridged Water. The new bridge has 5 HP (BRIDGE_MAX_HP).</li>
-                    </ul>
-                    <p><strong>3.6 End Turn:</strong></p>
-                    <ul>
-                        <li>Click the "End Turn" button.</li>
-                        <li>Control passes to the other player.</li>
-                        <li>For the new active player:
-                            <ul>
-                                <li>All their units regain their full base Movement Points.</li>
-                                <li>All their units have their "major action taken" flag reset, allowing them to act again.</li>
-                                <li>Zone of Control damage from their fortifications is applied to adjacent enemy units.</li>
-                                <li>Healing for their fortified units is processed.</li>
-                            </ul>
-                        </li>
-                        <li>The Global Turn counter increments when Player 2 ends their turn and it becomes Player 1's turn again.</li>
+                        <li><strong>Unfortify:</strong> A fortified unit can perform an action to move back onto an adjacent road, removing the fortification.</li>
                     </ul>
                 </div>
             </div>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">4. Interacting with the Game <span class="tutorial-arrow">&#9658;</span></div>
+                <div class="tutorial-section-header">5. Your Army: The Units <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
-                    <ul>
-                        <li><strong>Selecting/Deselecting Units:</strong> Click/tap on one of your units to select it. Its information will appear in the left panel, and available actions in the right panel. Click the unit again or an empty space to deselect.</li>
-                        <li><strong>Moving Units:</strong>
+                    <p>You control four distinct unit types, each with a unique role.</p>
+                     <ul>
+                        <li><strong>Melee (Symbol: Sword):</strong> A versatile front-line fighter.
+                            <p style="margin-left: 15px; margin-bottom: 5px;">HP: 12 | Move: 4 | Attack: 3</p>
                             <ul>
-                                <li><strong>Drag-and-Drop:</strong> Click/touch and hold on a selected, movable unit, then drag it to a highlighted green valid destination edge and release.</li>
-                                <li><strong>Click-to-Move:</strong> With a unit selected, click/tap on a highlighted green valid destination edge.</li>
+                                <li><strong>Special:</strong> The only unit that can build Bridges over Water roads.</li>
+                                <li><strong>Weak against:</strong> Horseman | <strong>Strong against:</strong> Archer</li>
                             </ul>
                         </li>
-                        <li><strong>Performing Actions:</strong>
+                        <li style="margin-top:10px;"><strong>Archer (Symbol: Arrow):</strong> A ranged unit that attacks from a distance. Must have Line of Sight to its target.
+                            <p style="margin-left: 15px; margin-bottom: 5px;">HP: 10 | Move: 3 | Attack: 3</p>
                             <ul>
-                                <li>With a unit selected, click its desired action button in the right panel (e.g., "Attack," "Fortify").</li>
-                                <li>Some actions (Fortify, Unfortify, Build Bridge, Attack) will then highlight valid target tiles/edges. Click/tap the desired target to complete the action.</li>
-                                <li>To cancel an action selection mode, click the action button again (it will typically say "Cancel...").</li>
+                                <li><strong>Special:</strong> Gains +1 Attack when attacking from a fortified position.</li>
+                                <li><strong>Weak against:</strong> Melee | <strong>Strong against:</strong> Pikeman</li>
                             </ul>
                         </li>
-                        <li><strong>Generating a New Map:</strong> Click the "Generate New Map" button. This will reset the current game.</li>
-                        <li><strong>Downloading Game:</strong> Click the download icon to save the current game state as a self-contained HTML file.</li>
+                        <li style="margin-top:10px;"><strong>Pikeman (Symbol: Pike):</strong> A defensive powerhouse and anti-cavalry specialist.
+                            <p style="margin-left: 15px; margin-bottom: 5px;">HP: 13 | Move: 3 | Attack: 3</p>
+                            <ul>
+                                <li><strong>Special:</strong> Gets a superior defensive bonus when fortified. Its attack can pierce some of an enemy's fortification defense.</li>
+                                <li><strong>Weak against:</strong> Archer | <strong>Strong against:</strong> Horseman</li>
+                            </ul>
+                        </li>
+                        <li style="margin-top:10px;"><strong>Horseman (Symbol: Horse Head):</strong> A fast, mobile flanker designed for hit-and-run tactics.
+                            <p style="margin-left: 15px; margin-bottom: 5px;">HP: 11 | Move: 5 | Attack: 3</p>
+                            <ul>
+                                <li><strong>Special:</strong> Can use its remaining Movement Points *after* attacking. Cannot fortify.</li>
+                                <li><strong>Weak against:</strong> Pikeman | <strong>Strong against:</strong> Melee</li>
+                            </ul>
+                        </li>
                     </ul>
                 </div>
             </div>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">5. General Tips <span class="tutorial-arrow">&#9658;</span></div>
+                <div class="tutorial-section-header">6. Advanced Combat: Synergies & Counters <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
+                     <p>Unit interactions are the key to victory.</p>
                     <ul>
-                        <li>Utilize terrain: Forests provide cover but slow movement. Mountains are strong chokepoints but block LOS.</li>
-                        <li>Fortifications are key for defense, area denial (ZoC), and unit longevity (healing).</li>
-                        <li>Bridges can create new pathways across water, enabling surprise attacks or flanking maneuvers.</li>
-                        <li>Protect your Archers, but use their range and LOS to control areas or weaken enemies before Melee units engage.</li>
-                        <li>Be mindful of your unit's Movement Points and whether they have already taken a major action.</li>
+                        <li><strong>Advantage/Disadvantage:</strong> Units get an attack bonus against types they are "strong" against, and a penalty against those they are "weak" against.</li>
+                        <li><strong>Spear Wall:</strong> An enemy Horseman attacking a unit next to your fortified Pikeman is stopped in its tracks and cannot move away after the attack.</li>
+                        <li><strong>Combined Arms:</strong> An attack from a road with both a friendly Melee and Archer on it will ignore the target's fortification bonus.</li>
+                        <li><strong>Cavalry Screen:</strong> If an enemy Melee unit attacks your Horseman, a friendly Archer on the same road will automatically retaliate with a half-damage shot.</li>
+                        <li><strong>Split Damage:</strong> If an Archer attacks a road where two enemies are present, its damage is split between them.</li>
                     </ul>
-                    <p>Good luck, Commander!</p>
+                </div>
+            </div>
+
+            <div class="tutorial-section">
+                <div class="tutorial-section-header">7. Strategic Systems: The Long Game <span class="tutorial-arrow">►</span></div>
+                <div class="tutorial-section-content">
+                    <p>Mastering these systems will set you apart from your opponent.</p>
+                    <ul>
+                        <li><strong>Supply Points:</strong> Each player starts with <strong>10 Supply Points</strong>, a global resource used to maintain supply lines. The cost of a supply line is based on the length and terrain of the path back to your base. If you cannot afford the cost, your unit will fortify but will be "unsupplied" and cannot heal. When a supplied unit is destroyed or unfortifies, its supply cost is refunded.</li>
+                        <li><strong>Supply Lines & Healing:</strong> For a fortified unit to heal, it must be "in supply." This requires both a valid supply line path AND enough Supply Points to maintain it. An enemy unit standing on any road in that chain will also break the supply line and prevent healing.</li>
+                        <li><strong>Capture the Flag & Supply Raids:</strong> Stealing the enemy flag is a devastating move. When you are carrying their flag, <strong>all of their units, no matter where they are, lose their supply lines and cannot heal.</strong> They must destroy your flag carrier to restore their healing capabilities.</li>
+                        <li><strong>Reinforcements (Respawn System):</strong> Destroyed units aren't gone forever. They enter a respawn queue. After 10 turns, you can deploy a new unit at your base. This is limited by a maximum army size (4 units) and a cap on each unit type (2 of each).</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -1227,6 +1107,7 @@
             flags: null,
             respawnQueue: { player1: [], player2: [] },
             unitCounts: null,
+            supplyPoints: { player1: 10, player2: 10 },
 
             // Physical UI states
             isDragging: false,
@@ -1465,6 +1346,9 @@
             gameState.respawnQueue = { player1: [], player2: [] };
             updateActionLogDisplay();
             
+            gameState.supplyPoints = { player1: 10, player2: 10 };
+            updateSupplyPointsDisplay();
+
             gameState.unitCounts = {
                 player1: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 },
                 player2: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 }
@@ -2704,6 +2588,15 @@
         function destroyUnit(unitToDestroy, reason = "destroyed") {
             const activePlayer = gameState.currentPlayer;
 
+            // Refund supply points if the unit was fortified and supplied
+            if (unitToDestroy.isFortified && unitToDestroy.supplyLine && unitToDestroy.supplyLine.cost) {
+                const playerSupplyKey = `player${unitToDestroy.player}`;
+                const refundedCost = Math.round(unitToDestroy.supplyLine.cost);
+                gameState.supplyPoints[playerSupplyKey] += refundedCost;
+                logAction(`P${unitToDestroy.player} regains ${refundedCost} supply from lost unit.`, activePlayer);
+                updateSupplyPointsDisplay();
+            }
+
             gameState.unitCounts[`player${unitToDestroy.player}`][unitToDestroy.type.name]--;
 
             if (unitToDestroy.isCarryingFlag) {
@@ -2713,7 +2606,7 @@
                     flag.carrierId = null;
                     unitToDestroy.isCarryingFlag = false; 
                     logAction(`The P${flag.player} flag has been returned to base!`, activePlayer);
-                    recalculateSupplyLinesForPlayer(flag.player); // NEW: Recalculate supply lines for the flag's owner.
+                    recalculateSupplyLinesForPlayer(flag.player);
                 }
             }
             
@@ -2862,7 +2755,7 @@
         }
 
         function findSupplyPath(startFortTileKey, player) {
-            // NEW: If the player's flag is stolen, they cannot have a supply line.
+            // If the player's flag is stolen, they cannot have a supply line.
             const playerFlag = gameState.flags[`p${player}`];
             if (playerFlag && playerFlag.status === 'carried') {
                 return null;
@@ -2893,11 +2786,22 @@
                 frontier.sort((a, b) => a.cost - b.cost);
                 const current = frontier.shift();
 
-            if (endEdges.has(current.edgeKey)) {
-            // Return the path, but remove the first and last edge for a cleaner visual.
-                const visualPath = current.path.length > 2 ? current.path.slice(1, -1) : [];
-                return { path: visualPath, cost: current.cost };
-            }
+                if (endEdges.has(current.edgeKey)) {
+                    // Path found! Now calculate the adjusted cost.
+                    let adjustedCost = current.cost;
+                    const fullPath = current.path;
+
+                    // Subtract the cost of the first and last edge segments.
+                    if (fullPath.length > 0) {
+                        adjustedCost -= getEdgeCost({ player }, fullPath[0]);
+                    }
+                    if (fullPath.length > 1) {
+                        adjustedCost -= getEdgeCost({ player }, fullPath[fullPath.length - 1]);
+                    }
+
+                    const visualPath = fullPath.length > 2 ? fullPath.slice(1, -1) : [];
+                    return { path: visualPath, cost: Math.max(0, adjustedCost) }; // Ensure cost isn't negative
+                }
 
                 const adjacentEdges = getRotationallyAdjacentEdges(current.edgeKey);
                 for (const neighborEdgeKey of adjacentEdges) {
@@ -2965,25 +2869,38 @@
                 resetActionSelectionStates(); 
                 updateSelectedUnitInfoPanel(); return;
             }
+            
             const fortifyingPlayer = selectedUnit.player;
+            const playerSupplyKey = `player${fortifyingPlayer}`;
+            
+            // First, calculate the potential supply line and its cost
+            const playerBaseTiles = [FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
+            let supplyPathData = null;
+            if (!playerBaseTiles.includes(targetTileKeyToFortify)) {
+                supplyPathData = findSupplyPath(targetTileKeyToFortify, fortifyingPlayer);
+            }
+
+            const supplyCost = supplyPathData ? Math.round(supplyPathData.cost) : 0;
+
+            // Check if player can afford the supply line
+            if (gameState.supplyPoints[playerSupplyKey] >= supplyCost) {
+                gameState.supplyPoints[playerSupplyKey] -= supplyCost;
+                selectedUnit.supplyLine = supplyPathData;
+                logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
+                if(supplyCost > 0) logAction(`Supply line established. Cost: ${supplyCost}.`, fortifyingPlayer);
+            } else {
+                selectedUnit.supplyLine = null; // Cannot afford it, so no supply line
+                logAction(`${selectedUnit.type.name} fortified, but is out of supply!`, fortifyingPlayer, 3000);
+            }
+            
+            // Complete the fortification action regardless of supply status
             const currentEdge = gameState.edges.get(selectedUnit.position);
             if (currentEdge) currentEdge.units = currentEdge.units.filter(u => u.id !== selectedUnit.id);
             selectedUnit.isFortified = true; selectedUnit.fortifiedTileKey = targetTileKeyToFortify;
             selectedUnit.positionType = 'center'; selectedUnit.position = targetTileKeyToFortify;
             selectedUnit.currentMove = 0; selectedUnit.hasPerformedMajorAction = true;
             targetTileObject.fortifiedByPlayer = fortifyingPlayer;
-            logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, gameState.currentPlayer, 2500);
             
-            // --- NEW: Calculate and store the supply line ---
-            const playerBaseEdgeKey = FLAG_HOME_POSITIONS[`player${fortifyingPlayer}`];
-            const playerBaseTiles = [playerBaseEdgeKey.split('_')[0], playerBaseEdgeKey.split('_')[1]];
-            
-            if (!playerBaseTiles.includes(targetTileKeyToFortify)) {
-                const supplyPathData = findSupplyPath(targetTileKeyToFortify, fortifyingPlayer);
-                selectedUnit.supplyLine = supplyPathData;
-            }
-            // --- END OF NEW LOGIC ---
-
             let unitsToDestroy = [];
             getNeighbors(targetTileObject.q, targetTileObject.r).forEach(neighborCoords => {
                  const edgeKey = getEdgeKey(targetTileObject.q, targetTileObject.r, neighborCoords.q, neighborCoords.r);
@@ -2992,16 +2909,18 @@
                      adjacentEdge.units.forEach(enemyUnit => {
                          if (enemyUnit.player !== fortifyingPlayer && enemyUnit.positionType === 'edge') {
                              enemyUnit.hp -= FORTIFICATION_DAMAGE;
-                             logAction(`P${enemyUnit.player} ${enemyUnit.type.name} takes ZoC. HP: ${enemyUnit.hp}`, gameState.currentPlayer);
+                             logAction(`P${enemyUnit.player} ${enemyUnit.type.name} takes ZoC. HP: ${enemyUnit.hp}`, fortifyingPlayer);
                              if (enemyUnit.hp <= 0 && !unitsToDestroy.find(u => u.id === enemyUnit.id)) unitsToDestroy.push(enemyUnit);
                          }
                      });
                  }
              });
             unitsToDestroy.forEach(u => destroyUnit(u, "fort_zoc"));
+
             gameState.currentReachableMoves.clear();
             resetActionSelectionStates();
-            updateSelectedUnitInfoPanel(); 
+            updateSelectedUnitInfoPanel();
+            updateSupplyPointsDisplay();
             if (!gameState.gameOver) checkVictoryCondition();
         }
 
@@ -3035,6 +2954,15 @@
                  updateSelectedUnitInfoPanel(); 
                  return;
             }
+
+            // Refund supply points if the unit had a supply line
+            if (selectedUnit.supplyLine && selectedUnit.supplyLine.cost) {
+                const playerSupplyKey = `player${selectedUnit.player}`;
+                const refundedCost = Math.round(selectedUnit.supplyLine.cost);
+                gameState.supplyPoints[playerSupplyKey] += refundedCost;
+                logAction(`Supply line removed. P${selectedUnit.player} regains ${refundedCost} supply.`, selectedUnit.player);
+            }
+
             const oldFortifiedTile = gameState.tiles.get(selectedUnit.fortifiedTileKey);
             if (oldFortifiedTile) oldFortifiedTile.fortifiedByPlayer = null;
             selectedUnit.isFortified = false;
@@ -3049,6 +2977,7 @@
             logAction(`${selectedUnit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, gameState.currentPlayer, 2500);
             resetActionSelectionStates();
             updateSelectedUnitInfoPanel();
+            updateSupplyPointsDisplay();
         }
 
         function handleUnfortifyActionLogic() {
@@ -3558,6 +3487,14 @@
             }
         }
 
+        function updateSupplyPointsDisplay() {
+            const p1SupplyEl = document.getElementById('p1Supply');
+            const p2SupplyEl = document.getElementById('p2Supply');
+            if (p1SupplyEl && p2SupplyEl) {
+                p1SupplyEl.textContent = gameState.supplyPoints.player1;
+                p2SupplyEl.textContent = gameState.supplyPoints.player2;
+            }
+        }
 
                 function completeAttack(attackingUnit, targetUnitInfo, attackType) {
             if (!attackingUnit || !targetUnitInfo || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) {
