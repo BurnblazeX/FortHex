@@ -590,7 +590,6 @@
         .respawn-queue-container {
             border-top: 1px solid #7f8c8d;
             padding-top: 15px;
-            margin-top: 15px;
             margin-top: auto;
         }
         .respawn-queue-header {
@@ -794,7 +793,7 @@
     </div>
 
     <div id="tutorialModalOverlay" style="display: none;"> <!-- Will be controlled by JS -->
-                <div id="tutorialModalContent">
+        <div id="tutorialModalContent">
             <button id="tutorialCloseButton" class="tutorial-modal-close-button" title="Close Tutorial">×</button>
             <h2>FortHex: Complete Tutorial</h2>
             <p>Welcome to FortHex! This is a turn-based strategy game of wits, warfare, and area control. This guide will teach you everything you need to know to claim victory.</p>
@@ -803,7 +802,7 @@
                 <div class="tutorial-section-header">1. How to Play: The Basics <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
                     <ul>
-                        <li><strong>Selecting & Deselecting:</strong> Click on one of your units to select it. Its stats and available actions will appear in the UI panels. To deselect, click the unit again or any empty space.</li>
+                        <li><strong>Selecting &amp; Deselecting:</strong> Click on one of your units to select it. Its stats and available actions will appear in the UI panels. To deselect, click the unit again or any empty space.</li>
                         <li><strong>Movement:</strong> With a unit selected, valid destinations will be highlighted in green. You can either <strong>drag-and-drop</strong> your unit to a highlighted road, or simply <strong>click</strong> on it.</li>
                         <li><strong>Actions:</strong> With a unit selected, click an action button in the right panel (e.g., "Attack," "Fortify"). The game will highlight valid targets. Click a target to confirm. To cancel, click the action button again.</li>
                         <li><strong>Ending Your Turn:</strong> When you have finished all your moves, click the "End Turn" button to pass control to your opponent.</li>
@@ -823,7 +822,7 @@
             </div>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">3. The Battlefield: Tiles & Roads <span class="tutorial-arrow">►</span></div>
+                <div class="tutorial-section-header">3. The Battlefield: Tiles &amp; Roads <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
                     <p>The map is made of hexagonal tiles and the roads connecting them. Your units are positioned on roads.</p>
                     <p><strong>Tiles:</strong> Each tile type affects gameplay.</p>
@@ -851,7 +850,7 @@
                             <ul>
                                 <li><strong>Defense:</strong> Reduces incoming damage. A fortified Pikeman is especially tough.</li>
                                 <li><strong>Zone of Control (ZoC):</strong> Automatically damages adjacent enemies, creating a dangerous area for your opponent.</li>
-                                <li><strong>Healing & Supply:</strong> A fortified unit can heal 1 HP at the start of your turn. Healing can even grant a temporary 1 HP "shield" above its maximum health.</li>
+                                <li><strong>Healing &amp; Supply:</strong> A fortified unit can heal 1 HP at the start of your turn. Healing can even grant a temporary 1 HP "shield" above its maximum health.</li>
                             </ul>
                         </li>
                         <li><strong>Unfortify:</strong> A fortified unit can perform an action to move back onto an adjacent road, removing the fortification.</li>
@@ -897,7 +896,7 @@
             </div>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">6. Advanced Combat: Synergies & Counters <span class="tutorial-arrow">►</span></div>
+                <div class="tutorial-section-header">6. Advanced Combat: Synergies &amp; Counters <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
                      <p>Unit interactions are the key to victory.</p>
                     <ul>
@@ -916,8 +915,8 @@
                     <p>Mastering these systems will set you apart from your opponent.</p>
                     <ul>
                         <li><strong>Supply Points:</strong> Each player starts with <strong>10 Supply Points</strong>, a global resource used to maintain supply lines. The cost of a supply line is based on the length and terrain of the path back to your base. If you cannot afford the cost, your unit will fortify but will be "unsupplied" and cannot heal. When a supplied unit is destroyed or unfortifies, its supply cost is refunded.</li>
-                        <li><strong>Supply Lines & Healing:</strong> For a fortified unit to heal, it must be "in supply." This requires both a valid supply line path AND enough Supply Points to maintain it. An enemy unit standing on any road in that chain will also break the supply line and prevent healing.</li>
-                        <li><strong>Capture the Flag & Supply Raids:</strong> Stealing the enemy flag is a devastating move. When you are carrying their flag, <strong>all of their units, no matter where they are, lose their supply lines and cannot heal.</strong> They must destroy your flag carrier to restore their healing capabilities.</li>
+                        <li><strong>Supply Lines &amp; Healing:</strong> For a fortified unit to heal, it must be "in supply." This requires both a valid supply line path AND enough Supply Points to maintain it. An enemy unit standing on any road in that chain will also break the supply line and prevent healing.</li>
+                        <li><strong>Capture the Flag &amp; Supply Raids:</strong> Stealing the enemy flag is a devastating move. When you are carrying their flag, <strong>all of their units, no matter where they are, lose their supply lines and cannot heal.</strong> They must destroy your flag carrier to restore their healing capabilities.</li>
                         <li><strong>Reinforcements (Respawn System):</strong> Destroyed units aren't gone forever. They enter a respawn queue. After 10 turns, you can deploy a new unit at your base. This is limited by a maximum army size (4 units) and a cap on each unit type (2 of each).</li>
                     </ul>
                 </div>
@@ -2631,14 +2630,14 @@
             if (unitToDestroy.positionType === 'edge') {
                 const edgeOfUnit = gameState.edges.get(unitToDestroy.position);
                 if (edgeOfUnit) edgeOfUnit.units = edgeOfUnit.units.filter(u => u.id !== unitToDestroy.id);
-            } else if (unitToDestroy.positionType === 'center' && unitToDestroy.isFortified) {
+            } else if (unitToDestroy.positionType === 'center' && wasFortified) {
                 const fortifiedTile = gameState.tiles.get(unitToDestroy.position);
                 if (fortifiedTile && fortifiedTile.fortifiedByPlayer === destroyedPlayer) fortifiedTile.fortifiedByPlayer = null;
             }
 
             gameState.units = gameState.units.filter(u => u.id !== unitToDestroy.id);
 
-            // If the destroyed unit was fortified, its removal might affect the supply network
+            // If the destroyed unit was fortified, its removal might change the supply network
             if (wasFortified) {
                 recalculatePlayerSupplyNetwork(destroyedPlayer);
             }
@@ -2829,6 +2828,74 @@
             return null; // No path found
         }
 
+        function recalculatePlayerSupplyNetwork(playerNum) {
+            const playerSupplyKey = `player${playerNum}`;
+            const maxSupply = 10;
+
+            // Reset all non-base supply lines for the player to start fresh
+            gameState.units.forEach(unit => {
+                if (unit.player === playerNum && unit.isFortified) {
+                    const playerBaseTiles = [FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
+                    if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                         unit.supplyLine = null;
+                    }
+                }
+            });
+
+            // Find all fortified units and their potential individual paths
+            const potentialSupplies = [];
+            const fortifiedUnits = gameState.units.filter(u => u.player === playerNum && u.isFortified);
+
+            fortifiedUnits.forEach(unit => {
+                const playerBaseTiles = [FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
+                if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                    const pathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
+                    if (pathData) {
+                        potentialSupplies.push({
+                            unit: unit,
+                            cost: Math.round(pathData.cost), // Individual cost for sorting
+                            pathData: pathData
+                        });
+                    }
+                }
+            });
+
+            // Prioritize supplying the forts with the cheapest lines first to maximize efficiency
+            potentialSupplies.sort((a, b) => a.cost - b.cost);
+
+            let allUsedRoads = new Set();
+            let networkSupplyCost = 0;
+            
+            // Go through the prioritized list and establish supply lines if the network can afford it
+            potentialSupplies.forEach(supply => {
+                const pathEdges = new Set(supply.pathData.path);
+                
+                // Calculate the cost of adding this fort's unique roads to the network
+                let incrementalCost = 0;
+                pathEdges.forEach(road => {
+                    if (!allUsedRoads.has(road)) {
+                        incrementalCost += getEdgeCost({ player: playerNum }, road);
+                    }
+                });
+
+                if (networkSupplyCost + incrementalCost <= maxSupply) {
+                    // Fund this supply line
+                    networkSupplyCost += incrementalCost;
+                    supply.unit.supplyLine = supply.pathData;
+                    
+                    // Add the newly funded roads to the master set of used roads
+                    pathEdges.forEach(road => allUsedRoads.add(road));
+                } else {
+                    // Can't afford it, so it remains unsupplied
+                    supply.unit.supplyLine = null;
+                }
+            });
+
+            // Update the player's remaining supply points based on the final network cost
+            gameState.supplyPoints[playerSupplyKey] = maxSupply - Math.round(networkSupplyCost);
+            updateSupplyPointsDisplay();
+        }
+
         function severSupplyLinesForPlayer(playerNum) {
             logAction(`P${playerNum}'s flag was stolen! Supply lines have been cut.`, playerNum === 1 ? 2 : 1);
             gameState.units.forEach(unit => {
@@ -2850,72 +2917,44 @@
             });
         }
 
-        function recalculatePlayerSupplyNetwork(playerNum) {
+        function attemptToResupplyForts(playerNum) {
             const playerSupplyKey = `player${playerNum}`;
+            const unsuppliedForts = gameState.units.filter(u => 
+                u.player === playerNum && 
+                u.isFortified && 
+                u.supplyLine === null
+            );
 
-            // First, reset all non-base supply lines for the player
-            gameState.units.forEach(unit => {
-                if (unit.player === playerNum && unit.isFortified) {
-                    const playerBaseTiles = [FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
-                    if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                         unit.supplyLine = null;
-                    }
-                }
-            });
+            if (unsuppliedForts.length === 0) return;
 
-            // Find all fortified units and their potential paths
-            const potentialSupplies = [];
-            const fortifiedUnits = gameState.units.filter(u => u.player === playerNum && u.isFortified);
-
-            fortifiedUnits.forEach(unit => {
+            // Find potential supply lines and their costs for all unsupplied forts
+            const potentialResupplies = [];
+            unsuppliedForts.forEach(unit => {
                 const playerBaseTiles = [FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
                 if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                    const pathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
-                    if (pathData) {
-                        potentialSupplies.push({
+                    const supplyPathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
+                    if (supplyPathData) {
+                        potentialResupplies.push({
                             unit: unit,
-                            cost: Math.round(pathData.cost), // Individual cost for sorting
-                            pathData: pathData
+                            cost: Math.round(supplyPathData.cost),
+                            pathData: supplyPathData
                         });
                     }
                 }
             });
 
-            // Prioritize supplying the forts with the cheapest individual lines first
-            potentialSupplies.sort((a, b) => a.cost - b.cost);
+            // Prioritize the cheapest supply lines first
+            potentialResupplies.sort((a, b) => a.cost - b.cost);
 
-            let allUsedRoads = new Set();
-            let networkSupplyCost = 0;
-            const maxSupply = 10;
-            
-            // Go through the prioritized list and establish supply lines if the network can afford it
-            potentialSupplies.forEach(supply => {
-                const newRoads = new Set(supply.pathData.path);
-                const currentNetworkRoads = new Set(allUsedRoads);
-
-                // Find the cost of roads that are new to the network
-                let incrementalCost = 0;
-                newRoads.forEach(road => {
-                    if (!currentNetworkRoads.has(road)) {
-                        incrementalCost += getEdgeCost({ player: playerNum }, road);
-                    }
-                });
-
-                if (networkSupplyCost + incrementalCost <= maxSupply) {
-                    // Fund this supply line
-                    networkSupplyCost += incrementalCost;
-                    supply.unit.supplyLine = supply.pathData;
-                    
-                    // Add the newly funded roads to the master set
-                    newRoads.forEach(road => allUsedRoads.add(road));
-                } else {
-                    // Can't afford it, so it remains unsupplied
-                    supply.unit.supplyLine = null;
+            // Attempt to fund the new supply lines
+            potentialResupplies.forEach(resupply => {
+                if (gameState.supplyPoints[playerSupplyKey] >= resupply.cost) {
+                    gameState.supplyPoints[playerSupplyKey] -= resupply.cost;
+                    resupply.unit.supplyLine = resupply.pathData;
+                    logAction(`P${playerNum} ${resupply.unit.type.name} is now in supply! (Cost: ${resupply.cost})`, playerNum);
                 }
             });
-
-            // Update the player's supply points based on the final network cost
-            gameState.supplyPoints[playerSupplyKey] = maxSupply - Math.round(networkSupplyCost);
+            
             updateSupplyPointsDisplay();
         }
 
@@ -3005,7 +3044,10 @@
 
         function completeUnfortify(targetEdgeKey) {
             const { selectedUnit } = gameState;
-            if (!selectedUnit || !selectedUnit.isFortified || selectedUnit.hasPerformedMajorAction) { showInstruction("Cannot unfortify.", 2000); return; }
+            if (!selectedUnit || !selectedUnit.isFortified || selectedUnit.hasPerformedMajorAction) {
+                showInstruction("Cannot unfortify now.", 2000); 
+                return; 
+            }
             const targetEdge = gameState.edges.get(targetEdgeKey); if (!targetEdge) { showInstruction("Invalid target edge.", 2000); return; }
             if (targetEdge.units.some(u => u.player !== selectedUnit.player) || targetEdge.units.filter(u => u.player === selectedUnit.player).length >= 2) {
                  showInstruction("Target edge blocked.", 2000); 
@@ -3020,16 +3062,16 @@
             if (oldFortifiedTile) oldFortifiedTile.fortifiedByPlayer = null;
             selectedUnit.isFortified = false;
             selectedUnit.turnsFortifiedAtBase = 0;
-            selectedUnit.supplyLine = null; 
+            selectedUnit.supplyLine = null;
             selectedUnit.fortifiedTileKey = null;
-            selectedУnit.positionType = 'edge'; 
+            selectedUnit.positionType = 'edge'; 
             selectedUnit.position = targetEdgeKey;
             selectedUnit.currentMove = 0; 
             selectedUnit.hasPerformedMajorAction = true;
             targetEdge.units.push(selectedUnit);
-            logAction(`${selectedUnit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, gameState.currentPlayer, 2500);
+            logAction(`${selectedUnit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, unfortifyingPlayer, 2500);
             
-            // Recalculate the entire supply network for the player
+            // Recalculate the supply network now that a fort has been removed
             recalculatePlayerSupplyNetwork(unfortifyingPlayer);
 
             resetActionSelectionStates();
@@ -4909,6 +4951,6 @@
         };
     </script>
           
-<div id="buildVersionDisplay">FortHex Build B16</div>
+<div id="buildVersionDisplay">FortHex Build B17</div>
 
 </body></html>
