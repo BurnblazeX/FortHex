@@ -2587,17 +2587,17 @@
         // --- Game Logic Core ---
         function destroyUnit(unitToDestroy, reason = "destroyed") {
             const activePlayer = gameState.currentPlayer;
+            const destroyedPlayer = unitToDestroy.player;
 
             // Refund supply points if the unit was fortified and supplied
             if (unitToDestroy.isFortified && unitToDestroy.supplyLine && unitToDestroy.supplyLine.cost) {
-                const playerSupplyKey = `player${unitToDestroy.player}`;
+                const playerSupplyKey = `player${destroyedPlayer}`;
                 const refundedCost = Math.round(unitToDestroy.supplyLine.cost);
                 gameState.supplyPoints[playerSupplyKey] += refundedCost;
-                logAction(`P${unitToDestroy.player} regains ${refundedCost} supply from lost unit.`, activePlayer);
-                updateSupplyPointsDisplay();
+                logAction(`P${destroyedPlayer} regains ${refundedCost} supply from lost unit.`, activePlayer);
             }
 
-            gameState.unitCounts[`player${unitToDestroy.player}`][unitToDestroy.type.name]--;
+            gameState.unitCounts[`player${destroyedPlayer}`][unitToDestroy.type.name]--;
 
             if (unitToDestroy.isCarryingFlag) {
                 const flag = Object.values(gameState.flags).find(f => f.carrierId === unitToDestroy.id);
@@ -2610,7 +2610,7 @@
                 }
             }
             
-            const queueKey = `player${unitToDestroy.player}`;
+            const queueKey = `player${destroyedPlayer}`;
             gameState.respawnQueue[queueKey].push({
                 unitType: unitToDestroy.type,
                 turnsRemaining: RESPAWN_TURN_TIMER
@@ -2618,11 +2618,11 @@
             updateRespawnQueueDisplay();
 
             if (reason === "bridge_collapse") {
-                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} fell as the bridge collapsed!`, activePlayer, 3500);
+                logAction(`P${destroyedPlayer} ${unitToDestroy.type.name} fell as the bridge collapsed!`, activePlayer, 3500);
             } else if (reason === "zoc_move" || reason === "zoc_turn_start" || reason === "fort_zoc") {
-                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} destroyed by ZoC!`, activePlayer, 3500);
+                logAction(`P${destroyedPlayer} ${unitToDestroy.type.name} destroyed by ZoC!`, activePlayer, 3500);
             } else {
-                logAction(`P${unitToDestroy.player} ${unitToDestroy.type.name} has been destroyed!`, activePlayer, 3000);
+                logAction(`P${destroyedPlayer} ${unitToDestroy.type.name} has been destroyed!`, activePlayer, 3000);
             }
 
             if (unitToDestroy.positionType === 'edge') {
@@ -2630,11 +2630,14 @@
                 if (edgeOfUnit) edgeOfUnit.units = edgeOfUnit.units.filter(u => u.id !== unitToDestroy.id);
             } else if (unitToDestroy.positionType === 'center' && unitToDestroy.isFortified) {
                 const fortifiedTile = gameState.tiles.get(unitToDestroy.position);
-                if (fortifiedTile && fortifiedTile.fortifiedByPlayer === unitToDestroy.player) fortifiedTile.fortifiedByPlayer = null;
+                if (fortifiedTile && fortifiedTile.fortifiedByPlayer === destroyedPlayer) fortifiedTile.fortifiedByPlayer = null;
             }
 
             gameState.units = gameState.units.filter(u => u.id !== unitToDestroy.id);
 
+            // Attempt to resupply other forts of the player whose unit was destroyed
+            attemptToResupplyForts(destroyedPlayer);
+            
             if (gameState.selectedUnit && gameState.selectedUnit.id === unitToDestroy.id) {
                 gameState.selectedUnit = null;
                 gameState.currentReachableMoves.clear();
@@ -2842,6 +2845,47 @@
             });
         }
 
+        function attemptToResupplyForts(playerNum) {
+            const playerSupplyKey = `player${playerNum}`;
+            const unsuppliedForts = gameState.units.filter(u => 
+                u.player === playerNum && 
+                u.isFortified && 
+                u.supplyLine === null
+            );
+
+            if (unsuppliedForts.length === 0) return;
+
+            // Find potential supply lines and their costs for all unsupplied forts
+            const potentialResupplies = [];
+            unsuppliedForts.forEach(unit => {
+                const playerBaseTiles = [FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
+                if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                    const supplyPathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
+                    if (supplyPathData) {
+                        potentialResupplies.push({
+                            unit: unit,
+                            cost: Math.round(supplyPathData.cost),
+                            pathData: supplyPathData
+                        });
+                    }
+                }
+            });
+
+            // Prioritize the cheapest supply lines first
+            potentialResupplies.sort((a, b) => a.cost - b.cost);
+
+            // Attempt to fund the new supply lines
+            potentialResupplies.forEach(resupply => {
+                if (gameState.supplyPoints[playerSupplyKey] >= resupply.cost) {
+                    gameState.supplyPoints[playerSupplyKey] -= resupply.cost;
+                    resupply.unit.supplyLine = resupply.pathData;
+                    logAction(`P${playerNum} ${resupply.unit.type.name} is now in supply! (Cost: ${resupply.cost})`, playerNum);
+                }
+            });
+            
+            updateSupplyPointsDisplay();
+        }
+
         // --- Action: Fortify / Unfortify ---
         function getPotentialUnfortifyTargets(unit) {
             if (!unit || !unit.isFortified || unit.positionType !== 'center') return [];
@@ -2955,12 +2999,14 @@
                  return;
             }
 
+            const unfortifyingPlayer = selectedUnit.player;
+
             // Refund supply points if the unit had a supply line
             if (selectedUnit.supplyLine && selectedUnit.supplyLine.cost) {
-                const playerSupplyKey = `player${selectedUnit.player}`;
+                const playerSupplyKey = `player${unfortifyingPlayer}`;
                 const refundedCost = Math.round(selectedUnit.supplyLine.cost);
                 gameState.supplyPoints[playerSupplyKey] += refundedCost;
-                logAction(`Supply line removed. P${selectedUnit.player} regains ${refundedCost} supply.`, selectedUnit.player);
+                logAction(`Supply line removed. P${unfortifyingPlayer} regains ${refundedCost} supply.`, unfortifyingPlayer);
             }
 
             const oldFortifiedTile = gameState.tiles.get(selectedUnit.fortifiedTileKey);
@@ -2975,6 +3021,10 @@
             selectedUnit.hasPerformedMajorAction = true;
             targetEdge.units.push(selectedUnit);
             logAction(`${selectedUnit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, gameState.currentPlayer, 2500);
+            
+            // Attempt to resupply other forts with the newly freed points
+            attemptToResupplyForts(unfortifyingPlayer);
+
             resetActionSelectionStates();
             updateSelectedUnitInfoPanel();
             updateSupplyPointsDisplay();
