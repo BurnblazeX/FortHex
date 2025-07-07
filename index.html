@@ -2588,14 +2588,7 @@
         function destroyUnit(unitToDestroy, reason = "destroyed") {
             const activePlayer = gameState.currentPlayer;
             const destroyedPlayer = unitToDestroy.player;
-
-            // Refund supply points if the unit was fortified and supplied
-            if (unitToDestroy.isFortified && unitToDestroy.supplyLine && unitToDestroy.supplyLine.cost) {
-                const playerSupplyKey = `player${destroyedPlayer}`;
-                const refundedCost = Math.round(unitToDestroy.supplyLine.cost);
-                gameState.supplyPoints[playerSupplyKey] += refundedCost;
-                logAction(`P${destroyedPlayer} regains ${refundedCost} supply from lost unit.`, activePlayer);
-            }
+            const wasFortified = unitToDestroy.isFortified;
 
             gameState.unitCounts[`player${destroyedPlayer}`][unitToDestroy.type.name]--;
 
@@ -2635,8 +2628,10 @@
 
             gameState.units = gameState.units.filter(u => u.id !== unitToDestroy.id);
 
-            // Attempt to resupply other forts of the player whose unit was destroyed
-            attemptToResupplyForts(destroyedPlayer);
+            // If the destroyed unit was fortified, its removal might affect the supply network
+            if (wasFortified) {
+                recalculatePlayerSupplyNetwork(destroyedPlayer);
+            }
             
             if (gameState.selectedUnit && gameState.selectedUnit.id === unitToDestroy.id) {
                 gameState.selectedUnit = null;
@@ -2845,44 +2840,72 @@
             });
         }
 
-        function attemptToResupplyForts(playerNum) {
+        function recalculatePlayerSupplyNetwork(playerNum) {
             const playerSupplyKey = `player${playerNum}`;
-            const unsuppliedForts = gameState.units.filter(u => 
-                u.player === playerNum && 
-                u.isFortified && 
-                u.supplyLine === null
-            );
 
-            if (unsuppliedForts.length === 0) return;
+            // First, reset all non-base supply lines for the player
+            gameState.units.forEach(unit => {
+                if (unit.player === playerNum && unit.isFortified) {
+                    const playerBaseTiles = [FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
+                    if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                         unit.supplyLine = null;
+                    }
+                }
+            });
 
-            // Find potential supply lines and their costs for all unsupplied forts
-            const potentialResupplies = [];
-            unsuppliedForts.forEach(unit => {
+            // Find all fortified units and their potential paths
+            const potentialSupplies = [];
+            const fortifiedUnits = gameState.units.filter(u => u.player === playerNum && u.isFortified);
+
+            fortifiedUnits.forEach(unit => {
                 const playerBaseTiles = [FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
                 if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                    const supplyPathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
-                    if (supplyPathData) {
-                        potentialResupplies.push({
+                    const pathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
+                    if (pathData) {
+                        potentialSupplies.push({
                             unit: unit,
-                            cost: Math.round(supplyPathData.cost),
-                            pathData: supplyPathData
+                            cost: Math.round(pathData.cost), // Individual cost for sorting
+                            pathData: pathData
                         });
                     }
                 }
             });
 
-            // Prioritize the cheapest supply lines first
-            potentialResupplies.sort((a, b) => a.cost - b.cost);
+            // Prioritize supplying the forts with the cheapest individual lines first
+            potentialSupplies.sort((a, b) => a.cost - b.cost);
 
-            // Attempt to fund the new supply lines
-            potentialResupplies.forEach(resupply => {
-                if (gameState.supplyPoints[playerSupplyKey] >= resupply.cost) {
-                    gameState.supplyPoints[playerSupplyKey] -= resupply.cost;
-                    resupply.unit.supplyLine = resupply.pathData;
-                    logAction(`P${playerNum} ${resupply.unit.type.name} is now in supply! (Cost: ${resupply.cost})`, playerNum);
+            let allUsedRoads = new Set();
+            let networkSupplyCost = 0;
+            const maxSupply = 10;
+            
+            // Go through the prioritized list and establish supply lines if the network can afford it
+            potentialSupplies.forEach(supply => {
+                const newRoads = new Set(supply.pathData.path);
+                const currentNetworkRoads = new Set(allUsedRoads);
+
+                // Find the cost of roads that are new to the network
+                let incrementalCost = 0;
+                newRoads.forEach(road => {
+                    if (!currentNetworkRoads.has(road)) {
+                        incrementalCost += getEdgeCost({ player: playerNum }, road);
+                    }
+                });
+
+                if (networkSupplyCost + incrementalCost <= maxSupply) {
+                    // Fund this supply line
+                    networkSupplyCost += incrementalCost;
+                    supply.unit.supplyLine = supply.pathData;
+                    
+                    // Add the newly funded roads to the master set
+                    newRoads.forEach(road => allUsedRoads.add(road));
+                } else {
+                    // Can't afford it, so it remains unsupplied
+                    supply.unit.supplyLine = null;
                 }
             });
-            
+
+            // Update the player's supply points based on the final network cost
+            gameState.supplyPoints[playerSupplyKey] = maxSupply - Math.round(networkSupplyCost);
             updateSupplyPointsDisplay();
         }
 
@@ -2915,36 +2938,19 @@
             }
             
             const fortifyingPlayer = selectedUnit.player;
-            const playerSupplyKey = `player${fortifyingPlayer}`;
             
-            // First, calculate the potential supply line and its cost
-            const playerBaseTiles = [FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
-            let supplyPathData = null;
-            if (!playerBaseTiles.includes(targetTileKeyToFortify)) {
-                supplyPathData = findSupplyPath(targetTileKeyToFortify, fortifyingPlayer);
-            }
-
-            const supplyCost = supplyPathData ? Math.round(supplyPathData.cost) : 0;
-
-            // Check if player can afford the supply line
-            if (gameState.supplyPoints[playerSupplyKey] >= supplyCost) {
-                gameState.supplyPoints[playerSupplyKey] -= supplyCost;
-                selectedUnit.supplyLine = supplyPathData;
-                logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
-                if(supplyCost > 0) logAction(`Supply line established. Cost: ${supplyCost}.`, fortifyingPlayer);
-            } else {
-                selectedUnit.supplyLine = null; // Cannot afford it, so no supply line
-                logAction(`${selectedUnit.type.name} fortified, but is out of supply!`, fortifyingPlayer, 3000);
-            }
-            
-            // Complete the fortification action regardless of supply status
+            // Complete the fortification action
             const currentEdge = gameState.edges.get(selectedUnit.position);
             if (currentEdge) currentEdge.units = currentEdge.units.filter(u => u.id !== selectedUnit.id);
             selectedUnit.isFortified = true; selectedUnit.fortifiedTileKey = targetTileKeyToFortify;
             selectedUnit.positionType = 'center'; selectedUnit.position = targetTileKeyToFortify;
             selectedUnit.currentMove = 0; selectedUnit.hasPerformedMajorAction = true;
             targetTileObject.fortifiedByPlayer = fortifyingPlayer;
-            
+            logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
+
+            // Recalculate the entire supply network for the player
+            recalculatePlayerSupplyNetwork(fortifyingPlayer);
+
             let unitsToDestroy = [];
             getNeighbors(targetTileObject.q, targetTileObject.r).forEach(neighborCoords => {
                  const edgeKey = getEdgeKey(targetTileObject.q, targetTileObject.r, neighborCoords.q, neighborCoords.r);
@@ -2964,7 +2970,6 @@
             gameState.currentReachableMoves.clear();
             resetActionSelectionStates();
             updateSelectedUnitInfoPanel();
-            updateSupplyPointsDisplay();
             if (!gameState.gameOver) checkVictoryCondition();
         }
 
@@ -3001,33 +3006,24 @@
 
             const unfortifyingPlayer = selectedUnit.player;
 
-            // Refund supply points if the unit had a supply line
-            if (selectedUnit.supplyLine && selectedUnit.supplyLine.cost) {
-                const playerSupplyKey = `player${unfortifyingPlayer}`;
-                const refundedCost = Math.round(selectedUnit.supplyLine.cost);
-                gameState.supplyPoints[playerSupplyKey] += refundedCost;
-                logAction(`Supply line removed. P${unfortifyingPlayer} regains ${refundedCost} supply.`, unfortifyingPlayer);
-            }
-
             const oldFortifiedTile = gameState.tiles.get(selectedUnit.fortifiedTileKey);
             if (oldFortifiedTile) oldFortifiedTile.fortifiedByPlayer = null;
             selectedUnit.isFortified = false;
             selectedUnit.turnsFortifiedAtBase = 0;
-            selectedUnit.supplyLine = null; // Clear the supply line
+            selectedUnit.supplyLine = null; 
             selectedUnit.fortifiedTileKey = null;
-            selectedUnit.positionType = 'edge'; 
+            selectedУnit.positionType = 'edge'; 
             selectedUnit.position = targetEdgeKey;
             selectedUnit.currentMove = 0; 
             selectedUnit.hasPerformedMajorAction = true;
             targetEdge.units.push(selectedUnit);
             logAction(`${selectedUnit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, gameState.currentPlayer, 2500);
             
-            // Attempt to resupply other forts with the newly freed points
-            attemptToResupplyForts(unfortifyingPlayer);
+            // Recalculate the entire supply network for the player
+            recalculatePlayerSupplyNetwork(unfortifyingPlayer);
 
             resetActionSelectionStates();
             updateSelectedUnitInfoPanel();
-            updateSupplyPointsDisplay();
         }
 
         function handleUnfortifyActionLogic() {
