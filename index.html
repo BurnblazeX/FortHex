@@ -2997,8 +2997,15 @@
             targetTileObject.fortifiedByPlayer = fortifyingPlayer;
             logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
 
-            // Recalculate the entire supply network for the player
-            recalculatePlayerSupplyNetwork(fortifyingPlayer);
+            // Check flag status before recalculating the supply network.
+            const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
+            if (playerFlag && playerFlag.status !== 'carried') {
+                // Only recalculate the network if the flag is safe at their base
+                recalculatePlayerSupplyNetwork(fortifyingPlayer);
+            } else {
+                // The unit fortifies but remains unsupplied. The log makes this clear.
+                logAction(`P${fortifyingPlayer} ${selectedUnit.type.name} fortified, but is unsupplied due to stolen flag.`, fortifyingPlayer, 3000);
+            }
 
             let unitsToDestroy = [];
             getNeighbors(targetTileObject.q, targetTileObject.r).forEach(neighborCoords => {
@@ -4419,19 +4426,27 @@
             const player = gameState.currentPlayer;
             const queueKey = `player${player}`;
             const queue = gameState.respawnQueue[queueKey];
-            
+    
             if (queue.length === 0) {
                 return;
             }
 
-            const firstItem = queue[0];
-            firstItem.turnsRemaining--;
+            // Iterate over the entire queue for the current player to decrement all timers.
+            queue.forEach(item => {
+            if (item.turnsRemaining > 0) { // Only decrement if it's not already ready
+                item.turnsRemaining--;
+                }
+            });
 
-            if (firstItem.turnsRemaining <= 0) {
-                showRespawnModal(player);
+            // After updating all timers, check if the unit at the front of the queue is ready.
+            // This preserves the one-at-a-time respawn flow.
+            const firstItem = queue[0];
+            if (firstItem && firstItem.turnsRemaining <= 0) {
+            showRespawnModal(player);
             }
-            
-            updateRespawnQueueDisplay();
+    
+            // Always update the display to show the new timer values.
+        updateRespawnQueueDisplay();
         }
 
         // --- Game Flow & Event Listeners ---
@@ -4951,6 +4966,6 @@
         };
     </script>
           
-<div id="buildVersionDisplay">FortHex Build B17</div>
+<div id="buildVersionDisplay">FortHex Build B18</div>
 
 </body></html>
