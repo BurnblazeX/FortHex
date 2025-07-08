@@ -278,6 +278,39 @@
             transform: translateY(3px);
         }
 
+        #generateMapButtonContainer .action-button {
+            width: 160px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 15px; 
+            margin: 0; 
+        }
+
+        #saveGameButton {
+            background-color: #f39c12; 
+            box-shadow: 0 3px #d35400;
+        }
+        #saveGameButton:hover:not(:disabled) {
+            background-color: #e67e22;
+        }
+        #saveGameButton:active:not(:disabled) {
+            box-shadow: none;
+            transform: translateY(3px);
+        }
+        #loadGameButton {
+            background-color: #5dade2; 
+            box-shadow: 0 3px #3498db;
+        }
+        #loadGameButton:hover:not(:disabled) {
+            background-color: #3498db;
+        }
+         #loadGameButton:active:not(:disabled) {
+            box-shadow: none;
+            transform: translateY(3px);
+        }
+
         .unit-info-container {
             width: 100%;
         }
@@ -755,13 +788,31 @@
         </div>
     </div>
 
-    <div id="generateMapButtonContainer">
+    <div id="generateMapButtonContainer" style="display: flex; justify-content: center; gap: 15px; width: 100%; margin-top: 20px; margin-bottom: 20px;">
+        <!-- SAVE GAME BUTTON -->
+        <button id="saveGameButton" class="action-button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            Save Game
+        </button>
+
         <button id="generateMapButton">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21.5 2v6h-6M2.5 22v-6h6"/>
                 <path d="M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
             </svg>
             Generate New Map
+        </button>
+
+        <!-- LOAD GAME BUTTON -->
+        <button id="loadGameButton" class="action-button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            Load Game
         </button>
     </div>
 
@@ -941,6 +992,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
+        const BUILD_VERSION = "B19";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1145,6 +1197,8 @@
             lastDebugPathKey: null, 
             debugAttackRangeHighlights: [], 
         };
+
+        let currentConfirmAction = null;
 
         // --- Utility Functions ---
         function axialToPixel(q, r) {
@@ -2661,6 +2715,8 @@
             checkVictoryCondition();
         }
 
+
+
         function getEdgeCost(unit, edgeKey) {
             const edge = gameState.edges.get(edgeKey); if (!edge) return Infinity;
             const tileCoords = parseEdgeKey(edgeKey);
@@ -2896,6 +2952,25 @@
             updateSupplyPointsDisplay();
         }
 
+function fundNewFortification(unit) {
+    const player = unit.player;
+    const playerSupplyKey = `player${player}`;
+
+    const pathData = findSupplyPath(unit.fortifiedTileKey, player);
+
+    if (pathData && pathData.cost <= gameState.supplyPoints[playerSupplyKey]) {
+        // Can afford it, fund the new line
+        unit.supplyLine = pathData;
+        gameState.supplyPoints[playerSupplyKey] -= Math.round(pathData.cost);
+        logAction(`P${player} ${unit.type.name} established a supply line (Cost: ${Math.round(pathData.cost)}).`, player);
+    } else {
+        // Cannot afford it or no path exists, remains unsupplied
+        unit.supplyLine = null;
+        logAction(`P${player} ${unit.type.name} fortified, but is unsupplied.`, player);
+    }
+    updateSupplyPointsDisplay();
+}
+
         function severSupplyLinesForPlayer(playerNum) {
             logAction(`P${playerNum}'s flag was stolen! Supply lines have been cut.`, playerNum === 1 ? 2 : 1);
             gameState.units.forEach(unit => {
@@ -2997,15 +3072,15 @@
             targetTileObject.fortifiedByPlayer = fortifyingPlayer;
             logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
 
-            // Check flag status before recalculating the supply network.
-            const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
-            if (playerFlag && playerFlag.status !== 'carried') {
-                // Only recalculate the network if the flag is safe at their base
-                recalculatePlayerSupplyNetwork(fortifyingPlayer);
-            } else {
-                // The unit fortifies but remains unsupplied. The log makes this clear.
-                logAction(`P${fortifyingPlayer} ${selectedUnit.type.name} fortified, but is unsupplied due to stolen flag.`, fortifyingPlayer, 3000);
-            }
+        // Check flag status before attempting to create a supply line.
+        const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
+        if (playerFlag && playerFlag.status !== 'carried') {
+            // Attempt to supply the new fort without disrupting existing lines.
+            fundNewFortification(selectedUnit);
+        } else {
+            // The unit fortifies but remains unsupplied. The log makes this clear.
+            logAction(`P${fortifyingPlayer} ${selectedUnit.type.name} fortified, but is unsupplied due to stolen flag.`, fortifyingPlayer, 3000);
+        }
 
             let unitsToDestroy = [];
             getNeighbors(targetTileObject.q, targetTileObject.r).forEach(neighborCoords => {
@@ -4559,20 +4634,29 @@
             checkVictoryCondition();
         });
 
-        ui.generateMapButton.addEventListener('click', () => {
-            if (gameState.isDragging) return; 
-            if (ui.customConfirmModal) {
-                ui.customConfirmModal.style.display = 'flex';
-                setTimeout(() => ui.customConfirmModal.classList.add('modal-visible'), 10);
-            }
-        });
-        ui.customConfirmOkButton.addEventListener('click', () => {
-            if (ui.customConfirmModal) {
-                ui.customConfirmModal.classList.remove('modal-visible');
-                setTimeout(() => ui.customConfirmModal.style.display = 'none', 300); 
-            }
-            handleGenerateNewMap();
-        });
+ui.generateMapButton.addEventListener('click', () => {
+    if (gameState.isDragging) return;
+    
+    // Set the message and the action for the modal
+    document.getElementById('customConfirmMessage').textContent = 'Are you sure you want to generate a new map? This will reset the current game.';
+    currentConfirmAction = handleGenerateNewMap;
+
+    if (ui.customConfirmModal) {
+        ui.customConfirmModal.style.display = 'flex';
+        setTimeout(() => ui.customConfirmModal.classList.add('modal-visible'), 10);
+    }
+});
+ui.customConfirmOkButton.addEventListener('click', () => {
+    if (ui.customConfirmModal) {
+        ui.customConfirmModal.classList.remove('modal-visible');
+        setTimeout(() => ui.customConfirmModal.style.display = 'none', 300); 
+    }
+    // Execute the action that was stored when the modal was opened
+    if (typeof currentConfirmAction === 'function') {
+        currentConfirmAction();
+        currentConfirmAction = null; // Clear the action after using it
+    }
+});
         ui.customConfirmCancelButton.addEventListener('click', () => {
              if (ui.customConfirmModal) {
                 ui.customConfirmModal.classList.remove('modal-visible');
@@ -4580,6 +4664,17 @@
             }
         });
 
+    document.getElementById('saveGameButton').addEventListener('click', saveGameState);
+document.getElementById('loadGameButton').addEventListener('click', () => {
+    // Set the message and the action for the modal
+    document.getElementById('customConfirmMessage').textContent = 'Are you sure you want to load a saved game? Any unsaved progress will be lost.';
+    currentConfirmAction = loadGameState;
+
+    if (ui.customConfirmModal) {
+        ui.customConfirmModal.style.display = 'flex';
+        setTimeout(() => ui.customConfirmModal.classList.add('modal-visible'), 10);
+    }
+});
 
         function handleGenerateNewMap() {
              gameState.isDragging = false; 
@@ -4588,6 +4683,142 @@
             initializeGrid(newLayout); 
             showInstruction("New map generated. Player 1's Turn.", 3000);
         }
+
+function saveGameState() {
+    if (gameState.isDragging) {
+        showInstruction("Cannot save while dragging a unit.", 2000);
+        return;
+    }
+    try {
+        // Create a temporary, serializable version of the game state
+        const serializableState = { ...gameState };
+        
+        // Manually convert Map objects to arrays for JSON compatibility
+        serializableState.tiles = Array.from(gameState.tiles.entries());
+        serializableState.edges = Array.from(gameState.edges.entries());
+        serializableState.currentReachableMoves = Array.from(gameState.currentReachableMoves.entries());
+
+        serializableState.saveVersion = BUILD_VERSION; 
+
+        const gameStateString = JSON.stringify(serializableState);
+        localStorage.setItem('forthexSaveGame', gameStateString);
+        showInstruction("Game Saved!", 2000);
+        console.log("Game state saved to localStorage.");
+    } catch (error) {
+        console.error("Error saving game state:", error);
+        showInstruction("Could not save game. See console for details.", 3000);
+    }
+}
+
+function loadGameState() {
+    const savedStateString = localStorage.getItem('forthexSaveGame');
+    if (!savedStateString) {
+        showInstruction("No saved game found.", 2000);
+        return;
+    }
+
+    try {
+        const loadedState = JSON.parse(savedStateString);
+
+        // Basic version check
+        if (loadedState.saveVersion !== BUILD_VERSION) {
+            showInstruction("Save file is from an incompatible version.", 3000);
+            return;
+        }
+        
+        // Overwrite the entire game state
+        gameState = loadedState;
+
+        // Perform a full re-initialization from the loaded state
+        fullGameRedraw();
+        showInstruction("Game Loaded.", 2000);
+        console.log("Game state loaded from localStorage.");
+
+    } catch (error) {
+        console.error("Error loading game state:", error);
+        showInstruction("Could not load save data. It may be corrupted.", 3000);
+    }
+}
+
+function fullGameRedraw() {
+    // This function re-initializes the game's UI and state from the `gameState` object.
+    // It's like initializeGrid, but without generating a new map layout.
+
+    // Reset UI elements and states that aren't saved
+    canvas.width = (2 * gameState.gridRadius + 1.5) * (HEX_SIZE * Math.sqrt(3));
+    canvas.height = (2 * gameState.gridRadius + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;
+    document.querySelectorAll('.ui-panel').forEach(panel => { panel.style.minHeight = canvas.height + 'px'; });
+
+    // --- DATA HYDRATION AND RE-LINKING ---
+
+    // Step 1: Convert arrays from the save file back into Map instances.
+    gameState.tiles = new Map(gameState.tiles);
+    gameState.edges = new Map(gameState.edges);
+    if (gameState.currentReachableMoves) {
+         gameState.currentReachableMoves = new Map(gameState.currentReachableMoves);
+    } else {
+         gameState.currentReachableMoves = new Map();
+    }
+
+    // Step 2: Re-link tile types. This is the critical fix.
+    // We iterate through every loaded tile and point its 'type' back to the original constant object.
+    for (const tile of gameState.tiles.values()) {
+        if (tile.type && tile.type.name) {
+            const typeName = tile.type.name.toUpperCase();
+            tile.type = TILE_TYPES[typeName];
+        }
+    }
+
+    // Step 3: Re-link unit types. This fixes unit-specific logic.
+    for (const unit of gameState.units) {
+        if (unit.type && unit.type.name) {
+            const typeName = unit.type.name.toUpperCase();
+            unit.type = UNIT_TYPES[typeName];
+        }
+    }
+
+    // Step 4: Re-populate edge unit arrays to restore object references.
+    // First, clear all unit arrays on all edges.
+    for (const edge of gameState.edges.values()) {
+        edge.units = [];
+    }
+    // Then, iterate the master unit list and place real unit references back onto the edges.
+    for (const unit of gameState.units) {
+        if (unit.positionType === 'edge') {
+            const edge = gameState.edges.get(unit.position);
+            if (edge) {
+                edge.units.push(unit);
+            }
+        }
+    }
+   
+    // Reset any non-persistent state properties
+    gameState.isDragging = false;
+    gameState.draggingUnit = null;
+    gameState.hoveredUnitId = null;
+    gameState.selectedUnit = null; // Deselect any unit upon loading
+    resetActionSelectionStates();
+
+    // Update all UI panels with loaded data
+    updateTurnDisplay();
+    updateGlobalTurnDisplay();
+    updateSupplyPointsDisplay();
+    updateRespawnQueueDisplay();
+    updateActionLogDisplay();
+    updateSelectedUnitInfoPanel(); // This will correctly show no selection
+
+    if (gameState.gameOver) {
+        ui.endTurnButton.disabled = true;
+        ui.actionsPanel.style.display = 'none';
+        // Find who won from the log or a new state variable if needed
+        ui.victoryMessage.textContent = "Game Over (Loaded)"; // Placeholder text
+        ui.victoryMessage.style.display = 'block';
+    } else {
+        ui.victoryMessage.style.display = 'none';
+        ui.endTurnButton.disabled = false;
+    }
+    requestAnimationFrame(gameLoop);
+}
 
         function generateTileLayout(radius) {
             const tempTiles = new Map();
@@ -4933,7 +5164,7 @@
         canvas.addEventListener('touchcancel', handleCanvasTouchCancel);
 
         window.onload = function () {
-            // --- NEW: Add event listeners for the Respawn Modal Buttons ---
+            document.getElementById('buildVersionDisplay').textContent = `FortHex Build ${BUILD_VERSION}`;
             const respawnChoicesDiv = document.getElementById('respawnChoices');
             if (respawnChoicesDiv) {
                 respawnChoicesDiv.addEventListener('click', (event) => {
@@ -4966,6 +5197,6 @@
         };
     </script>
           
-<div id="buildVersionDisplay">FortHex Build B18</div>
+<div id="buildVersionDisplay"></div>
 
 </body></html>
