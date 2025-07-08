@@ -4753,7 +4753,7 @@ function saveGameToFile() {
     const hours = padZero(now.getHours());
     const minutes = padZero(now.getMinutes());
     const seconds = padZero(now.getSeconds());
-    const fileName = `FortHexSaveGame-${day}.${month}.${year}-${hours}:${minutes}:${seconds}.fhsave`;
+    const fileName = `FortHex-${BUILD_VERSION}-SaveGame-${day}.${month}.${year}-${hours}:${minutes}:${seconds}.fhsave`;
 
     try {
         // --- Serialize the game state (same as autosave) ---
