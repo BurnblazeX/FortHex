@@ -1030,7 +1030,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B20";
+        const BUILD_VERSION = "B21";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1342,30 +1342,29 @@
             return tileType === TILE_TYPES.PLAINS || tileType === TILE_TYPES.FOREST || tileType === TILE_TYPES.MOUNTAIN;
         }
 
-        function isEdgeAdjacentToSpearWall(unit, edgeKey) {
-            if (!unit || !edgeKey) return false;
+function isEdgeAdjacentToSpearWall(unit, edgeKey) {
+    if (!unit || !edgeKey) return false;
 
-            const enemyPlayer = unit.player === 1 ? 2 : 1;
-            const [h1, h2] = parseEdgeKey(edgeKey);
-            if (isNaN(h1.q) || isNaN(h2.q)) return false;
+    const enemyPlayer = unit.player === 1 ? 2 : 1;
+    const [h1, h2] = parseEdgeKey(edgeKey);
+    if (isNaN(h1.q) || isNaN(h2.q)) return false;
 
-            const adjacentTilesToCheck = new Set();
-            adjacentTilesToCheck.add(getTileKey(h1.q, h1.r));
-            adjacentTilesToCheck.add(getTileKey(h2.q, h2.r));
-            getNeighbors(h1.q, h1.r).forEach(n => adjacentTilesToCheck.add(getTileKey(n.q, n.r)));
-            getNeighbors(h2.q, h2.r).forEach(n => adjacentTilesToCheck.add(getTileKey(n.q, n.r)));
+    // This set now ONLY contains the two tiles that form the edge.
+    const tilesThatFormTheEdge = new Set();
+    tilesThatFormTheEdge.add(getTileKey(h1.q, h1.r));
+    tilesThatFormTheEdge.add(getTileKey(h2.q, h2.r));
 
-            for (const tileKey of adjacentTilesToCheck) {
-                const tile = gameState.tiles.get(tileKey);
-                if (tile && tile.fortifiedByPlayer === enemyPlayer) {
-                    const fortifiedUnit = gameState.units.find(u => u.position === tileKey && u.isFortified);
-                    if (fortifiedUnit && fortifiedUnit.type.name === 'Pikeman') {
-                        return true; 
-                    }
-                }
+    for (const tileKey of tilesThatFormTheEdge) {
+        const tile = gameState.tiles.get(tileKey);
+        if (tile && tile.fortifiedByPlayer === enemyPlayer) {
+            const fortifiedUnit = gameState.units.find(u => u.position === tileKey && u.isFortified);
+            if (fortifiedUnit && fortifiedUnit.type.name === 'Pikeman') {
+                return true; 
             }
-            return false;
         }
+    }
+    return false;
+}
 
         function isRoad(edgeKey) {
             const edge = gameState.edges.get(edgeKey);
@@ -2733,12 +2732,23 @@
 
             gameState.units = gameState.units.filter(u => u.id !== unitToDestroy.id);
 
-            // If the destroyed unit was fortified, its removal might change the supply network
-            if (wasFortified) {
+        // If the destroyed unit was fortified, its removal might change the supply network
+        if (wasFortified) {
+            const playerFlag = gameState.flags[`p${destroyedPlayer}_flag`];
+            // Only recalculate the network if that player's flag is NOT currently stolen.
+            if (playerFlag && playerFlag.status !== 'carried') {
                 recalculatePlayerSupplyNetwork(destroyedPlayer);
+            } else {
+                // If the flag is stolen, just refund the supply points without recalculating the network.
+                // This prevents other forts from being re-supplied accidentally.
+                if (unitToDestroy.supplyLine && unitToDestroy.supplyLine.cost > 0) {
+                    gameState.supplyPoints[`player${destroyedPlayer}`] += Math.round(unitToDestroy.supplyLine.cost);
+                    updateSupplyPointsDisplay();
+                }
             }
-            
-            if (gameState.selectedUnit && gameState.selectedUnit.id === unitToDestroy.id) {
+        }
+        
+        if (gameState.selectedUnit && gameState.selectedUnit.id === unitToDestroy.id) {
                 gameState.selectedUnit = null;
                 gameState.currentReachableMoves.clear();
                 resetActionSelectionStates();
@@ -3748,14 +3758,19 @@ function fundNewFortification(unit) {
                 fortifiedArcherMsg = `Fortified Archer +1 Attack.`;
             }
             
-            attackingUnit.hasPerformedMajorAction = true;
-            let hitAndRunMessage = "";
-            if (attackingUnit.type.canMoveAfterAttack) {
-                attackingUnit.currentMove -= ATTACK_COST;
-                if (isEdgeAdjacentToSpearWall(attackingUnit, attackingUnit.position)) {
-                    hitAndRunMessage = "Spear Wall prevents further movement!";
-                    gameState.currentReachableMoves.clear();
-                } else if (attackingUnit.currentMove > 0) {
+        attackingUnit.hasPerformedMajorAction = true;
+        let hitAndRunMessage = "";
+        if (attackingUnit.type.canMoveAfterAttack) {
+            attackingUnit.currentMove -= ATTACK_COST;
+
+            // Check for Spear Wall on both the attacker's edge AND the target's edge.
+            const spearWallOnAttacker = isEdgeAdjacentToSpearWall(attackingUnit, attackingUnit.position);
+            const spearWallOnTarget = targetUnitInfo.edgeKey ? isEdgeAdjacentToSpearWall(attackingUnit, targetUnitInfo.edgeKey) : false;
+
+            if (spearWallOnAttacker || spearWallOnTarget) {
+                hitAndRunMessage = "Spear Wall prevents further movement!";
+                gameState.currentReachableMoves.clear();
+            } else if (attackingUnit.currentMove > 0) {
                     hitAndRunMessage = "Horseman can move again!";
                     gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
                 } else {
@@ -4713,7 +4728,7 @@ document.getElementById('loadGameButton').addEventListener('click', showLoadGame
         function handleGenerateNewMap() {
              gameState.isDragging = false; 
              gameState.draggingUnit = null;
-            const newLayout = generateTileLayout(gameState.gridRadius);
+            const newLayout = generateImprovedMap(gameState.gridRadius);
             initializeGrid(newLayout); 
             showInstruction("New map generated. Player 1's Turn.", 3000);
         }
@@ -4908,169 +4923,218 @@ function fullGameRedraw() {
     requestAnimationFrame(gameLoop);
 }
 
-        function generateTileLayout(radius) {
-            const tempTiles = new Map();
-            const allHexCoords = [];
-            for (let q = -radius; q <= radius; q++) {
-                for (let r = -radius; r <= radius; r++) {
-                    if (Math.abs(q + r) <= radius) {
-                        allHexCoords.push({ q, r });
-                        tempTiles.set(getTileKey(q, r), null); 
-                    }
-                }
+// ========================================================================
+// --- NEW IMPROVED MAP GENERATOR (V3 - Corrected) ---
+// ========================================================================
+
+function generateImprovedMap(radius) {
+    const tempTiles = new Map();
+    const allHexCoords = [];
+    for (let q = -radius; q <= radius; q++) {
+        for (let r = -radius; r <= radius; r++) {
+            if (Math.abs(q + r) <= radius) {
+                allHexCoords.push({ q, r });
             }
-            allHexCoords.sort(() => 0.5 - Math.random()); 
-
-            let counts = { MOUNTAIN: 0, WATER: 0, FOREST: 0, PLAINS: 0 };
-            const tileBudget = {
-                MOUNTAIN: MAX_MOUNTAIN_TILES_TOTAL,
-                WATER: MAX_WATER_TILES_TOTAL,
-                FOREST: MAX_FOREST_TILES_TOTAL,
-                PLAINS: MAX_PLAINS_TILES_TOTAL
-            };
-
-            function assignTile(q, r, type, currentCounts) {
-                const key = getTileKey(q, r);
-                const oldType = tempTiles.get(key);
-                if (oldType) { 
-                    const oldTypeName = oldType.name.toUpperCase();
-                    if (currentCounts.hasOwnProperty(oldTypeName)) currentCounts[oldTypeName]--;
-                }
-                tempTiles.set(key, type);
-                const newTypeName = type.name.toUpperCase();
-                if (currentCounts.hasOwnProperty(newTypeName)) currentCounts[newTypeName]++;
-            }
-            
-            allHexCoords.forEach(coord => {
-                const key = getTileKey(coord.q, coord.r);
-                if (tempTiles.get(key) !== null) return; 
-
-                if (counts.MOUNTAIN < tileBudget.MOUNTAIN && axialDistance(coord.q, coord.r, 0, 0) > 1) {
-                    let adjacentMountains = 0;
-                    getNeighbors(coord.q,coord.r).forEach(n => {
-                        const nKey = getTileKey(n.q,n.r);
-                        if(tempTiles.has(nKey) && tempTiles.get(nKey) === TILE_TYPES.MOUNTAIN) adjacentMountains++;
-                    });
-                    if (adjacentMountains < MAX_MOUNTAIN_TILES_PER_CLUSTER) {
-                        if (Math.random() < MOUNTAIN_SPAWN_CHANCE) {
-                            assignTile(coord.q, coord.r, TILE_TYPES.MOUNTAIN, counts);
-                            return; 
-                        }
-                    }
-                }
-            });
-             allHexCoords.forEach(coord => { 
-                const key = getTileKey(coord.q, coord.r);
-                if (tempTiles.get(key) !== null) return;
-
-                if (counts.WATER < tileBudget.WATER && Math.random() < WATER_SPAWN_CHANCE) {
-                     assignTile(coord.q, coord.r, TILE_TYPES.WATER, counts);
-                     return;
-                }
-            });
-            allHexCoords.forEach(coord => { 
-                const key = getTileKey(coord.q, coord.r);
-                if (tempTiles.get(key) !== null) return;
-                if (counts.FOREST < tileBudget.FOREST && Math.random() < FOREST_SPAWN_CHANCE) {
-                    assignTile(coord.q, coord.r, TILE_TYPES.FOREST, counts);
-                    return;
-                }
-            });
-
-            allHexCoords.forEach(coord => {
-                if (tempTiles.get(getTileKey(coord.q, coord.r)) === null) {
-                    assignTile(coord.q, coord.r, TILE_TYPES.PLAINS, counts);
-                }
-            });
-
-            const adjustmentPasses = 3; 
-            for (let pass = 0; pass < adjustmentPasses; pass++) {
-                allHexCoords.sort(() => 0.5 - Math.random()); 
-
-                if (counts.WATER < MIN_WATER_TILES_SOFT && counts.WATER < tileBudget.WATER) {
-                    for (const coord of allHexCoords) {
-                        if (counts.WATER >= MIN_WATER_TILES_SOFT || counts.WATER >= tileBudget.WATER) break;
-                        const key = getTileKey(coord.q, coord.r);
-                        if (tempTiles.get(key) === TILE_TYPES.PLAINS) { 
-                            assignTile(coord.q, coord.r, TILE_TYPES.WATER, counts);
-                        }
-                    }
-                }
-                if (counts.FOREST < MIN_FOREST_TILES_SOFT && counts.FOREST < tileBudget.FOREST) {
-                    for (const coord of allHexCoords) {
-                        if (counts.FOREST >= MIN_FOREST_TILES_SOFT || counts.FOREST >= tileBudget.FOREST) break;
-                        const key = getTileKey(coord.q, coord.r);
-                        if (tempTiles.get(key) === TILE_TYPES.PLAINS) {
-                            assignTile(coord.q, coord.r, TILE_TYPES.FOREST, counts);
-                        }
-                    }
-                }
-                if (counts.PLAINS < MIN_PLAINS_TILES_SOFT && counts.PLAINS < tileBudget.PLAINS) {
-                     for (const coord of allHexCoords) {
-                        if (counts.PLAINS >= MIN_PLAINS_TILES_SOFT || counts.PLAINS >= tileBudget.PLAINS) break;
-                        const key = getTileKey(coord.q, coord.r);
-                        if (tempTiles.get(key) === TILE_TYPES.FOREST && counts.FOREST > MIN_FOREST_TILES_SOFT) { 
-                            assignTile(coord.q, coord.r, TILE_TYPES.PLAINS, counts);
-                        }
-                    }
-                }
-                allHexCoords.forEach(coord => {
-                    const key = getTileKey(coord.q, coord.r);
-                    const currentType = tempTiles.get(key);
-                    if (currentType === TILE_TYPES.PLAINS) {
-                        if (counts.FOREST < 5 && counts.FOREST < tileBudget.FOREST && Math.random() < 0.1) { 
-                            assignTile(coord.q, coord.r, TILE_TYPES.FOREST, counts);
-                        } else if (counts.WATER < 3 && counts.WATER < tileBudget.WATER && Math.random() < 0.05) { 
-                             assignTile(coord.q, coord.r, TILE_TYPES.WATER, counts);
-                        }
-                    } else if (currentType === TILE_TYPES.FOREST) {
-                         if (counts.MOUNTAIN < 2 && counts.MOUNTAIN < tileBudget.MOUNTAIN && axialDistance(coord.q, coord.r, 0,0) > 1 && Math.random() < 0.05) {
-                            assignTile(coord.q, coord.r, TILE_TYPES.MOUNTAIN, counts);
-                        }
-                    }
-                });
-            }
-            
-            const originKey = getTileKey(0,0);
-            let originTile = tempTiles.get(originKey);
-            if (originTile === TILE_TYPES.WATER || originTile === TILE_TYPES.MOUNTAIN) {
-                let swapped = false;
-                const centralCandidates = allHexCoords.filter(c => axialDistance(c.q,c.r,0,0) <=1 && c.q !== 0 && c.r !==0);
-                for(const candCoord of centralCandidates) {
-                    const candKey = getTileKey(candCoord.q, candCoord.r);
-                    const candTile = tempTiles.get(candKey);
-                    if (candTile === TILE_TYPES.PLAINS || candTile === TILE_TYPES.FOREST) {
-                        assignTile(0,0, candTile, counts); 
-                        assignTile(candCoord.q, candCoord.r, originTile, counts);
-                        swapped = true; break;
-                    }
-                }
-                if (!swapped) assignTile(0,0, TILE_TYPES.PLAINS, counts); 
-            }
-
-            let centralPlainsCount = 0;
-            const centralHexes = allHexCoords.filter(c => axialDistance(c.q,c.r,0,0) <=1);
-            centralHexes.forEach(c => {
-                if(tempTiles.get(getTileKey(c.q,c.r)) === TILE_TYPES.PLAINS) centralPlainsCount++;
-            });
-
-            if(centralPlainsCount < MIN_CENTRAL_PLAINS_SOFT) {
-                const centralForestsToConvert = centralHexes.filter(c => tempTiles.get(getTileKey(c.q,c.r)) === TILE_TYPES.FOREST)
-                                                       .sort(() => 0.5 - Math.random());
-                for(const cfc of centralForestsToConvert) {
-                    if(centralPlainsCount >= MIN_CENTRAL_PLAINS_SOFT || counts.PLAINS >= tileBudget.PLAINS) break;
-                    assignTile(cfc.q, cfc.r, TILE_TYPES.PLAINS, counts);
-                    centralPlainsCount++;
-                }
-            }
-             allHexCoords.forEach(coord => { 
-                if (tempTiles.get(getTileKey(coord.q, coord.r)) === null) {
-                    assignTile(coord.q, coord.r, TILE_TYPES.PLAINS, counts);
-                }
-            });
-            console.log("Final Tile Counts:", JSON.parse(JSON.stringify(counts))); 
-            return tempTiles;
         }
+    }
+
+    // --- 1. Define Base Area Keys ---
+    const p1BaseAreaKeys = new Set(['-3,1', '-2,1', '-2,2', '-3,2']);
+    const p2BaseAreaKeys = new Set(['3,-1', '2,-1', '2,-2', '3,-2']);
+
+    // --- 2. Generate Water Archetype ---
+    const archetypes = ['coastline', 'river'];
+    const chosenArchetype = archetypes[Math.floor(Math.random() * archetypes.length)];
+    console.log(`Generating map with archetype: ${chosenArchetype}`);
+
+    if (chosenArchetype === 'coastline') {
+        generateCoastline(tempTiles, allHexCoords, radius);
+    } else if (chosenArchetype === 'river') {
+        generateRiver(tempTiles, allHexCoords, radius);
+    }
+
+    // --- 3. Generate Mountains ---
+    // Let mountains generate anywhere for now, we can overwrite them later if needed.
+    allHexCoords.forEach(coord => {
+        const key = getTileKey(coord.q, coord.r);
+        if (tempTiles.has(key)) return; // Don't overwrite existing water
+
+        if (Math.random() < 0.18) {
+            tempTiles.set(key, TILE_TYPES.MOUNTAIN);
+        }
+    });
+
+    // --- 4. Guarantee Two Paths ---
+    // This step is allowed to "carve" through any terrain, including mountains or water.
+    const p1_start_node = '-3,1';
+    const p2_end_node = '3,-1';
+    const firstPath = findAndCarvePath(p1_start_node, p2_end_node, tempTiles, []);
+    if (firstPath) {
+        findAndCarvePath(p1_start_node, p2_end_node, tempTiles, firstPath);
+    }
+
+    // --- 5. Fill Remaining Empty Space ---
+    // Any tile that hasn't been assigned a type yet gets forest or plains.
+    allHexCoords.forEach(coord => {
+        const key = getTileKey(coord.q, coord.r);
+        if (!tempTiles.has(key)) {
+            if (Math.random() < 0.45) {
+                tempTiles.set(key, TILE_TYPES.FOREST);
+            } else {
+                tempTiles.set(key, TILE_TYPES.PLAINS);
+            }
+        }
+    });
+
+    // --- 6. ABSOLUTE FINAL STEP: Force Base Areas to be Plains ---
+    // This is the last operation. It overwrites anything that was placed in the
+    // base areas, including water, mountains, or paths.
+    p1BaseAreaKeys.forEach(key => tempTiles.set(key, TILE_TYPES.PLAINS));
+    p2BaseAreaKeys.forEach(key => tempTiles.set(key, TILE_TYPES.PLAINS));
+
+    return tempTiles;
+}
+
+/** Generates a coastline on one side of the map. */
+function generateCoastline(tiles, allCoords, radius) {
+    const side = Math.floor(Math.random() * 6); // 0 to 5, picks a side of the hex map
+    const direction = AXIAL_DIRECTIONS[side];
+    
+    allCoords.forEach(coord => {
+        const projection = coord.q * direction.q + coord.r * direction.r;
+        if (projection >= radius - 1) {
+            tiles.set(getTileKey(coord.q, coord.r), TILE_TYPES.WATER);
+        }
+    });
+}
+
+/** Generates a winding river across the map. */
+function generateRiver(tiles, allCoords, radius) {
+    const edgeCoords = allCoords.filter(c => axialDistance(c.q, c.r, 0, 0) === radius);
+    let current = edgeCoords[Math.floor(Math.random() * edgeCoords.length)];
+    let riverPath = new Set();
+    
+    for(let i = 0; i < radius * 2.5; i++) {
+         const key = getTileKey(current.q, current.r);
+         if(riverPath.has(key)) break;
+         riverPath.add(key);
+         tiles.set(key, TILE_TYPES.WATER);
+
+         const neighbors = getNeighbors(current.q, current.r).filter(n => isCoordInRadius(getTileKey(n.q, n.r), radius));
+         if(neighbors.length > 0 && Math.random() > 0.4) {
+             const randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
+             const neighborKey = getTileKey(randomNeighbor.q, randomNeighbor.r);
+             if(!riverPath.has(neighborKey)) {
+                 riverPath.add(neighborKey);
+                 tiles.set(neighborKey, TILE_TYPES.WATER);
+             }
+         }
+         
+         let bestNeighbor = null;
+         let maxDist = -Infinity;
+         for(const n of neighbors) {
+             const dist = -1 * (n.q * current.q + n.r * current.r);
+             if (dist > maxDist) {
+                 maxDist = dist;
+                 bestNeighbor = n;
+             }
+         }
+         if (bestNeighbor) {
+             current = bestNeighbor;
+         } else {
+             break;
+         }
+    }
+}
+
+
+/**
+ * Finds a path between two hexes. If no path exists, it carves one.
+ * @param {string} startKey - The starting hex key (e.g., 'q,r').
+ * @param {string} endKey - The target hex key.
+ * @param {Map} tiles - The map of tiles to operate on.
+ * @param {Array<string>} excludedKeys - An array of hex keys to ignore during pathfinding.
+ * @returns {Array<string>|null} The path as an array of keys, or null if failed.
+ */
+function findAndCarvePath(startKey, endKey, tiles, excludedKeys = []) {
+    let openSet = [startKey];
+    const cameFrom = new Map();
+    const gScore = new Map();
+    gScore.set(startKey, 0);
+    const fScore = new Map();
+    const [sq, sr] = startKey.split(',').map(Number);
+    const [eq, er] = endKey.split(',').map(Number);
+    fScore.set(startKey, axialDistance(sq, sr, eq, er));
+    const excludedSet = new Set(excludedKeys);
+
+    while (openSet.length > 0) {
+        let currentKey = openSet.sort((a, b) => (fScore.get(a) || Infinity) - (fScore.get(b) || Infinity))[0];
+
+        if (currentKey === endKey) {
+            return reconstructPath(cameFrom, currentKey);
+        }
+
+        openSet = openSet.filter(key => key !== currentKey);
+        const [cq, cr] = currentKey.split(',').map(Number);
+        const neighbors = getNeighbors(cq, cr).map(n => getTileKey(n.q, n.r));
+
+        for (const neighborKey of neighbors) {
+            if (!tiles.has(neighborKey) && !isCoordInRadius(neighborKey, GRID_RADIUS)) continue;
+            const tile = tiles.get(neighborKey);
+            const isPassable = tile !== TILE_TYPES.WATER && tile !== TILE_TYPES.MOUNTAIN;
+            if (excludedSet.has(neighborKey)) continue;
+
+            if (isPassable) {
+                const tentative_gScore = (gScore.get(currentKey) || Infinity) + 1;
+                if (tentative_gScore < (gScore.get(neighborKey) || Infinity)) {
+                    cameFrom.set(neighborKey, currentKey);
+                    gScore.set(neighborKey, tentative_gScore);
+                    const [nq, nr] = neighborKey.split(',').map(Number);
+                    fScore.set(neighborKey, tentative_gScore + axialDistance(nq, nr, eq, er));
+                    if (!openSet.includes(neighborKey)) {
+                        openSet.push(neighborKey);
+                    }
+                }
+            }
+        }
+    }
+
+    console.log("No path found, attempting to carve.");
+    let carvePath = [startKey];
+    let currentCarveKey = startKey;
+    for (let i = 0; i < 100; i++) {
+        if (currentCarveKey === endKey) break;
+        const [ccq, ccr] = currentCarveKey.split(',').map(Number);
+        const neighbors = getNeighbors(ccq, ccr)
+                            .map(n => ({ key: getTileKey(n.q, n.r), q: n.q, r: n.r }))
+                            .filter(n => isCoordInRadius(n.key, GRID_RADIUS));
+        let nextStep = neighbors.sort((a,b) => axialDistance(a.q, a.r, eq, er) - axialDistance(b.q, b.r, eq, er))[0];
+        if (!nextStep) return null;
+        if (tiles.get(nextStep.key) === TILE_TYPES.WATER || tiles.get(nextStep.key) === TILE_TYPES.MOUNTAIN) {
+            tiles.set(nextStep.key, TILE_TYPES.PLAINS);
+        }
+        currentCarveKey = nextStep.key;
+        carvePath.push(currentCarveKey);
+    }
+    return carvePath;
+}
+
+/** Reconstructs a path from the 'cameFrom' map of an A* search. */
+function reconstructPath(cameFrom, currentKey) {
+    const totalPath = [currentKey];
+    while (cameFrom.has(currentKey)) {
+        currentKey = cameFrom.get(currentKey);
+        totalPath.unshift(currentKey);
+    }
+    return totalPath;
+}
+
+/** Checks if a given hex coordinate key is within the map radius */
+function isCoordInRadius(key, radius) {
+    const [q, r] = key.split(',').map(Number);
+    if (isNaN(q) || isNaN(r)) return false;
+    return Math.abs(q) <= radius && Math.abs(r) <= radius && Math.abs(q + r) <= radius;
+}
 
         function placeUnitsOnNewGeneratedMap() {
             const landEdges = [];
