@@ -61,6 +61,63 @@
              font-family: 'Geostar', cursive;
         }
 
+#topLeftControlsContainer {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+#gameMenuTrigger {
+    background-color: #34495e;
+    border: 2px solid #ecf0f1;
+    border-radius: 8px;
+    padding: 6px 15px; /* Restored from a previous step */
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: flex;
+    align-items: center;
+    font-size: 1.2em; /* Restored from a previous step */
+    font-weight: bold; /* Restored from a previous step */
+}
+
+#gameIconLink {
+    background-color: transparent;
+    border: none;
+    padding: 5px;
+    border-radius: 8px; /* Keep radius for hover effect */
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s;
+}
+
+#gameMenuTrigger {
+    font-size: 1.2em;
+    font-weight: bold;
+    padding: 6px 15px;
+}
+#gameMenuTrigger:hover {
+    background-color: #4a6075;
+}
+#gameIconLink:hover {
+    background-color: rgba(74, 96, 117, 0.5); /* A semi-transparent hover */
+}
+.menu-options-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+.menu-options-container .action-button {
+    width: 100%;
+    padding: 12px 20px;
+    font-size: 1.1em;
+    margin: 0;
+}
+
         #gameLayoutContainer {
             display: flex;
             flex-direction: row;
@@ -146,36 +203,6 @@
             margin-bottom: 20px; /* Space below button container */
         }
 
-        #generateMapButton {
-            background-color: #f1c40f; 
-            box-shadow: 0 3px #d4ac0d; 
-            width: 280px; /* Set specific width */
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            font-family: 'Exo 2', sans-serif;
-            cursor: pointer;
-            transition: background-color 0.3s, box-shadow 0.3s, transform 0.1s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        #generateMapButton:hover:not(:disabled) {
-            background-color: #d4ac0d;
-        }
-        #generateMapButton:active:not(:disabled) {
-            box-shadow: none;
-            transform: translateY(3px);
-        }
-         #generateMapButton svg {
-            width: 20px;
-            height: 20px;
-            stroke: white;
-        }
-
-
         #downloadButton {
             position: fixed;
             bottom: 20px;
@@ -258,27 +285,32 @@
             margin-left: 5px;
             margin-right: 5px;
         }
-        .action-button.selecting {
-            background-color: #f39c12;
-            box-shadow: 0 3px #d35400;
-        }
-        .action-button.selecting:hover {
-            background-color: #d35400;
-        }
-        .action-button:not(.selecting):hover:not(:disabled) {
-             background-color: #2980b9;
-        }
-        .action-button:disabled {
-            background-color: #95a5a6;
-            color: #bdc3c7;
-            cursor: not-allowed;
-            box-shadow: 0 3px #7f8c8d;
-        }
-        .action-button:active:not(:disabled) {
-             box-shadow: none;
-            transform: translateY(3px);
-        }
+    .action-button.selecting:hover {
+        background-color: #d35400;
+    }
+    .action-button:not(.selecting):hover:not(:disabled) {
+         background-color: #2980b9;
+    }
+    .action-button:disabled {
+        background-color: #95a5a6;
+        color: #bdc3c7;
+        cursor: not-allowed;
+        box-shadow: 0 3px #7f8c8d;
+    }
+    .action-button:active:not(:disabled) {
+         box-shadow: none;
+        transform: translateY(3px);
+    }
 
+    /* --- Corrected Cancel Button Rules --- */
+    .action-button-cancel {
+        background-color: #e74c3c;
+        box-shadow: 0 3px #c0392b;
+    }
+    /* By specifying both classes, this rule becomes more specific and will override the generic blue hover. */
+    .action-button.action-button-cancel:hover:not(:disabled) {
+        background-color: #c0392b;
+    }
         #generateMapButtonContainer .action-button {
             width: 160px; 
             display: flex;
@@ -446,6 +478,37 @@
 }
 #loadFromFileButton:hover:not(:disabled) {
     background-color: #229954;
+}
+
+#newMapButton {
+    width: 160px;
+    background-color: #f1c40f; 
+    box-shadow: 0 3px #d4ac0d;
+}
+
+#newMapButton:hover:not(:disabled) {
+    background-color: #d4ac0d;
+}
+#newMapOptionsContainer {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    width: 100%;
+}
+#generateMapFromModalButton {
+    background-color: #27ae60;
+    box-shadow: 0 3px #1e8449;
+}
+#generateMapFromModalButton:hover:not(:disabled) {
+    background-color: #229954;
+}
+
+.action-button-cancel {
+    background-color: #e74c3c;
+    box-shadow: 0 3px #c0392b;
+}
+.action-button-cancel:hover:not(:disabled) {
+    background-color: #c0392b;
 }
 
         /* Tutorial Modal Styles */
@@ -762,8 +825,41 @@
     <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.16 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.mb-6{margin-bottom:1.5rem}.text-center{text-align:center}.text-4xl{font-size:2.25rem;line-height:2.5rem}.font-bold{font-weight:700}.text-amber-400{--tw-text-opacity:1;color:rgb(251 191 36 / var(--tw-text-opacity, 1))}</style>
 </head>
 <body>
-    <h1 class="text-4xl font-bold mb-6 text-center text-amber-400">FortHex</h1>
-    <div id="gameLayoutContainer">
+<h1 class="text-4xl font-bold mb-6 text-center text-amber-400">FortHex</h1>
+
+<!-- NEW MENU TRIGGER BUTTON -->
+<div id="topLeftControlsContainer">
+    <a id="gameIconLink" title="Restart Game">
+        <svg version="1.0" width="30" height="30" viewBox="0 0 384 384" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,384)scale(.075,.075)"><path fill="white" d="M1452-4473l-1102 636 0 1277 0 1277 1098 633c603 349 1104 634 1112 634 8 0 509-285 1113-633l1097-634 0-1277 0-1277-1093-631c-601-347-1099-633-1107-636-9-3-480 263-1118 631z m1552-167c234 135 425 248 426 252 0 10-863 839-871 836-21-8-868-833-862-839 20-19 859-499 869-496 7 1 203 112 438 247z m-3 1829c1216 1170 1508 1456 1497 1466-14 13-825 481-849 490-9 3-194-168-505-467-270-260-713-687-985-948-1341-1290-1550-1493-1542-1501 16-15 858-498 865-496 4 1 688 656 1519 1456z m1076-1209c230 133 422 245 426 249 10 10-1069 1054-1083 1049-5-2-165-153-354-335l-345-333 457-440c251-242 463-438 469-435 7 2 201 113 430 245z m501 1936l-3 476-490-471c-269-259-491-475-493-479-1-4 219-221 490-482l493-474 3 477c1 262 1 691 0 953z m-2529 18c187 181 341 332 341 336 0 6-218 218-832 808l-77 74-428-247c-235-135-432-250-436-254-8-8 1072-1053 1084-1049 4 2 160 151 348 332z"></path></g></svg>
+    </a>
+    <a id="gameMenuTrigger">Menu</a>
+</div>
+
+<!-- UNIFIED GAME MENU MODAL -->
+<div id="gameMenuModal" class="modal-overlay">
+    <div class="modal-content">
+        <!-- Main Menu Content (Visible by default) -->
+        <div id="mainMenuContent">
+            <h2 class="text-4xl" style="font-family: 'Geostar', cursive; color: #f1c40f; margin-bottom: 30px;">FortHex</h2>
+            <div class="menu-options-container">
+                <button id="singleplayerButton" class="action-button" disabled>Singleplayer (Coming Soon)</button>
+                <button id="multiplayerButton" class="action-button">Multiplayer</button>
+            </div>
+        </div>
+
+        <!-- Multiplayer Menu Content (Hidden by default) -->
+        <div id="multiplayerMenuContent" style="display: none;">
+             <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #f1c40f; margin-bottom: 25px;">Multiplayer</h3>
+            <div class="menu-options-container">
+                <button id="localMultiplayerButton" class="action-button">Local</button>
+                <button id="onlineMultiplayerButton" class="action-button" disabled>Online (Coming Soon)</button>
+            </div>
+             <button id="backToMainMenuButton" class="action-button action-button-cancel" style="margin-top: 25px;">Back</button>
+        </div>
+    </div>
+</div>
+
+<div id="gameLayoutContainer">
         <div id="leftPanel" class="ui-panel">
             <div>
                 <div id="globalTurnCounterDisplay" class="text-center" style="font-size: 1.5em; color: #f1c40f;">Turn: 1</div>
@@ -813,33 +909,28 @@
         </div>
     </div>
 
-    <div id="generateMapButtonContainer" style="display: flex; justify-content: center; gap: 15px; width: 100%; margin-top: 20px; margin-bottom: 20px;">
-        <!-- SAVE GAME BUTTON -->
-        <button id="saveGameButton" class="action-button">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                <polyline points="7 3 7 8 15 8"></polyline>
-            </svg>
-            Save Game
-        </button>
+<div id="generateMapButtonContainer" style="display: flex; justify-content: center; gap: 15px; width: 100%; margin-top: 20px; margin-bottom: 20px;">
+    <!-- SAVE GAME BUTTON -->
+    <button id="saveGameButton" class="action-button">
+         <!-- ... save icon svg ... -->
+        Save Game
+    </button>
 
-        <button id="generateMapButton">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21.5 2v6h-6M2.5 22v-6h6"/>
-                <path d="M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
-            </svg>
-            Generate New Map
-        </button>
+    <button id="newMapButton" class="action-button">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;">
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+            <line x1="8" y1="2" x2="8" y2="18"></line>
+            <line x1="16" y1="6" x2="16" y2="22"></line>
+        </svg>
+        New Map
+    </button>
 
-        <!-- LOAD GAME BUTTON -->
-        <button id="loadGameButton" class="action-button">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            Load Game
-        </button>
-    </div>
+    <!-- LOAD GAME BUTTON -->
+    <button id="loadGameButton" class="action-button">
+        <!-- ... load icon svg ... -->
+        Load Game
+    </button>
+</div>
 
     <button id="tutorialButton" title="Game Tutorial">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -880,6 +971,19 @@
 
 <!-- Hidden file input for loading game saves -->
 <input type="file" id="fileLoaderInput" style="display: none;" accept=".fhsave, .json">
+
+<!-- NEW MAP MODAL -->
+<div id="newMapModal" class="modal-overlay" style="display: none;">
+<div class="modal-content">
+<button id="newMapModalCloseButton" class="tutorial-modal-close-button" title="Close">×</button>
+<h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #f1c40f; margin-bottom: 25px;">New Map</h3>
+<div id="newMapOptionsContainer">
+<button id="selectMapButton" class="action-button" disabled>Select Map (Coming Soon)</button>
+<button id="generateMapFromModalButton" class="action-button">Generate Map</button>
+<button id="customMapButton" class="action-button" disabled>Custom Map (Coming Soon)</button>
+</div>
+</div>
+</div>
 
     <div id="tutorialModalOverlay" style="display: none;"> <!-- Will be controlled by JS -->
         <div id="tutorialModalContent">
@@ -1030,7 +1134,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B21";
+        const BUILD_VERSION = "B22";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1173,7 +1277,6 @@
             buildBridgeButton: document.getElementById('buildBridgeButton'),
             attackButton: document.getElementById('attackButton'),
             endTurnButton: document.getElementById('endTurnButton'),
-            generateMapButton: document.getElementById('generateMapButton'),
             downloadButton: document.getElementById('downloadButton'),
             tutorialButton: document.getElementById('tutorialButton'), 
             messageBox: document.getElementById('messageBox'),
@@ -3086,21 +3189,32 @@ function fundNewFortification(unit) {
         }
 
         // --- Action: Fortify / Unfortify ---
-        function getPotentialUnfortifyTargets(unit) {
-            if (!unit || !unit.isFortified || unit.positionType !== 'center') return [];
-            const fortifiedTile = gameState.tiles.get(unit.position); if (!fortifiedTile) return [];
-            const validTargets = [];
-            getNeighbors(fortifiedTile.q, fortifiedTile.r).forEach(neighborCoords => {
-                const edgeKey = getEdgeKey(fortifiedTile.q, fortifiedTile.r, neighborCoords.q, neighborCoords.r);
-                const edge = gameState.edges.get(edgeKey);
-                if (edge && getEdgeCost(unit, edgeKey) !== Infinity) {
-                     const enemyOnEdge = edge.units.some(u => u.player !== unit.player);
-                     const friendliesOnEdge = edge.units.filter(u => u.player === unit.player).length;
-                     if (!enemyOnEdge && friendliesOnEdge < 2) validTargets.push(edgeKey);
-                 }
-             });
-             return validTargets;
+function getPotentialUnfortifyTargets(unit) {
+    if (!unit || !unit.isFortified || unit.positionType !== 'center') return [];
+    const fortifiedTile = gameState.tiles.get(unit.position); if (!fortifiedTile) return [];
+    
+    const playerHomeFlagEdge = FLAG_HOME_POSITIONS[`player${unit.player}`];
+    const validTargets = [];
+
+    getNeighbors(fortifiedTile.q, fortifiedTile.r).forEach(neighborCoords => {
+        const edgeKey = getEdgeKey(fortifiedTile.q, fortifiedTile.r, neighborCoords.q, neighborCoords.r);
+        
+        // CRITICAL FIX: Prevent unfortifying onto the player's own home flag tile.
+        if (edgeKey === playerHomeFlagEdge) {
+            return; // Skip this edge, it's not a valid target.
         }
+
+        const edge = gameState.edges.get(edgeKey);
+        if (edge && getEdgeCost(unit, edgeKey) !== Infinity) {
+             const enemyOnEdge = edge.units.some(u => u.player !== unit.player);
+             const friendliesOnEdge = edge.units.filter(u => u.player === unit.player).length;
+             if (!enemyOnEdge && friendliesOnEdge < 2) {
+                 validTargets.push(edgeKey);
+             }
+         }
+     });
+     return validTargets;
+}
 
         function completeFortify(targetTileKeyToFortify) {
             const { selectedUnit } = gameState;
@@ -3156,17 +3270,34 @@ function fundNewFortification(unit) {
             if (!gameState.gameOver) checkVictoryCondition();
         }
 
-        function handleFortifyActionLogic() {
-            const { selectedUnit } = gameState;
-             if (!selectedUnit || selectedUnit.hasPerformedMajorAction || selectedUnit.isFortified || selectedUnit.positionType !== 'edge') { showInstruction("Cannot fortify.", 2000); return; }
-            const edgeCoords = parseEdgeKey(selectedUnit.position);
-             if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { showInstruction("Unit not on valid edge.", 2000); return; }
-            const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
-            const tile1 = gameState.tiles.get(tile1Key); const tile2 = gameState.tiles.get(tile2Key);
-            gameState.validFortifyTargetTileKeys = [];
-            if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null) gameState.validFortifyTargetTileKeys.push(tile1Key);
-            if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null) gameState.validFortifyTargetTileKeys.push(tile2Key);
-            if (gameState.validFortifyTargetTileKeys.length === 0) { showInstruction("No valid adjacent tile.", 2000); return; }
+function handleFortifyActionLogic() {
+    const { selectedUnit } = gameState;
+     if (!selectedUnit || selectedUnit.hasPerformedMajorAction || selectedUnit.isFortified || selectedUnit.positionType !== 'edge') { showInstruction("Cannot fortify.", 2000); return; }
+    const edgeCoords = parseEdgeKey(selectedUnit.position);
+     if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { showInstruction("Unit not on valid edge.", 2000); return; }
+
+    // Define the enemy player's base tiles
+    const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
+    const enemyBaseEdgeKey = FLAG_HOME_POSITIONS[`player${enemyPlayer}`];
+    const [enemy_h1, enemy_h2] = parseEdgeKey(enemyBaseEdgeKey);
+    const enemyBaseTileKeys = new Set([getTileKey(enemy_h1.q, enemy_h1.r), getTileKey(enemy_h2.q, enemy_h2.r)]);
+
+    const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); 
+    const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
+    const tile1 = gameState.tiles.get(tile1Key); 
+    const tile2 = gameState.tiles.get(tile2Key);
+    
+    gameState.validFortifyTargetTileKeys = [];
+    // Check Tile 1
+    if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key)) {
+        gameState.validFortifyTargetTileKeys.push(tile1Key);
+    }
+    // Check Tile 2
+    if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key)) {
+        gameState.validFortifyTargetTileKeys.push(tile2Key);
+    }
+
+    if (gameState.validFortifyTargetTileKeys.length === 0) { showInstruction("No valid adjacent tile.", 2000); return; }
             if (gameState.validFortifyTargetTileKeys.length === 1) {
                 completeFortify(gameState.validFortifyTargetTileKeys[0]);
             } else { 
@@ -4617,7 +4748,7 @@ function fundNewFortification(unit) {
                 gameState.gameOver = true;
                 gameState.currentActionState = ACTION_STATES.IDLE;
                 ui.endTurnButton.disabled = true;
-                ui.generateMapButton.disabled = false; 
+                document.getElementById('newMapButton').disabled = false; 
                 if (gameState.selectedUnit) {
                     ui.fortifyUnfortifyButton.disabled = true;
                     ui.buildBridgeButton.disabled = true;
@@ -4630,7 +4761,7 @@ function fundNewFortification(unit) {
                 gameState.currentReachableMoves.clear(); 
                 updateSelectedUnitInfoPanel(); 
             } else {
-                ui.generateMapButton.disabled = false;
+                document.getElementById('newMapButton').disabled = false;
             }
         }                                                                           
 
@@ -4692,18 +4823,34 @@ function fundNewFortification(unit) {
             checkVictoryCondition();
         });
 
-ui.generateMapButton.addEventListener('click', () => {
-    if (gameState.isDragging) return;
-    
-    // Set the message and the action for the modal
+// Replaces the old "Generate Map" button listener
+document.getElementById('newMapButton').addEventListener('click', showNewMapModal);
+
+// --- New Map Modal Listeners ---
+const newMapModalOverlay = document.getElementById('newMapModal');
+
+// Click outside to close
+newMapModalOverlay.addEventListener('click', (event) => {
+    if (event.target === newMapModalOverlay) {
+        hideNewMapModal();
+    }
+});
+
+// 'x' button to close
+document.getElementById('newMapModalCloseButton').addEventListener('click', hideNewMapModal);
+
+// "Generate Map" button inside the modal
+document.getElementById('generateMapFromModalButton').addEventListener('click', () => {
+    hideNewMapModal();
+    // It's good practice to confirm before resetting the game.
     document.getElementById('customConfirmMessage').textContent = 'Are you sure you want to generate a new map? This will reset the current game.';
     currentConfirmAction = handleGenerateNewMap;
-
     if (ui.customConfirmModal) {
         ui.customConfirmModal.style.display = 'flex';
         setTimeout(() => ui.customConfirmModal.classList.add('modal-visible'), 10);
     }
 });
+
 ui.customConfirmOkButton.addEventListener('click', () => {
     if (ui.customConfirmModal) {
         ui.customConfirmModal.classList.remove('modal-visible');
@@ -4807,6 +4954,22 @@ setTimeout(() => modal.classList.add('modal-visible'), 10);
 
 function hideLoadGameModal() {
 const modal = document.getElementById('loadGameModal');
+if (modal) {
+modal.classList.remove('modal-visible');
+setTimeout(() => modal.style.display = 'none', 300);
+}
+}
+
+function showNewMapModal() {
+const modal = document.getElementById('newMapModal');
+if (modal) {
+modal.style.display = 'flex';
+setTimeout(() => modal.classList.add('modal-visible'), 10);
+}
+}
+
+function hideNewMapModal() {
+const modal = document.getElementById('newMapModal');
 if (modal) {
 modal.classList.remove('modal-visible');
 setTimeout(() => modal.style.display = 'none', 300);
@@ -5317,6 +5480,63 @@ function isCoordInRadius(key, radius) {
 
         window.onload = function () {
             document.getElementById('buildVersionDisplay').textContent = `FortHex Build ${BUILD_VERSION}`;
+
+    // --- NEW: Main Menu System Listeners ---
+
+// The top-left ICON listener (simple refresh with custom modal)
+document.getElementById('gameIconLink').addEventListener('click', (event) => {
+    event.preventDefault(); // Prevent default link behavior
+
+    // Set the message and the action for the modal
+    document.getElementById('customConfirmMessage').textContent = 'Are you sure you want to restart? Any unsaved progress will be lost.';
+    currentConfirmAction = () => {
+        location.reload();
+    };
+
+    if (ui.customConfirmModal) {
+        ui.customConfirmModal.style.display = 'flex';
+        setTimeout(() => ui.customConfirmModal.classList.add('modal-visible'), 10);
+    }
+});
+
+// The top-left MENU TEXT listener (shows the unified modal)
+document.getElementById('gameMenuTrigger').addEventListener('click', () => {
+    const modal = document.getElementById('gameMenuModal');
+    // Reset to show main menu content first
+    document.getElementById('mainMenuContent').style.display = 'block';
+    document.getElementById('multiplayerMenuContent').style.display = 'none';
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('modal-visible'), 10);
+});
+
+// --- Unified Menu Button Listeners ---
+
+// "Multiplayer" button listener (swaps content inside the modal)
+document.getElementById('multiplayerButton').addEventListener('click', () => {
+    document.getElementById('mainMenuContent').style.display = 'none';
+    document.getElementById('multiplayerMenuContent').style.display = 'block';
+});
+
+// "Local Multiplayer" button listener
+document.getElementById('localMultiplayerButton').addEventListener('click', () => {
+    location.reload(); // Still the cleanest way to start a new game
+});
+
+// "Back" button listener (swaps content back)
+document.getElementById('backToMainMenuButton').addEventListener('click', () => {
+    document.getElementById('multiplayerMenuContent').style.display = 'none';
+    document.getElementById('mainMenuContent').style.display = 'block';
+});
+
+// Add click-outside-to-close for the unified modal
+document.getElementById('gameMenuModal').addEventListener('click', (e) => {
+    if (e.target.id === 'gameMenuModal') {
+        const modal = e.target;
+        modal.classList.remove('modal-visible');
+        setTimeout(() => modal.style.display = 'none', 300);
+    }
+});
+
                     // --- NEW: Confirmation Modal "Click Outside" Listener ---
         const customConfirmModalOverlay = document.getElementById('customConfirmModal');
         customConfirmModalOverlay.addEventListener('click', (event) => {
