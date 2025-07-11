@@ -61,6 +61,25 @@
              font-family: 'Geostar', cursive;
         }
 
+#confettiContainer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Allows clicks to go through to the game */
+    z-index: 9999; /* On top of everything */
+    overflow: hidden;
+}
+
+.confetti-piece {
+    position: absolute;
+    width: 10px;
+    height: 20px;
+    opacity: 0.9;
+    transform-origin: center;
+}
+
 #topLeftControlsContainer {
     position: absolute;
     top: 20px;
@@ -94,11 +113,6 @@
     transition: background-color 0.3s;
 }
 
-#gameMenuTrigger {
-    font-size: 1.2em;
-    font-weight: bold;
-    padding: 6px 15px;
-}
 #gameMenuTrigger:hover {
     background-color: #4a6075;
 }
@@ -842,9 +856,19 @@
         <div id="mainMenuContent">
             <h2 class="text-4xl" style="font-family: 'Geostar', cursive; color: #f1c40f; margin-bottom: 30px;">FortHex</h2>
             <div class="menu-options-container">
-                <button id="singleplayerButton" class="action-button" disabled>Singleplayer (Coming Soon)</button>
+                <button id="singleplayerButton" class="action-button" disabled>Singleplayer (WIP)</button>
                 <button id="multiplayerButton" class="action-button">Multiplayer</button>
             </div>
+        </div>
+
+        <!-- Singleplayer Menu Content (Hidden by default) -->
+        <div id="singleplayerMenuContent" style="display: none;">
+            <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #f1c40f; margin-bottom: 25px;">Choose Your Side</h3>
+            <div class="menu-options-container">
+                <button id="playAsBlueButton" class="action-button" style="background-color: #5dade2; box-shadow: 0 3px #3498db;">Play as Blue (P1)</button>
+                <button id="playAsRedButton" class="action-button" style="background-color: #e74c3c; box-shadow: 0 3px #c0392b;">Play as Red (P2)</button>
+            </div>
+            <button id="backToMainMenuButtonSP" class="action-button action-button-cancel" style="margin-top: 25px;">Back</button>
         </div>
 
         <!-- Multiplayer Menu Content (Hidden by default) -->
@@ -854,7 +878,7 @@
                 <button id="localMultiplayerButton" class="action-button">Local</button>
                 <button id="onlineMultiplayerButton" class="action-button" disabled>Online (Coming Soon)</button>
             </div>
-             <button id="backToMainMenuButton" class="action-button action-button-cancel" style="margin-top: 25px;">Back</button>
+             <button id="backToMainMenuButtonMP" class="action-button action-button-cancel" style="margin-top: 25px;">Back</button>
         </div>
     </div>
 </div>
@@ -912,10 +936,15 @@
 <div id="generateMapButtonContainer" style="display: flex; justify-content: center; gap: 15px; width: 100%; margin-top: 20px; margin-bottom: 20px;">
     <!-- SAVE GAME BUTTON -->
     <button id="saveGameButton" class="action-button">
-         <!-- ... save icon svg ... -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+        </svg>
         Save Game
     </button>
 
+    <!-- NEW MAP BUTTON -->
     <button id="newMapButton" class="action-button">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;">
             <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
@@ -927,7 +956,9 @@
 
     <!-- LOAD GAME BUTTON -->
     <button id="loadGameButton" class="action-button">
-        <!-- ... load icon svg ... -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
         Load Game
     </button>
 </div>
@@ -1134,7 +1165,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B22";
+        const BUILD_VERSION = "B23";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1295,10 +1326,12 @@
 
         // --- Game State ---
         let gameState = {
-            tiles: new Map(),
-            edges: new Map(),
-            units: [],
-            currentPlayer: 1,
+    gameMode: 'local', // 'local' or 'singleplayer'
+    playerSide: null, // 1 or 2, for singleplayer mode
+    tiles: new Map(),
+    edges: new Map(),
+    units: [],
+    currentPlayer: 1,
             globalTurnNumber: 1,
             selectedUnit: null,
             hoveredUnitId: null,
@@ -1335,9 +1368,10 @@
             debugPathToDraw: null,          
             debugPathAnimationStartTime: null,
             debugPathPauseStartTime: null, 
-            lastDebugPathKey: null, 
-            debugAttackRangeHighlights: [], 
-        };
+    lastDebugPathKey: null, 
+    debugAttackRangeHighlights: [],
+    visualEffects: [],
+};
 
         let currentConfirmAction = null;
 
@@ -1618,24 +1652,47 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
                 });
             });
 
-            if (tileLayoutMap) { placeUnitsOnNewGeneratedMap(); }
-            else { 
-                gameState.units.push(createUnit(1, UNIT_TYPES.MELEE,    getEdgeKey(1, -2, 0, -2)));
-                gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER,   getEdgeKey(-2, 0, -1, -1)));
-                gameState.units.push(createUnit(1, UNIT_TYPES.PIKEMAN,  getEdgeKey(-1, -1, 0, -2)));
-                gameState.units.push(createUnit(1, UNIT_TYPES.HORSEMAN, getEdgeKey(-2, 0, -2, 1)));
-                
-                gameState.units.push(createUnit(2, UNIT_TYPES.MELEE,    getEdgeKey(-1, 2, 0, 2)));
-                gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER,   getEdgeKey(1, 1, 2, 0)));
-                gameState.units.push(createUnit(2, UNIT_TYPES.PIKEMAN,  getEdgeKey(0, 2, 1, 1)));
-                gameState.units.push(createUnit(2, UNIT_TYPES.HORSEMAN, getEdgeKey(2, 0, 2, -1)));
+// If a tileLayoutMap is provided, decide how to place units.
+if (tileLayoutMap) {
+    // If it's the default map, use the default hardcoded positions.
+    if (tileLayoutMap === DEFAULT_MAP_LAYOUT_RADIUS_3) {
+        gameState.units.push(createUnit(1, UNIT_TYPES.MELEE,    getEdgeKey(1, -2, 0, -2)));
+        gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER,   getEdgeKey(-2, 0, -1, -1)));
+        gameState.units.push(createUnit(1, UNIT_TYPES.PIKEMAN,  getEdgeKey(-1, -1, 0, -2)));
+        gameState.units.push(createUnit(1, UNIT_TYPES.HORSEMAN, getEdgeKey(-2, 0, -2, 1)));
+        
+        gameState.units.push(createUnit(2, UNIT_TYPES.MELEE,    getEdgeKey(-1, 2, 0, 2)));
+        gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER,   getEdgeKey(1, 1, 2, 0)));
+        gameState.units.push(createUnit(2, UNIT_TYPES.PIKEMAN,  getEdgeKey(0, 2, 1, 1)));
+        gameState.units.push(createUnit(2, UNIT_TYPES.HORSEMAN, getEdgeKey(2, 0, 2, -1)));
 
-                 gameState.units.forEach(unit => {
-                    const edge = gameState.edges.get(unit.position);
-                    if (edge) edge.units.push(unit);
-                    else console.error("Failed to place unit on default edge:", unit.position, unit);
-                });
-            }
+         gameState.units.forEach(unit => {
+            const edge = gameState.edges.get(unit.position);
+            if (edge) edge.units.push(unit);
+            else console.error("Failed to place unit on default edge:", unit.position, unit);
+        });
+    } else {
+        // Otherwise, it's a newly generated map, so place units for that.
+        placeUnitsOnNewGeneratedMap();
+    }
+} else { 
+    // If no map was provided at all, fallback to default map and units.
+    gameState.units.push(createUnit(1, UNIT_TYPES.MELEE,    getEdgeKey(1, -2, 0, -2)));
+    gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER,   getEdgeKey(-2, 0, -1, -1)));
+    gameState.units.push(createUnit(1, UNIT_TYPES.PIKEMAN,  getEdgeKey(-1, -1, 0, -2)));
+    gameState.units.push(createUnit(1, UNIT_TYPES.HORSEMAN, getEdgeKey(-2, 0, -2, 1)));
+    
+    gameState.units.push(createUnit(2, UNIT_TYPES.MELEE,    getEdgeKey(-1, 2, 0, 2)));
+    gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER,   getEdgeKey(1, 1, 2, 0)));
+    gameState.units.push(createUnit(2, UNIT_TYPES.PIKEMAN,  getEdgeKey(0, 2, 1, 1)));
+    gameState.units.push(createUnit(2, UNIT_TYPES.HORSEMAN, getEdgeKey(2, 0, 2, -1)));
+
+     gameState.units.forEach(unit => {
+        const edge = gameState.edges.get(unit.position);
+        if (edge) edge.units.push(unit);
+        else console.error("Failed to place unit on default edge:", unit.position, unit);
+    });
+}                                                       
 
             gameState.units.forEach(unit => {
                 unit.currentMove = unit.type.baseMove; unit.hasPerformedMajorAction = false;
@@ -1653,15 +1710,16 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
             }
 
             return {
-                id: unitId, player, type, hp: type.hp, maxHp: type.hp,
-                currentMove: type.baseMove, positionType: 'edge', position: edgeKey,
-                isFortified: false, fortifiedTileKey: null, hasPerformedMajorAction: false,
-                isCarryingFlag: false,
-                turnsFortifiedAtBase: 0,
-                canHeal: true,
-                supplyLine: null,
-                lastAttackedByHostileOnTurn: 0 
-            };
+    id: unitId, player, type, hp: type.hp, maxHp: type.hp,
+    currentMove: type.baseMove, positionType: 'edge', position: edgeKey,
+    isFortified: false, fortifiedTileKey: null, hasPerformedMajorAction: false,
+    isCarryingFlag: false,
+    turnsFortifiedAtBase: 0,
+    canHeal: true,
+    supplyLine: null,
+    lastAttackedByHostileOnTurn: 0,
+    isDying: false,
+};
         }
 
         function spawnUnit(player, unitType) {
@@ -2262,7 +2320,13 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
         }
 
         function drawSingleUnit(ctx, unit, x, y, radius) {
-            ctx.beginPath();
+    if (unit.isDying) {
+        const blinkSpeed = 400; // ms per blink
+        const opacity = (Date.now() % blinkSpeed) < (blinkSpeed / 2) ? 1 : 0;
+        ctx.globalAlpha = opacity;
+    }
+
+    ctx.beginPath();
             ctx.arc(x, y, radius, 0, 2 * Math.PI);
             ctx.fillStyle = unit.player === 1 ? unit.type.color : unit.type.enemyColor;
             ctx.fill();
@@ -2296,6 +2360,8 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
             const symbolColor = unit.isFortified ? '#000' : '#FFF';
             const radiusForSymbol = radius - healthBarVisualThickness;
             drawUnitSymbol(ctx, unit, x, y, radiusForSymbol, symbolColor);
+            drawUnitSymbol(ctx, unit, x, y, radiusForSymbol, symbolColor);
+            ctx.globalAlpha = 1.0; // Reset global alpha
         }
 
         function drawUnits() {
@@ -2342,15 +2408,20 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
         }
 
 
-        function drawMovementHighlights() {
-            const unitForHighlights = gameState.isDragging ? gameState.draggingUnit : gameState.selectedUnit;
+function drawMovementHighlights() {
+    const unitForHighlights = gameState.isDragging ? gameState.draggingUnit : gameState.selectedUnit;
 
-            const isActionSelectionActive = gameState.currentActionState !== ACTION_STATES.IDLE && 
-                                            gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED;
+    const isActionSelectionActive = gameState.currentActionState !== ACTION_STATES.IDLE && 
+                                    gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED;
 
-            if (!unitForHighlights || unitForHighlights.isFortified || (!gameState.isDragging && isActionSelectionActive)) {
-                return;
-            }
+    if (!unitForHighlights || unitForHighlights.isFortified || (!gameState.isDragging && isActionSelectionActive)) {
+        return;
+    }
+    
+    // CRITICAL FIX: Do not show movement highlights for AI units.
+    if (gameState.gameMode === 'singleplayer' && unitForHighlights.player !== gameState.playerSide) {
+        return;
+    }
             
             if (!gameState.isDragging) {
                 if (unitForHighlights.currentMove < 1) return;
@@ -2515,6 +2586,86 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
             ctx.restore();
         }
 
+function drawVisualEffects() {
+    if (gameState.visualEffects.length === 0) return;
+
+    const currentTime = Date.now();
+    const effectsToRemove = [];
+    
+    ctx.save();
+    gameState.visualEffects.forEach((effect, index) => {
+        const elapsedTime = currentTime - effect.startTime;
+        const progress = elapsedTime / effect.duration;
+
+        if (progress >= 1) {
+            effectsToRemove.push(index);
+if (effect.onComplete) {
+    effect.onComplete();
+}
+return;
+        }
+
+        if (effect.type === 'damage_ring') {
+            const startRadius = effect.unitRadius;
+            const endRadius = startRadius * 1.8; // How far the ring expands
+            
+            const currentRadius = startRadius + (endRadius - startRadius) * progress;
+            const opacity = 1.0 - progress;
+
+            ctx.beginPath();
+            ctx.arc(effect.x, effect.y, currentRadius, 0, 2 * Math.PI);
+            ctx.strokeStyle = `rgba(255, 50, 50, ${opacity})`;
+            ctx.lineWidth = 3 + (4 * (1 - progress)); // Ring gets thinner as it expands
+            ctx.stroke();
+        } else if (effect.type === 'starburst_death') {
+    const lineLength = effect.unitRadius * 3.5;
+    const currentLength = lineLength * progress;
+    const opacity = 1.0 - progress;
+
+    ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+    ctx.lineWidth = 4;
+    
+    for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i; // 60 degrees between each line
+        const endX = effect.x + Math.cos(angle) * currentLength;
+        const endY = effect.y + Math.sin(angle) * currentLength;
+        
+        ctx.beginPath();
+        ctx.moveTo(effect.x, effect.y);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+    }
+}
+    });
+    ctx.restore();
+
+    // Remove finished effects (in reverse order to avoid index issues)
+    for (let i = effectsToRemove.length - 1; i >= 0; i--) {
+        gameState.visualEffects.splice(effectsToRemove[i], 1);
+    }
+}
+
+        function animateUnitAlongPath(unit, path, duration) {
+    const animation = {
+        unit: unit,
+        path: path,
+        startTime: Date.now(),
+        duration: duration,
+        isFinished: false,
+        onComplete: null,
+    };
+
+    // Remove the unit from its starting edge immediately so it doesn't get drawn there.
+const startEdge = gameState.edges.get(unit.position);
+if(startEdge) {
+    startEdge.units = startEdge.units.filter(u => u.id !== unit.id);
+}
+    // The unit is now "in animation" and not on any specific edge or tile.
+    unit.positionType = 'animating';
+    
+    gameState.activeAnimations.push(animation);
+    return animation;
+}
 
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -2524,6 +2675,7 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
             drawContestedEdgeIndicator();
             drawBridges();
             drawFlags();
+            drawVisualEffects();
             drawSupplyLines();
             
             drawDebugAttackRangeHighlights()
@@ -2549,10 +2701,10 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
                 }
             }
             
-            drawDebugPath();
-            drawUnits();
+drawDebugPath();
+drawUnits(); // Draws stationary units
 
-             if (!gameState.isDragging && gameState.currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET) {
+ if (!gameState.isDragging && gameState.currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET) {
                  const currentAttackTargets = gameState.selectedUnit?.type.attackType === 'melee'
                     ? gameState.validMeleeAttackTargets 
                     : gameState.validArcherAttackTargets;
@@ -2781,6 +2933,51 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
             if (ui.messageBox.timeoutId) clearTimeout(ui.messageBox.timeoutId);
             ui.messageBox.timeoutId = setTimeout(() => { ui.messageBox.style.display = 'none'; }, duration);
         }
+
+function handleUnitDeath(unitToDie, reason = "destroyed") {
+    if (unitToDie.isDying) return; // Prevent triggering multiple times
+
+    unitToDie.isDying = true;
+
+    // Get the unit's last known screen position
+    let targetX, targetY, targetRadius;
+    if (unitToDie.isFortified) {
+        const tile = gameState.tiles.get(unitToDie.position);
+        if (tile) {
+            const center = axialToPixel(tile.q, tile.r);
+            targetX = center.x;
+            targetY = center.y;
+            targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
+        }
+    } else {
+        const edge = gameState.edges.get(unitToDie.position);
+        if (edge) {
+            // Simplified position for death effect - center of edge
+            const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+            targetX = mid.x;
+            targetY = mid.y;
+            targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
+        }
+    }
+
+    // Create the starburst visual effect
+    if (targetX !== undefined) {
+        gameState.visualEffects.push({
+            type: 'starburst_death',
+            x: targetX, y: targetY,
+            unitRadius: targetRadius,
+            startTime: Date.now(),
+            duration: 600, // Animation duration
+            onComplete: () => {
+                // This runs AFTER the animation is finished
+                destroyUnit(unitToDie, reason);
+            }
+        });
+    } else {
+        // Failsafe if we can't get coordinates
+        destroyUnit(unitToDie, reason);
+    }
+}
 
         function logAction(message, player, duration = 3000) {
             showInstruction(message, duration);
@@ -3355,6 +3552,7 @@ function handleFortifyActionLogic() {
         }
 
         function handleFortifyUnfortifyButtonClick() {
+            if (gameState.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== gameState.playerSide) return;
             if (gameState.isDragging) return; 
             const { selectedUnit } = gameState; 
             if (!selectedUnit) return;
@@ -3396,6 +3594,7 @@ function handleFortifyActionLogic() {
 
 
         function handleBuildBridgeAction() {
+            if (gameState.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== gameState.playerSide) return;
             if (gameState.isDragging) return; 
             const { selectedUnit } = gameState;
 
@@ -3755,6 +3954,7 @@ function handleFortifyActionLogic() {
 
 
         function handleAttackAction() {
+            if (gameState.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== gameState.playerSide) return;
             if (gameState.isDragging) return; 
             const { selectedUnit } = gameState;
             
@@ -3891,23 +4091,26 @@ function handleFortifyActionLogic() {
             
         attackingUnit.hasPerformedMajorAction = true;
         let hitAndRunMessage = "";
-        if (attackingUnit.type.canMoveAfterAttack) {
-            attackingUnit.currentMove -= ATTACK_COST;
+if (attackingUnit.type.canMoveAfterAttack) {
+    attackingUnit.currentMove -= ATTACK_COST;
 
-            // Check for Spear Wall on both the attacker's edge AND the target's edge.
-            const spearWallOnAttacker = isEdgeAdjacentToSpearWall(attackingUnit, attackingUnit.position);
-            const spearWallOnTarget = targetUnitInfo.edgeKey ? isEdgeAdjacentToSpearWall(attackingUnit, targetUnitInfo.edgeKey) : false;
+    // Check for Spear Wall on both the attacker's edge AND the target's edge.
+    const spearWallOnAttacker = isEdgeAdjacentToSpearWall(attackingUnit, attackingUnit.position);
+    const spearWallOnTarget = targetUnitInfo.edgeKey ? isEdgeAdjacentToSpearWall(attackingUnit, targetUnitInfo.edgeKey) : false;
 
-            if (spearWallOnAttacker || spearWallOnTarget) {
-                hitAndRunMessage = "Spear Wall prevents further movement!";
-                gameState.currentReachableMoves.clear();
-            } else if (attackingUnit.currentMove > 0) {
-                    hitAndRunMessage = "Horseman can move again!";
-                    gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
-                } else {
-                    gameState.currentReachableMoves.clear();
-                }
-            } else {
+    if (spearWallOnAttacker || spearWallOnTarget) {
+        hitAndRunMessage = "Spear Wall prevents further movement!";
+        gameState.currentReachableMoves.clear();
+    } else if (attackingUnit.currentMove > 0) {
+        hitAndRunMessage = "Horseman can move again!";
+        // Only show highlights for the human player's units.
+        if (gameState.gameMode !== 'singleplayer' || attackingUnit.player === gameState.playerSide) {
+            gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
+        }
+    } else {
+        gameState.currentReachableMoves.clear();
+    }
+} else {
                 attackingUnit.currentMove = 0;
                 gameState.currentReachableMoves.clear();
             }
@@ -3966,17 +4169,137 @@ function handleFortifyActionLogic() {
                         logParts.push(`Damage split between 2 units!`);
                         allEnemyUnitsOnEdge.forEach(unitToHit => {
                             unitToHit.hp -= splitDamage;
+                            // --- Trigger Damage Ring Effect ---
+let targetX, targetY, targetRadius;
+if (targetUnit.isFortified) {
+    const tile = gameState.tiles.get(targetUnit.position);
+    if (tile) {
+        const center = axialToPixel(tile.q, tile.r);
+        targetX = center.x;
+        targetY = center.y;
+        targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
+    }
+} else {
+    const edge = gameState.edges.get(targetUnit.position);
+    if (edge) {
+        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+        targetX = mid.x;
+        targetY = mid.y;
+        targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
+        // Adjust for stacked units
+        const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
+        const unitIndex = unitsOnEdge.findIndex(u => u.id === targetUnit.id);
+        if(unitsOnEdge.length > 1 && unitIndex !== -1) {
+            const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
+            const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
+            let dx = p2.x - p1.x, dy = p2.y - p1.y; const len = Math.sqrt(dx*dx + dy*dy) || 1;
+            let perpX = -dy / len, perpY = dx / len;
+            targetX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+            targetY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+        }
+    }
+}
+if (targetX !== undefined) {
+    gameState.visualEffects.push({
+        type: 'damage_ring',
+        x: targetX, y: targetY,
+        unitRadius: targetRadius,
+        startTime: Date.now(),
+        duration: 500 // half a second
+    });
+}
+// --- End Effect ---
                             logParts.push(`P${unitToHit.player} ${unitToHit.type.name} takes ${splitDamage} damage. HP: ${unitToHit.hp}`);
                             if (attackingUnit.player !== unitToHit.player) unitToHit.lastAttackedByHostileOnTurn = gameState.globalTurnNumber;
                             if (unitToHit.hp <= 0) destroyUnit(unitToHit);
                         });
                     } else {
                         targetUnit.hp -= actualDamage;
+                        // --- Trigger Damage Ring Effect ---
+let targetX, targetY, targetRadius;
+if (targetUnit.isFortified) {
+    const tile = gameState.tiles.get(targetUnit.position);
+    if (tile) {
+        const center = axialToPixel(tile.q, tile.r);
+        targetX = center.x;
+        targetY = center.y;
+        targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
+    }
+} else {
+    const edge = gameState.edges.get(targetUnit.position);
+    if (edge) {
+        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+        targetX = mid.x;
+        targetY = mid.y;
+        targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
+        // Adjust for stacked units
+        const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
+        const unitIndex = unitsOnEdge.findIndex(u => u.id === targetUnit.id);
+        if(unitsOnEdge.length > 1 && unitIndex !== -1) {
+            const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
+            const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
+            let dx = p2.x - p1.x, dy = p2.y - p1.y; const len = Math.sqrt(dx*dx + dy*dy) || 1;
+            let perpX = -dy / len, perpY = dx / len;
+            targetX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+            targetY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+        }
+    }
+}
+if (targetX !== undefined) {
+    gameState.visualEffects.push({
+        type: 'damage_ring',
+        x: targetX, y: targetY,
+        unitRadius: targetRadius,
+        startTime: Date.now(),
+        duration: 500 // half a second
+    });
+}
+// --- End Effect ---
                         logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
                         if (targetUnit.hp <= 0) destroyUnit(targetUnit);
                     }
                 } else { 
                     targetUnit.hp -= actualDamage;
+                    // --- Trigger Damage Ring Effect ---
+let targetX, targetY, targetRadius;
+if (targetUnit.isFortified) {
+    const tile = gameState.tiles.get(targetUnit.position);
+    if (tile) {
+        const center = axialToPixel(tile.q, tile.r);
+        targetX = center.x;
+        targetY = center.y;
+        targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
+    }
+} else {
+    const edge = gameState.edges.get(targetUnit.position);
+    if (edge) {
+        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+        targetX = mid.x;
+        targetY = mid.y;
+        targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
+        // Adjust for stacked units
+        const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
+        const unitIndex = unitsOnEdge.findIndex(u => u.id === targetUnit.id);
+        if(unitsOnEdge.length > 1 && unitIndex !== -1) {
+            const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
+            const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
+            let dx = p2.x - p1.x, dy = p2.y - p1.y; const len = Math.sqrt(dx*dx + dy*dy) || 1;
+            let perpX = -dy / len, perpY = dx / len;
+            targetX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+            targetY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+        }
+    }
+}
+if (targetX !== undefined) {
+    gameState.visualEffects.push({
+        type: 'damage_ring',
+        x: targetX, y: targetY,
+        unitRadius: targetRadius,
+        startTime: Date.now(),
+        duration: 500 // half a second
+    });
+}
+// --- End Effect ---
                     logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
                     if (targetUnit.hp <= 0) destroyUnit(targetUnit);
                 }
@@ -4009,7 +4332,14 @@ function handleFortifyActionLogic() {
                     if (tile) {
                         const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
                         if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < FORTIFIED_UNIT_DRAW_SIZE * 1.5) {
-                             if (unit.player === gameState.currentPlayer) { clickedOnUnit = unit; break; }
+                             if (unit.player === gameState.currentPlayer) {
+    if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
+        showInstruction(`That is an AI unit.`);
+        return true; // Acknowledge the click but do nothing
+    }
+    clickedOnUnit = unit;
+    break;
+}
                              else { showInstruction(`Enemy ${unit.type.name} fortified.`); return true; }
                         }
                     }
@@ -4031,7 +4361,14 @@ function handleFortifyActionLogic() {
                         unitX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5); unitY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
                     }
                     if (Math.sqrt((x - unitX)**2 + (y - unitY)**2) < UNIT_CLICK_RADIUS) {
-                       if (unit.player === gameState.currentPlayer) { clickedOnUnit = unit; break; }
+                       if (unit.player === gameState.currentPlayer) {
+    if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
+        showInstruction(`That is an AI unit.`);
+        return true; // Acknowledge the click but do nothing
+    }
+    clickedOnUnit = unit;
+    break;
+}
                        else { showInstruction(`Enemy ${unit.type.name} on edge.`); return true; }
                     }
                 }
@@ -4062,53 +4399,70 @@ function handleFortifyActionLogic() {
             return false;
         }
 
-        function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
-             if (unitToMove.positionType === 'edge') {
-                const oldEdge = gameState.edges.get(unitToMove.position);
-                if (oldEdge) oldEdge.units = oldEdge.units.filter(u => u.id !== unitToMove.id);
+    
+function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
+    // --- PRE-MOVE: Remove unit from old position ---
+    if (unitToMove.positionType === 'edge') {
+        const oldEdge = gameState.edges.get(unitToMove.position);
+        if (oldEdge) oldEdge.units = oldEdge.units.filter(u => u.id !== unitToMove.id);
+    }
+
+    // --- UPDATE STATE: Place unit in new position ---
+    const finalTargetEdgeData = gameState.edges.get(targetEdgeKey);
+    if (!finalTargetEdgeData) { console.error("Target edge for move not found:", targetEdgeKey); return; }
+    
+    unitToMove.position = targetEdgeKey;
+    unitToMove.positionType = 'edge';
+    unitToMove.currentMove -= costToMove;
+    finalTargetEdgeData.units.push(unitToMove);
+    clearDebugPath();
+
+    // --- CHECK FOR VICTORY IMMEDIATELY ---
+    // If the move resulted in a win, stop everything else.
+    if (checkVictoryCondition()) {
+        return; // Halt execution to prevent duplication and further actions.
+    }
+
+    // --- POST-MOVE LOGIC (only runs if game is not over) ---
+    const unitDestroyedByZoC = applyFortificationDamageOnMove(unitToMove, targetEdgeKey);
+    
+    if (!unitDestroyedByZoC && unitToMove.hp > 0) {
+        logAction(`${unitToMove.type.name} moved. MP: ${Math.floor(unitToMove.currentMove)}`, gameState.currentPlayer);
+        if (unitToMove.currentMove >= 1 && (!unitToMove.hasPerformedMajorAction || unitToMove.type.canMoveAfterAttack)) {
+            if (gameState.gameMode !== 'singleplayer' || unitToMove.player === gameState.playerSide) {
+                 gameState.currentReachableMoves = getPossibleMoves(unitToMove);
             }
-            const finalTargetEdgeData = gameState.edges.get(targetEdgeKey);
-             if (!finalTargetEdgeData) { console.error("Target edge for move not found:", targetEdgeKey); return; }
-            unitToMove.position = targetEdgeKey; unitToMove.positionType = 'edge'; unitToMove.currentMove -= costToMove;
-            finalTargetEdgeData.units.push(unitToMove);
-
-            const unitDestroyedByZoC = applyFortificationDamageOnMove(unitToMove, targetEdgeKey);
-            clearDebugPath();
-            if (!unitDestroyedByZoC && unitToMove.hp > 0) {
-                logAction(`${unitToMove.type.name} moved. MP: ${Math.floor(unitToMove.currentMove)}`, gameState.currentPlayer);
-                if (unitToMove.currentMove >= 1 && (!unitToMove.hasPerformedMajorAction || unitToMove.type.canMoveAfterAttack)) {
-                    gameState.currentReachableMoves = getPossibleMoves(unitToMove);
-                } else {
-                    gameState.currentReachableMoves.clear();
-                }
-                gameState.selectedUnit = unitToMove; 
-            } else {
-                 gameState.currentReachableMoves.clear();
-                 if (gameState.selectedUnit && gameState.selectedUnit.id === unitToMove.id) gameState.selectedUnit = null;
-            }
-            
-            const enemyFlag = unitToMove.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
-            if (enemyFlag.status === 'at_base' && targetEdgeKey === enemyFlag.homePosition) {
-                enemyFlag.status = 'carried';
-                enemyFlag.carrierId = unitToMove.id;
-                unitToMove.isCarryingFlag = true;
-                unitToMove.currentMove = 0;
-                logAction(`P${unitToMove.player} ${unitToMove.type.name} has picked up the flag!`, gameState.currentPlayer);
-                updateAllHealingStatus();
-                severSupplyLinesForPlayer(enemyFlag.player); // NEW: Sever supply lines for the flag's owner.
-            }
-
-            updateSelectedUnitInfoPanel(); 
-            checkVictoryCondition();
-
-
+        } else {
+            gameState.currentReachableMoves.clear();
         }
+    } else {
+         gameState.currentReachableMoves.clear();
+    }
+    
+    // Flag capture logic (picking up the flag)
+    const enemyFlag = unitToMove.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+    if (enemyFlag.status === 'at_base' && targetEdgeKey === enemyFlag.homePosition) {
+        enemyFlag.status = 'carried';
+        enemyFlag.carrierId = unitToMove.id;
+        unitToMove.isCarryingFlag = true;
+        unitToMove.currentMove = 0;
+        logAction(`P${unitToMove.player} ${unitToMove.type.name} has picked up the flag!`, gameState.currentPlayer);
+        updateAllHealingStatus();
+        severSupplyLinesForPlayer(enemyFlag.player);
+    }
 
-        function handleMoveClick(x, y) {
-            const { selectedUnit } = gameState;
-            if (!selectedUnit || selectedUnit.isFortified || selectedUnit.currentMove < 1) {
-                return false;
-            }
+    updateSelectedUnitInfoPanel();
+}
+
+function handleMoveClick(x, y) {
+    const { selectedUnit } = gameState;
+    if (!selectedUnit || selectedUnit.isFortified || selectedUnit.currentMove < 1) {
+        return false;
+    }
+    // CRITICAL FIX: Prevent human from moving AI units.
+    if (gameState.gameMode === 'singleplayer' && selectedUnit.player !== gameState.playerSide) {
+        return false;
+    }
             if (selectedUnit.hasPerformedMajorAction && !selectedUnit.type.canMoveAfterAttack) {
                 return false;
             }
@@ -4260,7 +4614,9 @@ function handleFortifyActionLogic() {
             
             for (let i = edgeUnits.length - 1; i >= 0; i--) {
                  const {unit, edge} = edgeUnits[i];
-                 if (unit.player !== gameState.currentPlayer || unit.isFortified || unit.currentMove < 1) continue;
+                 if (unit.player !== gameState.currentPlayer) continue;
+if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; // Cannot drag AI units
+if (unit.isFortified || unit.currentMove < 1) continue;
                  if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
                  
                  const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
@@ -4712,119 +5068,253 @@ function handleFortifyActionLogic() {
         updateRespawnQueueDisplay();
         }
 
+function triggerConfetti() {
+    const container = document.getElementById('confettiContainer');
+    if (!container) return;
+
+    const confettiCount = 150;
+    const colors = ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71', '#ecf0f1'];
+
+    for (let i = 0; i < confettiCount; i++) {
+        const confettiPiece = document.createElement('div');
+        confettiPiece.className = 'confetti-piece';
+        
+        // Randomize properties
+        const x_start = Math.random() * 100; // % of screen width
+        const y_start = -10 - Math.random() * 20; // Start off-screen
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const fall_duration = 3 + Math.random() * 4; // 3 to 7 seconds
+        const rotation_start = Math.random() * 360;
+        const rotation_end = rotation_start + 720 + Math.random() * 720;
+        const sway = Math.random() * 150 - 75; // a horizontal sway of -75 to +75px
+
+        confettiPiece.style.left = `${x_start}vw`;
+        confettiPiece.style.top = `${y_start}px`;
+        confettiPiece.style.backgroundColor = color;
+        confettiPiece.style.transform = `rotate(${rotation_start}deg)`;
+        
+        container.appendChild(confettiPiece);
+
+        // Animate using Web Animations API (clean and performant)
+        confettiPiece.animate([
+            { transform: `translate3d(0, 0, 0) rotate(${rotation_start}deg)` },
+            { transform: `translate3d(${sway}px, 105vh, 0) rotate(${rotation_end}deg)` }
+        ], {
+            duration: fall_duration * 1000,
+            easing: 'ease-in',
+            iterations: 1
+        });
+
+        // Remove the element after it falls
+        setTimeout(() => {
+            confettiPiece.remove();
+        }, fall_duration * 1000);
+    }
+}
+
+function executeAITurn(unitsToProcess = null) {
+    if (gameState.gameOver) return;
+
+    // On the first run for a turn, get a list of all AI units that can still act.
+    if (unitsToProcess === null) {
+        console.log(`Executing AI Turn for Player ${gameState.currentPlayer}...`);
+        unitsToProcess = gameState.units.filter(u => u.player === gameState.currentPlayer && !u.hasPerformedMajorAction);
+    }
+
+// BASE CASE: If there are no more units to process, the AI's turn is over.
+if (unitsToProcess.length === 0) {
+    console.log("AI has no more actions. Ending turn.");
+    if (!gameState.gameOver) {
+        // End the turn after the standard 1-second delay.
+        setTimeout(() => {
+            // CRITICAL FIX: The button must be enabled before it can be clicked.
+            ui.endTurnButton.disabled = false; 
+            ui.endTurnButton.click();
+        }, 1000); 
+    }
+    return;
+}
+
+    // Get the next unit to command.
+    const unit = unitsToProcess.shift();
+
+    // --- AI ACTION DECISION ---
+
+    // 1. Prioritize Attack
+    const attackTargets = getValidMeleeAttackTargets(unit).concat(getValidArcherAttackTargets(unit));
+    if (attackTargets.length > 0) {
+        const randomTarget = attackTargets[Math.floor(Math.random() * attackTargets.length)];
+        const attackType = unit.type.attackType === 'melee' ? 'Melee' : 'Archer';
+        
+        gameState.selectedUnit = unit; // Briefly select to show who is attacking
+        updateSelectedUnitInfoPanel();
+        
+        // Execute the attack, and once the delay is over, process the next unit.
+        setTimeout(() => {
+            completeAttack(unit, randomTarget, attackType);
+            executeAITurn(unitsToProcess); // Immediately start thinking about the next unit.
+        }, 1000); // 1-second delay for the attack action.
+        return;
+    }
+
+    // 2. If no attack, try to move
+    const possibleMoves = getPossibleMoves(unit);
+    if (possibleMoves.size > 0) {
+        const moveKeys = Array.from(possibleMoves.keys());
+        const randomMoveKey = moveKeys[Math.floor(Math.random() * moveKeys.length)];
+        const moveData = possibleMoves.get(randomMoveKey);
+
+        // Trigger the line-draw animation
+        gameState.potentialDebugPathToDraw = moveData.path;
+        gameState.debugPathHoverStartTime = Date.now();
+        
+        const totalAnimationTime = PATH_DRAW_HOVER_DELAY_MS + PATH_DRAW_ANIMATION_DURATION_MS + 200;
+
+        // After the animation finishes, execute the move and then process the next unit.
+        setTimeout(() => {
+            handleMoveAction(unit, randomMoveKey, moveData.cost);
+            executeAITurn(unitsToProcess); // Immediately start thinking about the next unit.
+        }, totalAnimationTime);
+        return;
+    }
+    
+    // 3. If this unit could not do anything, process the next unit immediately.
+    console.log(`Unit ${unit.id} has no valid actions.`);
+    executeAITurn(unitsToProcess);
+}
+
         // --- Game Flow & Event Listeners ---
-        function checkVictoryCondition() {
-            if (gameState.gameOver) return;
-            let victoryText = null;
+function checkVictoryCondition() {
+    if (gameState.gameOver) return true;
+    let victoryText = null;
 
-            const flagCarrier = gameState.units.find(u => u.isCarryingFlag);
-            if (flagCarrier) {
-                const carrierPlayer = flagCarrier.player;
-                const carrierHomeBaseEdge = FLAG_HOME_POSITIONS[`player${carrierPlayer}`];
+// Check for flag capture victory by iterating through ALL units.
+for (const unit of gameState.units) {
+    if (unit.isCarryingFlag) {
+        const carrierPlayer = unit.player;
+        const carrierHomeBaseEdge = FLAG_HOME_POSITIONS[`player${carrierPlayer}`];
+        if (unit.position === carrierHomeBaseEdge) {
+            victoryText = `Player ${carrierPlayer} captured the flag and wins!`;
+            break; // A winner has been found, no need to check further.
+        }
+    }
+}
+    
+    // If no flag victory, check for annihilation
+    if (!victoryText) {
+        const player1Units = gameState.units.filter(u => u.player === 1);
+        const player2Units = gameState.units.filter(u => u.player === 2);
+        
+        if (gameState.tiles.size > 0) { 
+            if (player1Units.length === 0 && player2Units.length > 0) {
+                victoryText = "Player 2 Wins by Annihilation!";
+            } else if (player2Units.length === 0 && player1Units.length > 0) {
+                victoryText = "Player 1 Wins by Annihilation!";
+            } else if (player1Units.length === 0 && player2Units.length === 0) {
+                victoryText = "It's a Draw!";
+            }
+        }
+    }
 
-                if (flagCarrier.position === carrierHomeBaseEdge) {
-                    victoryText = `Player ${carrierPlayer} captured the flag and wins!`;
-                }
-            }
-            
-            if (!victoryText) {
-                const player1Units = gameState.units.filter(u => u.player === 1);
-                const player2Units = gameState.units.filter(u => u.player === 2);
-                
-                if (gameState.tiles.size > 0) { 
-                    if (player1Units.length === 0 && player2Units.length > 0) {
-                        victoryText = "Player 2 Wins by Annihilation!";
-                    } else if (player2Units.length === 0 && player1Units.length > 0) {
-                        victoryText = "Player 1 Wins by Annihilation!";
-                    } else if (player1Units.length === 0 && player2Units.length === 0) {
-                        victoryText = "It's a Draw!";
-                    }
-                }
-            }
+    if (victoryText) {
+        ui.victoryMessage.textContent = victoryText;
+        ui.victoryMessage.style.display = 'block';
+        triggerConfetti();
+        gameState.gameOver = true;
+        gameState.currentActionState = ACTION_STATES.IDLE;
+        ui.endTurnButton.disabled = true;
+        document.getElementById('newMapButton').disabled = false; 
+        if (gameState.selectedUnit) {
+            ui.actionsPanel.style.display = 'none';
+        }
+        canvas.style.cursor = 'default'; 
+        gameState.selectedUnit = null;
+        gameState.currentReachableMoves.clear(); 
+        updateSelectedUnitInfoPanel();
+        return true; // VICTORY!
+    }
 
-            if (victoryText) {
-                ui.victoryMessage.textContent = victoryText;
-                ui.victoryMessage.style.display = 'block';
-                gameState.gameOver = true;
-                gameState.currentActionState = ACTION_STATES.IDLE;
-                ui.endTurnButton.disabled = true;
-                document.getElementById('newMapButton').disabled = false; 
-                if (gameState.selectedUnit) {
-                    ui.fortifyUnfortifyButton.disabled = true;
-                    ui.buildBridgeButton.disabled = true;
-                    ui.attackButton.disabled = true;
-                } else {
-                    ui.actionsPanel.style.display = 'none';
-                }
-                canvas.style.cursor = 'default'; 
-                gameState.selectedUnit = null;
-                gameState.currentReachableMoves.clear(); 
-                updateSelectedUnitInfoPanel(); 
-            } else {
-                document.getElementById('newMapButton').disabled = false;
-            }
-        }                                                                           
+    // No victory condition met
+    document.getElementById('newMapButton').disabled = false;
+    return false;
+}                                                                       
 
         ui.fortifyUnfortifyButton.addEventListener('click', handleFortifyUnfortifyButtonClick);
         ui.buildBridgeButton.addEventListener('click', handleBuildBridgeAction);
         ui.attackButton.addEventListener('click', handleAttackAction);
 
-        ui.endTurnButton.addEventListener('click', () => {
-            if (gameState.isDragging || gameState.gameOver) return;
-            
-            const previousPlayer = gameState.currentPlayer;
-            gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+ui.endTurnButton.addEventListener('click', () => {
+    if (gameState.isDragging || gameState.gameOver) return;
+    
+    const previousPlayer = gameState.currentPlayer;
+    gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
 
-            if (previousPlayer === 2 && gameState.currentPlayer === 1) { 
-                gameState.globalTurnNumber++;
-                updateGlobalTurnDisplay();
+    if (previousPlayer === 2 && gameState.currentPlayer === 1) { 
+        gameState.globalTurnNumber++;
+        updateGlobalTurnDisplay();
+    }
+    
+    gameState.selectedUnit = null; 
+    gameState.currentReachableMoves.clear();
+    gameState.hoveredUnitId = null; 
+    canvas.style.cursor = 'default';
+    resetActionSelectionStates();
+    
+    gameState.units.forEach(unit => {
+        if (unit.player === gameState.currentPlayer) {
+            unit.hasPerformedMajorAction = false; 
+            let baseMoveForTurn = unit.type.baseMove;
+            if (unit.isCarryingFlag) {
+                baseMoveForTurn -= 1; 
             }
+            unit.currentMove = Math.max(0, baseMoveForTurn); 
             
-            gameState.selectedUnit = null; 
-            gameState.currentReachableMoves.clear();
-            gameState.hoveredUnitId = null; 
-            canvas.style.cursor = 'default';
-            resetActionSelectionStates();
-            
-            gameState.units.forEach(unit => {
-                if (unit.player === gameState.currentPlayer) {
-                    unit.hasPerformedMajorAction = false; 
-                    
-                    let baseMoveForTurn = unit.type.baseMove;
-                    if (unit.isCarryingFlag) {
-                        baseMoveForTurn -= 1; 
-                    }
-                    unit.currentMove = Math.max(0, baseMoveForTurn); 
-                    
-                    // --- Handle Cowardice Timer ---
-                    const playerBaseTiles = [FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
-                    if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                        unit.turnsFortifiedAtBase++;
-                        if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
-                            logAction(`P${unit.player} ${unit.type.name} was destroyed for cowardice!`, gameState.currentPlayer);
-                            destroyUnit(unit, "cowardice");
-                        }
-                    }
+            const playerBaseTiles = [FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
+            if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                unit.turnsFortifiedAtBase++;
+                if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
+                    logAction(`P${unit.player} ${unit.type.name} was destroyed for cowardice!`, gameState.currentPlayer);
+                    destroyUnit(unit, "cowardice");
                 }
-            });
-            
-            handleRespawnQueue();
+            }
+        }
+    });
+    
+    handleRespawnQueue();
+    applyStartOfTurnZoCDamage(); 
+    logSiegeStatus();
+    applyStartOfTurnHealing(); 
+    updateTurnDisplay();
+    updateSelectedUnitInfoPanel(); 
+    
+    showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
+    logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
+    autoSaveGame(true);
+    checkVictoryCondition();
 
-            applyStartOfTurnZoCDamage(); 
-            logSiegeStatus();
-            applyStartOfTurnHealing(); 
-            
-            updateTurnDisplay();
-            updateSelectedUnitInfoPanel(); 
-            
-            showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
-            logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
-            autoSaveGame(true);
-            checkVictoryCondition();
-        });
+    // --- NEW AI TRIGGER LOGIC ---
+    if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
+        // It's the AI's turn. Disable the button and start the AI's turn after a short delay.
+        ui.endTurnButton.disabled = true;
+        setTimeout(() => {
+            executeAITurn();
+        }, 1500); // 1.5 second delay to feel more natural
+    } else {
+        // It's a human's turn.
+        ui.endTurnButton.disabled = false;
+    }
+});
 
 // Replaces the old "Generate Map" button listener
-document.getElementById('newMapButton').addEventListener('click', showNewMapModal);
+document.getElementById('newMapButton').addEventListener('click', () => {
+    const generateButton = document.getElementById('generateMapFromModalButton');
+    if (gameState.gameMode === 'singleplayer') {
+        generateButton.disabled = true;
+    } else {
+        generateButton.disabled = false;
+    }
+    showNewMapModal();
+});
 
 // --- New Map Modal Listeners ---
 const newMapModalOverlay = document.getElementById('newMapModal');
@@ -4880,6 +5370,18 @@ document.getElementById('loadGameButton').addEventListener('click', showLoadGame
             showInstruction("New map generated. Player 1's Turn.", 3000);
         }
 
+function startSingleplayerGame(playerSide) {
+    hideAllModals(); // A new helper function we will create
+    
+    // Set the game mode state
+    gameState.gameMode = 'singleplayer';
+    gameState.playerSide = playerSide;
+
+    // Force the default map for singleplayer
+    initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+    showInstruction(`Singleplayer game started. You are Player ${playerSide}.`, 3000);
+}
+
 function autoSaveGame(isSilent = false) {
     if (gameState.isDragging) {
         showInstruction("Cannot save while dragging a unit.", 2000);
@@ -4897,7 +5399,8 @@ function autoSaveGame(isSilent = false) {
         serializableState.saveVersion = BUILD_VERSION; 
 
         const gameStateString = JSON.stringify(serializableState);
-        localStorage.setItem('forthexSaveGame', gameStateString);
+        const saveKey = gameState.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame';
+        localStorage.setItem(saveKey, gameStateString);
         if (!isSilent) { showInstruction("Game Saved!", 2000); }
         console.log("Game state saved to localStorage.");
     } catch (error) {
@@ -4915,7 +5418,8 @@ function saveGameToFile() {
     const hours = padZero(now.getHours());
     const minutes = padZero(now.getMinutes());
     const seconds = padZero(now.getSeconds());
-    const fileName = `FortHex-${BUILD_VERSION}-SaveGame-${day}.${month}.${year}-${hours}:${minutes}:${seconds}.fhsave`;
+    const modePrefix = gameState.gameMode === 'singleplayer' ? 'SP-' : '';
+    const fileName = `FortHex-${BUILD_VERSION}-${modePrefix}SaveGame-${day}.${month}.${year}-${hours}:${minutes}:${seconds}.fhsave`;
 
     try {
         // --- Serialize the game state (same as autosave) ---
@@ -4960,6 +5464,13 @@ setTimeout(() => modal.style.display = 'none', 300);
 }
 }
 
+function hideAllModals() {
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+        modal.classList.remove('modal-visible');
+        setTimeout(() => modal.style.display = 'none', 300);
+    });
+}
+
 function showNewMapModal() {
 const modal = document.getElementById('newMapModal');
 if (modal) {
@@ -4977,7 +5488,8 @@ setTimeout(() => modal.style.display = 'none', 300);
 }
 
 function loadAutoSave() {
-    const savedStateString = localStorage.getItem('forthexSaveGame');
+    const saveKey = gameState.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame';
+    const savedStateString = localStorage.getItem(saveKey);
     if (!savedStateString) {
         showInstruction("No saved game found.", 2000);
         return;
@@ -5504,28 +6016,44 @@ document.getElementById('gameMenuTrigger').addEventListener('click', () => {
     const modal = document.getElementById('gameMenuModal');
     // Reset to show main menu content first
     document.getElementById('mainMenuContent').style.display = 'block';
+    document.getElementById('singleplayerMenuContent').style.display = 'none';
     document.getElementById('multiplayerMenuContent').style.display = 'none';
     modal.style.display = 'flex';
     setTimeout(() => modal.classList.add('modal-visible'), 10);
 });
 
 // --- Unified Menu Button Listeners ---
+const mainMenuContent = document.getElementById('mainMenuContent');
+const spMenuContent = document.getElementById('singleplayerMenuContent');
+const mpMenuContent = document.getElementById('multiplayerMenuContent');
 
-// "Multiplayer" button listener (swaps content inside the modal)
+// Main Menu -> Singleplayer
+document.getElementById('singleplayerButton').addEventListener('click', () => {
+    mainMenuContent.style.display = 'none';
+    spMenuContent.style.display = 'block';
+});
+
+// Main Menu -> Multiplayer
 document.getElementById('multiplayerButton').addEventListener('click', () => {
-    document.getElementById('mainMenuContent').style.display = 'none';
-    document.getElementById('multiplayerMenuContent').style.display = 'block';
+    mainMenuContent.style.display = 'none';
+    mpMenuContent.style.display = 'block';
 });
 
-// "Local Multiplayer" button listener
-document.getElementById('localMultiplayerButton').addEventListener('click', () => {
-    location.reload(); // Still the cleanest way to start a new game
-});
+// Singleplayer -> Play
+document.getElementById('playAsBlueButton').addEventListener('click', () => startSingleplayerGame(1));
+document.getElementById('playAsRedButton').addEventListener('click', () => startSingleplayerGame(2));
 
-// "Back" button listener (swaps content back)
-document.getElementById('backToMainMenuButton').addEventListener('click', () => {
-    document.getElementById('multiplayerMenuContent').style.display = 'none';
-    document.getElementById('mainMenuContent').style.display = 'block';
+// Multiplayer -> Play Local
+document.getElementById('localMultiplayerButton').addEventListener('click', () => location.reload());
+
+// Back buttons
+document.getElementById('backToMainMenuButtonSP').addEventListener('click', () => {
+    spMenuContent.style.display = 'none';
+    mainMenuContent.style.display = 'block';
+});
+document.getElementById('backToMainMenuButtonMP').addEventListener('click', () => {
+    mpMenuContent.style.display = 'none';
+    mainMenuContent.style.display = 'block';
 });
 
 // Add click-outside-to-close for the unified modal
@@ -5536,6 +6064,7 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
         setTimeout(() => modal.style.display = 'none', 300);
     }
 });
+
 
                     // --- NEW: Confirmation Modal "Click Outside" Listener ---
         const customConfirmModalOverlay = document.getElementById('customConfirmModal');
@@ -5631,5 +6160,6 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
     </script>
           
 <div id="buildVersionDisplay"></div>
+<div id="confettiContainer"></div>
 
 </body></html>
