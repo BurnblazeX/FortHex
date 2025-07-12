@@ -93,20 +93,21 @@
     background-color: #34495e;
     border: 2px solid #ecf0f1;
     border-radius: 8px;
-    padding: 6px 15px; /* Restored from a previous step */
+    padding: 6px 15px;
     cursor: pointer;
     transition: background-color 0.3s;
     display: flex;
     align-items: center;
-    font-size: 1.2em; /* Restored from a previous step */
-    font-weight: bold; /* Restored from a previous step */
+    gap: 4px;
+    font-size: 1.2em;
+    font-weight: bold;
 }
 
 #gameIconLink {
     background-color: transparent;
     border: none;
     padding: 5px;
-    border-radius: 8px; /* Keep radius for hover effect */
+    border-radius: 8px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -117,7 +118,7 @@
     background-color: #4a6075;
 }
 #gameIconLink:hover {
-    background-color: rgba(74, 96, 117, 0.5); /* A semi-transparent hover */
+    background-color: rgba(74, 96, 117, 0.5);
 }
 .menu-options-container {
     display: flex;
@@ -299,8 +300,12 @@
             margin-left: 5px;
             margin-right: 5px;
         }
-    .action-button.selecting:hover {
-        background-color: #d35400;
+    .action-button.selecting {
+        background-color: #e74c3c; /* Red base for cancel state */
+        box-shadow: 0 3px #c0392b;
+    }
+    .action-button.selecting:hover:not(:disabled) {
+        background-color: #c0392b; /* Dark red on hover */
     }
     .action-button:not(.selecting):hover:not(:disabled) {
          background-color: #2980b9;
@@ -846,7 +851,14 @@
     <a id="gameIconLink" title="Restart Game">
         <svg version="1.0" width="30" height="30" viewBox="0 0 384 384" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,384)scale(.075,.075)"><path fill="white" d="M1452-4473l-1102 636 0 1277 0 1277 1098 633c603 349 1104 634 1112 634 8 0 509-285 1113-633l1097-634 0-1277 0-1277-1093-631c-601-347-1099-633-1107-636-9-3-480 263-1118 631z m1552-167c234 135 425 248 426 252 0 10-863 839-871 836-21-8-868-833-862-839 20-19 859-499 869-496 7 1 203 112 438 247z m-3 1829c1216 1170 1508 1456 1497 1466-14 13-825 481-849 490-9 3-194-168-505-467-270-260-713-687-985-948-1341-1290-1550-1493-1542-1501 16-15 858-498 865-496 4 1 688 656 1519 1456z m1076-1209c230 133 422 245 426 249 10 10-1069 1054-1083 1049-5-2-165-153-354-335l-345-333 457-440c251-242 463-438 469-435 7 2 201 113 430 245z m501 1936l-3 476-490-471c-269-259-491-475-493-479-1-4 219-221 490-482l493-474 3 477c1 262 1 691 0 953z m-2529 18c187 181 341 332 341 336 0 6-218 218-832 808l-77 74-428-247c-235-135-432-250-436-254-8-8 1072-1053 1084-1049 4 2 160 151 348 332z"></path></g></svg>
     </a>
-    <a id="gameMenuTrigger">Menu</a>
+    <a id="gameMenuTrigger">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+    Menu
+</a>
 </div>
 
 <!-- UNIFIED GAME MENU MODAL -->
@@ -1165,7 +1177,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B23";
+        const BUILD_VERSION = "B24";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1181,6 +1193,7 @@
         };
         const FORTIFICATION_DAMAGE = 1; 
         const BRIDGE_MAX_HP = 5;        
+        const PROJECTILE_SPEED_PIXELS_PER_MS = 0.8;
         const UNIT_ON_EDGE_OFFSET = HEX_SIZE * 0.2; 
         const ATTACK_COST = 1;          
         const FORTIFY_UNFORTIFY_COST = 1; 
@@ -1325,7 +1338,7 @@
         let dragOperationJustConcluded = false;
 
         // --- Game State ---
-        let gameState = {
+    let gameState = {
     gameMode: 'local', // 'local' or 'singleplayer'
     playerSide: null, // 1 or 2, for singleplayer mode
     tiles: new Map(),
@@ -1343,6 +1356,7 @@
             respawnQueue: { player1: [], player2: [] },
             unitCounts: null,
             supplyPoints: { player1: 10, player2: 10 },
+            activeAnimations: [],
 
             // Physical UI states
             isDragging: false,
@@ -1470,6 +1484,47 @@
             const projection = { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) };
             return distSq(p, projection);
         }
+
+function lerp(start, end, amount) {
+    return start + (end - start) * amount;
+}
+
+function getUnitScreenPosition(unit) {
+    if (!unit) return null;
+    let unitX, unitY;
+
+    if (unit.isFortified) {
+        const tile = gameState.tiles.get(unit.position);
+        if (tile) {
+            const center = axialToPixel(tile.q, tile.r);
+            unitX = center.x;
+            unitY = center.y;
+        }
+    } else {
+        const edge = gameState.edges.get(unit.position);
+        if (edge) {
+            const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+            unitX = mid.x;
+            unitY = mid.y;
+            const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
+            const unitIndex = unitsOnEdge.findIndex(u => u.id === unit.id);
+            if (unitsOnEdge.length > 1 && unitIndex !== -1) {
+                const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
+                const p1 = axialToPixel(edge.q1, edge.r1);
+                const p2 = axialToPixel(edge.q2, edge.r2);
+                let dx = p2.x - p1.x, dy = p2.y - p1.y;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                let perpX = -dy / len, perpY = dx / len;
+                unitX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * 0.5;
+                unitY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * 0.5;
+            }
+        }
+    }
+    if (unitX !== undefined) {
+        return { x: unitX, y: unitY };
+    }
+    return null;
+}
 
         function padZero(num) {
             return String(num).padStart(2, '0');
@@ -1718,7 +1773,6 @@ if (tileLayoutMap) {
     canHeal: true,
     supplyLine: null,
     lastAttackedByHostileOnTurn: 0,
-    isDying: false,
 };
         }
 
@@ -2320,11 +2374,6 @@ if (tileLayoutMap) {
         }
 
         function drawSingleUnit(ctx, unit, x, y, radius) {
-    if (unit.isDying) {
-        const blinkSpeed = 400; // ms per blink
-        const opacity = (Date.now() % blinkSpeed) < (blinkSpeed / 2) ? 1 : 0;
-        ctx.globalAlpha = opacity;
-    }
 
     ctx.beginPath();
             ctx.arc(x, y, radius, 0, 2 * Math.PI);
@@ -2361,10 +2410,10 @@ if (tileLayoutMap) {
             const radiusForSymbol = radius - healthBarVisualThickness;
             drawUnitSymbol(ctx, unit, x, y, radiusForSymbol, symbolColor);
             drawUnitSymbol(ctx, unit, x, y, radiusForSymbol, symbolColor);
-            ctx.globalAlpha = 1.0; // Reset global alpha
         }
 
         function drawUnits() {
+            const animatedUnitIds = new Set(gameState.activeAnimations.map(a => a.attacker.id));
             const offsetDistance = UNIT_ON_EDGE_OFFSET;
 
             gameState.edges.forEach((edge) => {
@@ -2377,6 +2426,7 @@ if (tileLayoutMap) {
                     let perpX = -dy_centers / len_centers; let perpY = dx_centers / len_centers;
                     
                     edgeUnitsOnly.forEach((unit, index) => {
+                        if (animatedUnitIds.has(unit.id)) return;
                         let unitX = mid.x, unitY = mid.y;
                         if (edgeUnitsOnly.length > 1) {
                             const offsetSign = (index % 2 === 0) ? -1 : 1;
@@ -2389,6 +2439,7 @@ if (tileLayoutMap) {
             });
 
             gameState.units.forEach(unit => {
+                if (animatedUnitIds.has(unit.id)) return;
                 if (unit.isFortified && unit.positionType === 'center' && (!gameState.isDragging || unit.id !== gameState.draggingUnit.id)) {
                     const tile = gameState.tiles.get(unit.position);
                     if (tile) {
@@ -2586,6 +2637,82 @@ function drawMovementHighlights() {
             ctx.restore();
         }
 
+function triggerDamageVisual(targetUnit, attackStatus = 'normal') {
+    // Get the unit's screen position and size for the effect
+    let targetX, targetY, targetRadius;
+    if (targetUnit.isFortified) {
+        const tile = gameState.tiles.get(targetUnit.position);
+        if (tile) {
+            const center = axialToPixel(tile.q, tile.r);
+            targetX = center.x;
+            targetY = center.y;
+            targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
+        }
+    } else {
+        const edge = gameState.edges.get(targetUnit.position);
+        if (edge) {
+            const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+            targetX = mid.x;
+            targetY = mid.y;
+            targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
+            // Adjust for stacked units
+            const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
+            const unitIndex = unitsOnEdge.findIndex(u => u.id === targetUnit.id);
+            if(unitsOnEdge.length > 1 && unitIndex !== -1) {
+                const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
+                const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
+                let dx = p2.x - p1.x, dy = p2.y - p1.y; const len = Math.sqrt(dx*dx + dy*dy) || 1;
+                let perpX = -dy / len, perpY = dx / len;
+                targetX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+                targetY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+            }
+        }
+    }
+
+    if (targetX !== undefined) {
+        // --- DAMAGE RING LOGIC (Unchanged) ---
+        const baseEffect = {
+            type: 'damage_ring',
+            x: targetX, y: targetY,
+            unitRadius: targetRadius,
+            startTime: Date.now(),
+            duration: 500
+        };
+
+        if (attackStatus === 'disadvantage') {
+            baseEffect.subType = 'disadvantage';
+            gameState.visualEffects.push(baseEffect);
+        } else if (attackStatus === 'advantage') {
+            const effect1 = { ...baseEffect, subType: 'advantage' };
+            const effect2 = { ...baseEffect, subType: 'advantage', startTime: Date.now() + 250 };
+            gameState.visualEffects.push(effect1, effect2);
+        } else {
+            baseEffect.subType = 'normal';
+            gameState.visualEffects.push(baseEffect);
+        }
+
+        // --- UPDATED UNIT FLASH LOGIC ---
+        const flashEffect = {
+            type: 'unit_flash',
+            targetUnitId: targetUnit.id,
+            startTime: Date.now(),
+            flashCount: 1,
+            color: 'rgba(255, 0, 0, 0.5)', // Default: Red
+            duration: 300, // Shorter duration for single flashes
+        };
+
+        if (attackStatus === 'advantage') {
+            flashEffect.flashCount = 2;
+            flashEffect.duration = 600; // Longer duration for two flashes
+        } else if (attackStatus === 'disadvantage') {
+            flashEffect.color = 'rgba(255, 165, 0, 0.5)'; // Orange color
+        }
+        // For 'normal', the default red, single-flash settings are correct.
+
+        gameState.visualEffects.push(flashEffect);
+    }
+}
+
 function drawVisualEffects() {
     if (gameState.visualEffects.length === 0) return;
 
@@ -2599,53 +2726,106 @@ function drawVisualEffects() {
 
         if (progress >= 1) {
             effectsToRemove.push(index);
-if (effect.onComplete) {
-    effect.onComplete();
-}
-return;
+            if (effect.onComplete) {
+                effect.onComplete();
+            }
+            return;
         }
 
         if (effect.type === 'damage_ring') {
             const startRadius = effect.unitRadius;
-            const endRadius = startRadius * 1.8; // How far the ring expands
+            const endRadius = startRadius * 1.8;
             
             const currentRadius = startRadius + (endRadius - startRadius) * progress;
             const opacity = 1.0 - progress;
 
             ctx.beginPath();
             ctx.arc(effect.x, effect.y, currentRadius, 0, 2 * Math.PI);
-            ctx.strokeStyle = `rgba(255, 50, 50, ${opacity})`;
-            ctx.lineWidth = 3 + (4 * (1 - progress)); // Ring gets thinner as it expands
-            ctx.stroke();
-        } else if (effect.type === 'starburst_death') {
-    const lineLength = effect.unitRadius * 3.5;
-    const currentLength = lineLength * progress;
-    const opacity = 1.0 - progress;
 
-    ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-    ctx.lineWidth = 4;
-    
-    for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i; // 60 degrees between each line
-        const endX = effect.x + Math.cos(angle) * currentLength;
-        const endY = effect.y + Math.sin(angle) * currentLength;
-        
-        ctx.beginPath();
-        ctx.moveTo(effect.x, effect.y);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-    }
-}
+            let ringColor = `rgba(255, 50, 50, ${opacity})`;
+            if (effect.subType === 'disadvantage') {
+                ringColor = `rgba(255, 165, 0, ${opacity})`;
+            }
+            
+            ctx.strokeStyle = ringColor;
+            ctx.lineWidth = 3 + (4 * (1 - progress));
+            ctx.stroke();
+        } else if (effect.type === 'shield_ring') {
+            const startRadius = effect.unitRadius;
+            const endRadius = startRadius * 2.0;
+            
+            const currentRadius = startRadius + (endRadius - startRadius) * progress;
+            const opacity = 1.0 - progress;
+
+            ctx.beginPath();
+            ctx.arc(effect.x, effect.y, currentRadius, 0, 2 * Math.PI);
+            ctx.strokeStyle = `rgba(48, 196, 196, ${opacity})`; 
+            ctx.lineWidth = 4 + (3 * (1 - progress));
+            ctx.stroke();
+        } else if (effect.type === 'unit_flash') {
+            const unit = gameState.units.find(u => u.id === effect.targetUnitId);
+            if (!unit) return;
+
+            let isVisible = false;
+            // Use the new flashCount property to determine timing
+            if (effect.flashCount === 2) {
+                // Two quick flashes
+                isVisible = (progress >= 0 && progress < 0.15) || (progress >= 0.25 && progress < 0.40);
+            } else {
+                // A single, slightly longer flash
+                isVisible = (progress >= 0 && progress < 0.40);
+            }
+
+            if (isVisible) {
+                let unitX, unitY, unitRadius;
+                if (unit.isFortified) {
+                    const tile = gameState.tiles.get(unit.position);
+                    if (tile) {
+                        const center = axialToPixel(tile.q, tile.r);
+                        unitX = center.x;
+                        unitY = center.y;
+                        unitRadius = FORTIFIED_UNIT_DRAW_SIZE;
+                    }
+                } else {
+                    const edge = gameState.edges.get(unit.position);
+                    if (edge) {
+                        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                        unitX = mid.x;
+                        unitY = mid.y;
+                        unitRadius = UNIT_DRAW_SIZE_ON_EDGE;
+                        const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
+                        const unitIndex = unitsOnEdge.findIndex(u => u.id === unit.id);
+                        if (unitsOnEdge.length > 1 && unitIndex !== -1) {
+                            const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
+                            const p1 = axialToPixel(edge.q1, edge.r1);
+                            const p2 = axialToPixel(edge.q2, edge.r2);
+                            let dx = p2.x - p1.x, dy = p2.y - p1.y;
+                            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                            let perpX = -dy / len, perpY = dx / len;
+                            unitX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * 0.5;
+                            unitY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * 0.5;
+                        }
+                    }
+                }
+                
+                if (unitX !== undefined) {
+                    // Use the color passed in from the effect object
+                    ctx.fillStyle = effect.color;
+                    ctx.beginPath();
+                    ctx.arc(unitX, unitY, unitRadius, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+        }
     });
     ctx.restore();
 
-    // Remove finished effects (in reverse order to avoid index issues)
     for (let i = effectsToRemove.length - 1; i >= 0; i--) {
         gameState.visualEffects.splice(effectsToRemove[i], 1);
     }
 }
 
-        function animateUnitAlongPath(unit, path, duration) {
+function animateUnitAlongPath(unit, path, duration) {
     const animation = {
         unit: unit,
         path: path,
@@ -2667,6 +2847,115 @@ if(startEdge) {
     return animation;
 }
 
+function drawAttackAnimations() {
+    const stillAnimating = [];
+    const currentTime = Date.now();
+
+    gameState.activeAnimations.forEach(anim => {
+        const elapsedTime = currentTime - anim.startTime;
+        let progress = elapsedTime / anim.duration;
+
+        if (progress >= 1) {
+            if (anim.onComplete) anim.onComplete();
+            return;
+        }
+
+        const attacker = anim.attacker;
+        const startPos = getUnitScreenPosition(attacker);
+        const drawRadius = attacker.isFortified ? FORTIFIED_UNIT_DRAW_SIZE : UNIT_DRAW_SIZE_ON_EDGE;
+
+        if (!startPos) {
+            stillAnimating.push(anim);
+            return;
+        }
+
+        if (anim.type === 'attack_lunge') {
+            const targetPos = getUnitScreenPosition(anim.target);
+            if (!targetPos) { stillAnimating.push(anim); return; }
+
+            let currentPos = { x: startPos.x, y: startPos.y };
+            const lungeDistanceFactor = 0.5;
+            const windupDistanceFactor = -0.2;
+
+            if (progress < 0.25) {
+                const phaseProgress = progress / 0.25;
+                currentPos.x = lerp(startPos.x, targetPos.x, phaseProgress * windupDistanceFactor);
+                currentPos.y = lerp(startPos.y, targetPos.y, phaseProgress * windupDistanceFactor);
+            } 
+            else if (progress < 0.5) {
+                const phaseProgress = (progress - 0.25) / 0.25;
+                const windupX = lerp(startPos.x, targetPos.x, windupDistanceFactor);
+                const windupY = lerp(startPos.y, targetPos.y, windupDistanceFactor);
+                const peakX = lerp(startPos.x, targetPos.x, lungeDistanceFactor);
+                const peakY = lerp(startPos.y, targetPos.y, lungeDistanceFactor);
+                currentPos.x = lerp(windupX, peakX, phaseProgress);
+                currentPos.y = lerp(windupY, peakY, phaseProgress);
+            }
+            else {
+                const phaseProgress = (progress - 0.5) / 0.5;
+                const peakX = lerp(startPos.x, targetPos.x, lungeDistanceFactor);
+                const peakY = lerp(startPos.y, targetPos.y, lungeDistanceFactor);
+                currentPos.x = lerp(peakX, startPos.x, phaseProgress);
+                currentPos.y = lerp(peakY, startPos.y, phaseProgress);
+            }
+            drawSingleUnit(ctx, attacker, currentPos.x, currentPos.y, drawRadius);
+        } else if (anim.type === 'attack_projectile') {
+            const totalPreShotDuration = anim.preShotDuration.draw + anim.preShotDuration.hold;
+
+            // Phase 1 & 2: Draw Back and Hold
+            if (elapsedTime < totalPreShotDuration) {
+                 const recoilFactor = -0.1;
+                 const someTargetPos = getUnitScreenPosition(anim.targets[0]);
+                 if (!someTargetPos) { stillAnimating.push(anim); return; }
+                 const recoilX = lerp(startPos.x, someTargetPos.x, recoilFactor);
+                 const recoilY = lerp(startPos.y, someTargetPos.y, recoilFactor);
+
+                if (elapsedTime < anim.preShotDuration.draw) {
+                    const phaseProgress = elapsedTime / anim.preShotDuration.draw;
+                    const currentX = lerp(startPos.x, recoilX, phaseProgress);
+                    const currentY = lerp(startPos.y, recoilY, phaseProgress);
+                    drawSingleUnit(ctx, attacker, currentX, currentY, drawRadius);
+                } else {
+                    drawSingleUnit(ctx, attacker, recoilX, recoilY, drawRadius);
+                }
+            }
+            // Phase 3: Fire & Travel
+            else {
+                drawSingleUnit(ctx, attacker, startPos.x, startPos.y, drawRadius);
+                
+                const travelElapsedTime = elapsedTime - totalPreShotDuration;
+                const travelProgress = travelElapsedTime / anim.travelDuration;
+
+                // Iterate over all targets and draw a projectile for each
+                anim.targets.forEach(targetUnit => {
+                    const targetPos = getUnitScreenPosition(targetUnit);
+                    if (!targetPos) return;
+
+                    const projectileX = lerp(startPos.x, targetPos.x, travelProgress);
+                    const projectileY = lerp(startPos.y, targetPos.y, travelProgress);
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(projectileX, projectileY);
+                    const dx = targetPos.x - startPos.x;
+                    const dy = targetPos.y - startPos.y;
+                    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+                    const tailX = projectileX - (dx/len) * 15;
+                    const tailY = projectileY - (dy/len) * 15;
+                    ctx.lineTo(tailX, tailY);
+                    
+                    ctx.strokeStyle = '#95a5a6';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                });
+            }
+        }
+        
+        stillAnimating.push(anim);
+    });
+
+    gameState.activeAnimations = stillAnimating;
+}
+
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             gameState.tiles.forEach(tile => drawHexFill(tile.q, tile.r, tile.type.color));
@@ -2675,7 +2964,7 @@ if(startEdge) {
             drawContestedEdgeIndicator();
             drawBridges();
             drawFlags();
-            drawVisualEffects();
+            
             drawSupplyLines();
             
             drawDebugAttackRangeHighlights()
@@ -2702,7 +2991,9 @@ if(startEdge) {
             }
             
 drawDebugPath();
+drawAttackAnimations();
 drawUnits(); // Draws stationary units
+drawVisualEffects();
 
  if (!gameState.isDragging && gameState.currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET) {
                  const currentAttackTargets = gameState.selectedUnit?.type.attackType === 'melee'
@@ -2935,48 +3226,25 @@ drawUnits(); // Draws stationary units
         }
 
 function handleUnitDeath(unitToDie, reason = "destroyed") {
-    if (unitToDie.isDying) return; // Prevent triggering multiple times
-
-    unitToDie.isDying = true;
-
-    // Get the unit's last known screen position
-    let targetX, targetY, targetRadius;
-    if (unitToDie.isFortified) {
-        const tile = gameState.tiles.get(unitToDie.position);
-        if (tile) {
-            const center = axialToPixel(tile.q, tile.r);
-            targetX = center.x;
-            targetY = center.y;
-            targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
-        }
-    } else {
-        const edge = gameState.edges.get(unitToDie.position);
-        if (edge) {
-            // Simplified position for death effect - center of edge
-            const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-            targetX = mid.x;
-            targetY = mid.y;
-            targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
-        }
+    // Check if the unit is still in the game's master list.
+    // This is the most reliable way to prevent errors from destroying the same unit twice.
+    const unitExists = gameState.units.some(u => u.id === unitToDie.id);
+    if (!unitExists) {
+        return; // Already destroyed in this action.
     }
 
-    // Create the starburst visual effect
-    if (targetX !== undefined) {
-        gameState.visualEffects.push({
-            type: 'starburst_death',
-            x: targetX, y: targetY,
-            unitRadius: targetRadius,
-            startTime: Date.now(),
-            duration: 600, // Animation duration
-            onComplete: () => {
-                // This runs AFTER the animation is finished
-                destroyUnit(unitToDie, reason);
-            }
-        });
-    } else {
-        // Failsafe if we can't get coordinates
-        destroyUnit(unitToDie, reason);
+    // Immediately call destroyUnit, no animation.
+    destroyUnit(unitToDie, reason);
+}function handleUnitDeath(unitToDie, reason = "destroyed") {
+    // Check if the unit is still in the game's master list.
+    // This is the most reliable way to prevent errors from destroying the same unit twice.
+    const unitExists = gameState.units.some(u => u.id === unitToDie.id);
+    if (!unitExists) {
+        return; // Already destroyed in this action.
     }
+
+    // Immediately call destroyUnit, no animation.
+    destroyUnit(unitToDie, reason);
 }
 
         function logAction(message, player, duration = 3000) {
@@ -3459,7 +3727,7 @@ function getPotentialUnfortifyTargets(unit) {
                      });
                  }
              });
-            unitsToDestroy.forEach(u => destroyUnit(u, "fort_zoc"));
+            unitsToDestroy.forEach(u => handleUnitDeath(u, "fort_zoc"));
 
             gameState.currentReachableMoves.clear();
             resetActionSelectionStates();
@@ -3652,7 +3920,7 @@ function handleFortifyActionLogic() {
                 if (tile && tile.fortifiedByPlayer === enemyPlayer && !unitDestroyed) {
                     unitMoving.hp -= FORTIFICATION_DAMAGE;
                     logAction(`P${unitMoving.player} ${unitMoving.type.name} takes ZoC. HP: ${unitMoving.hp}`, gameState.currentPlayer, 3500);
-                    if (unitMoving.hp <= 0) { destroyUnit(unitMoving, "zoc_move"); unitDestroyed = true; }
+                    if (unitMoving.hp <= 0) { handleUnitDeath(unitMoving, "zoc_move"); unitDestroyed = true; }
                     return true;
                 } return false;
             };
@@ -4059,58 +4327,69 @@ function handleFortifyActionLogic() {
             }
         }
 
-                function completeAttack(attackingUnit, targetUnitInfo, attackType) {
-            if (!attackingUnit || !targetUnitInfo || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) {
-                showInstruction("Cannot complete attack.", 2000); 
-                resetActionSelectionStates(); 
-                updateSelectedUnitInfoPanel(); return;
-            }
-
-            let damageModifier = 0;
-            let advantageMessage = "";
-            let baseDamage = attackingUnit.type.attack;
-
-            if (targetUnitInfo.unit) {
-                const attackerType = attackingUnit.type;
-                const defenderType = targetUnitInfo.unit.type;
-                if (attackerType.strengths && attackerType.strengths.includes(defenderType.name)) {
-                    damageModifier = 1;
-                    advantageMessage = "Advantage!";
-                } else if (attackerType.weaknesses && attackerType.weaknesses.includes(defenderType.name)) {
-                    damageModifier = -1;
-                    advantageMessage = "Disadvantage!";
-                }
-            }
-            baseDamage += damageModifier;
-
-            let fortifiedArcherMsg = "";
-            if (attackType === 'Archer' && attackingUnit.isFortified) { 
-                baseDamage += 1; 
-                fortifiedArcherMsg = `Fortified Archer +1 Attack.`;
-            }
-            
-        attackingUnit.hasPerformedMajorAction = true;
-        let hitAndRunMessage = "";
-if (attackingUnit.type.canMoveAfterAttack) {
-    attackingUnit.currentMove -= ATTACK_COST;
-
-    // Check for Spear Wall on both the attacker's edge AND the target's edge.
-    const spearWallOnAttacker = isEdgeAdjacentToSpearWall(attackingUnit, attackingUnit.position);
-    const spearWallOnTarget = targetUnitInfo.edgeKey ? isEdgeAdjacentToSpearWall(attackingUnit, targetUnitInfo.edgeKey) : false;
-
-    if (spearWallOnAttacker || spearWallOnTarget) {
-        hitAndRunMessage = "Spear Wall prevents further movement!";
-        gameState.currentReachableMoves.clear();
-    } else if (attackingUnit.currentMove > 0) {
-        hitAndRunMessage = "Horseman can move again!";
-        // Only show highlights for the human player's units.
-        if (gameState.gameMode !== 'singleplayer' || attackingUnit.player === gameState.playerSide) {
-            gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
-        }
-    } else {
-        gameState.currentReachableMoves.clear();
+function completeAttack(attackingUnit, targetUnitInfo, attackType) {
+    if (!attackingUnit || !targetUnitInfo || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) {
+        showInstruction("Cannot complete attack.", 2000); 
+        resetActionSelectionStates(); 
+        updateSelectedUnitInfoPanel(); return;
     }
-} else {
+    
+    // Phase 1: Calculate outcome (Unchanged)
+    let damageModifier = 0;
+    let advantageMessage = "";
+    let baseDamage = attackingUnit.type.attack;
+
+    if (targetUnitInfo.unit) {
+        const attackerType = attackingUnit.type;
+        const defenderType = targetUnitInfo.unit.type;
+        if (attackerType.strengths && attackerType.strengths.includes(defenderType.name)) {
+            damageModifier = 1;
+            advantageMessage = "Advantage!";
+        } else if (attackerType.weaknesses && attackerType.weaknesses.includes(defenderType.name)) {
+            damageModifier = -1;
+            advantageMessage = "Disadvantage!";
+        }
+    }
+    baseDamage += damageModifier;
+
+    let fortifiedArcherMsg = "";
+    if (attackType === 'Archer' && attackingUnit.isFortified) { 
+        baseDamage += 1; 
+        fortifiedArcherMsg = `Fortified Archer +1 Attack.`;
+    }
+    
+    let attackStatus = 'normal';
+    if (advantageMessage === "Advantage!") {
+        attackStatus = 'advantage';
+    } else if (advantageMessage === "Disadvantage!") {
+        attackStatus = 'disadvantage';
+    }
+
+    // Phase 2: Create a generic animation object
+    const animation = {
+        attacker: attackingUnit,
+        targetInfo: targetUnitInfo,
+        startTime: Date.now(),
+        onComplete: () => {
+            // ... (The entire onComplete function remains exactly the same as before)
+            attackingUnit.hasPerformedMajorAction = true;
+            let hitAndRunMessage = "";
+            if (attackingUnit.type.canMoveAfterAttack) {
+                attackingUnit.currentMove -= ATTACK_COST;
+                const spearWallOnAttacker = isEdgeAdjacentToSpearWall(attackingUnit, attackingUnit.position);
+                const spearWallOnTarget = targetUnitInfo.edgeKey ? isEdgeAdjacentToSpearWall(attackingUnit, targetUnitInfo.edgeKey) : false;
+                if (spearWallOnAttacker || spearWallOnTarget) {
+                    hitAndRunMessage = "Spear Wall prevents further movement!";
+                    gameState.currentReachableMoves.clear();
+                } else if (attackingUnit.currentMove > 0) {
+                    hitAndRunMessage = "Horseman can move again!";
+                    if (gameState.gameMode !== 'singleplayer' || attackingUnit.player === gameState.playerSide) {
+                        gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
+                    }
+                } else {
+                    gameState.currentReachableMoves.clear();
+                }
+            } else {
                 attackingUnit.currentMove = 0;
                 gameState.currentReachableMoves.clear();
             }
@@ -4123,11 +4402,12 @@ if (attackingUnit.type.canMoveAfterAttack) {
                 const bridgeEdge = gameState.edges.get(targetUnitInfo.edgeKey);
                 if (bridgeEdge && bridgeEdge.bridge) {
                     bridgeEdge.bridgeHp -= baseDamage;
+                    triggerDamageVisual({ position: targetUnitInfo.edgeKey, isFortified: false }, 'normal');
                     logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} targets bridge for ${baseDamage}.<br>Bridge HP: ${bridgeEdge.bridgeHp}/${BRIDGE_MAX_HP}.`);
                     if (bridgeEdge.bridgeHp <= 0) {
                         logParts.push(`Bridge destroyed!`);
                         bridgeEdge.bridge = false; bridgeEdge.bridgeHp = null;
-                        [...bridgeEdge.units].forEach(unitOnCollapse => destroyUnit(unitOnCollapse, "bridge_collapse"));
+                        [...bridgeEdge.units].forEach(unitOnCollapse => handleUnitDeath(unitOnCollapse, "bridge_collapse"));
                     }
                 } else logParts.push("Target bridge missing.");
             }
@@ -4161,6 +4441,8 @@ if (attackingUnit.type.canMoveAfterAttack) {
                 if (pierceMessage) logParts.push(pierceMessage);
                 if (defenseMessage) logParts.push(defenseMessage);
                 
+                triggerDamageVisual(targetUnit, attackStatus);
+
                 if (attackType === 'Archer' && targetUnitInfo.edgeKey && actualDamage > 0 && !targetUnit.isFortified) {
                     const edgeOfTarget = gameState.edges.get(targetUnitInfo.edgeKey);
                     const allEnemyUnitsOnEdge = edgeOfTarget ? edgeOfTarget.units.filter(u => u.player === targetUnit.player) : [];
@@ -4169,139 +4451,20 @@ if (attackingUnit.type.canMoveAfterAttack) {
                         logParts.push(`Damage split between 2 units!`);
                         allEnemyUnitsOnEdge.forEach(unitToHit => {
                             unitToHit.hp -= splitDamage;
-                            // --- Trigger Damage Ring Effect ---
-let targetX, targetY, targetRadius;
-if (targetUnit.isFortified) {
-    const tile = gameState.tiles.get(targetUnit.position);
-    if (tile) {
-        const center = axialToPixel(tile.q, tile.r);
-        targetX = center.x;
-        targetY = center.y;
-        targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
-    }
-} else {
-    const edge = gameState.edges.get(targetUnit.position);
-    if (edge) {
-        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-        targetX = mid.x;
-        targetY = mid.y;
-        targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
-        // Adjust for stacked units
-        const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
-        const unitIndex = unitsOnEdge.findIndex(u => u.id === targetUnit.id);
-        if(unitsOnEdge.length > 1 && unitIndex !== -1) {
-            const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
-            const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
-            let dx = p2.x - p1.x, dy = p2.y - p1.y; const len = Math.sqrt(dx*dx + dy*dy) || 1;
-            let perpX = -dy / len, perpY = dx / len;
-            targetX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
-            targetY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
-        }
-    }
-}
-if (targetX !== undefined) {
-    gameState.visualEffects.push({
-        type: 'damage_ring',
-        x: targetX, y: targetY,
-        unitRadius: targetRadius,
-        startTime: Date.now(),
-        duration: 500 // half a second
-    });
-}
-// --- End Effect ---
+                            triggerDamageVisual(unitToHit, attackStatus); // Trigger effect for second unit
                             logParts.push(`P${unitToHit.player} ${unitToHit.type.name} takes ${splitDamage} damage. HP: ${unitToHit.hp}`);
                             if (attackingUnit.player !== unitToHit.player) unitToHit.lastAttackedByHostileOnTurn = gameState.globalTurnNumber;
-                            if (unitToHit.hp <= 0) destroyUnit(unitToHit);
+                            if (unitToHit.hp <= 0) handleUnitDeath(unitToHit);
                         });
                     } else {
                         targetUnit.hp -= actualDamage;
-                        // --- Trigger Damage Ring Effect ---
-let targetX, targetY, targetRadius;
-if (targetUnit.isFortified) {
-    const tile = gameState.tiles.get(targetUnit.position);
-    if (tile) {
-        const center = axialToPixel(tile.q, tile.r);
-        targetX = center.x;
-        targetY = center.y;
-        targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
-    }
-} else {
-    const edge = gameState.edges.get(targetUnit.position);
-    if (edge) {
-        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-        targetX = mid.x;
-        targetY = mid.y;
-        targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
-        // Adjust for stacked units
-        const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
-        const unitIndex = unitsOnEdge.findIndex(u => u.id === targetUnit.id);
-        if(unitsOnEdge.length > 1 && unitIndex !== -1) {
-            const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
-            const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
-            let dx = p2.x - p1.x, dy = p2.y - p1.y; const len = Math.sqrt(dx*dx + dy*dy) || 1;
-            let perpX = -dy / len, perpY = dx / len;
-            targetX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
-            targetY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
-        }
-    }
-}
-if (targetX !== undefined) {
-    gameState.visualEffects.push({
-        type: 'damage_ring',
-        x: targetX, y: targetY,
-        unitRadius: targetRadius,
-        startTime: Date.now(),
-        duration: 500 // half a second
-    });
-}
-// --- End Effect ---
                         logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
-                        if (targetUnit.hp <= 0) destroyUnit(targetUnit);
+                        if (targetUnit.hp <= 0) handleUnitDeath(targetUnit);
                     }
                 } else { 
                     targetUnit.hp -= actualDamage;
-                    // --- Trigger Damage Ring Effect ---
-let targetX, targetY, targetRadius;
-if (targetUnit.isFortified) {
-    const tile = gameState.tiles.get(targetUnit.position);
-    if (tile) {
-        const center = axialToPixel(tile.q, tile.r);
-        targetX = center.x;
-        targetY = center.y;
-        targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
-    }
-} else {
-    const edge = gameState.edges.get(targetUnit.position);
-    if (edge) {
-        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-        targetX = mid.x;
-        targetY = mid.y;
-        targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
-        // Adjust for stacked units
-        const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
-        const unitIndex = unitsOnEdge.findIndex(u => u.id === targetUnit.id);
-        if(unitsOnEdge.length > 1 && unitIndex !== -1) {
-            const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
-            const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
-            let dx = p2.x - p1.x, dy = p2.y - p1.y; const len = Math.sqrt(dx*dx + dy*dy) || 1;
-            let perpX = -dy / len, perpY = dx / len;
-            targetX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
-            targetY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
-        }
-    }
-}
-if (targetX !== undefined) {
-    gameState.visualEffects.push({
-        type: 'damage_ring',
-        x: targetX, y: targetY,
-        unitRadius: targetRadius,
-        startTime: Date.now(),
-        duration: 500 // half a second
-    });
-}
-// --- End Effect ---
                     logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
-                    if (targetUnit.hp <= 0) destroyUnit(targetUnit);
+                    if (targetUnit.hp <= 0) handleUnitDeath(targetUnit);
                 }
                 
                 if (targetUnit.type.name === 'Horseman' && attackingUnit.type.attackType === 'melee' && targetUnitInfo.edgeKey) {
@@ -4310,8 +4473,9 @@ if (targetX !== undefined) {
                     if (retaliatingArcher) {
                         const retaliationDamage = Math.ceil(retaliatingArcher.type.attack / 2);
                         attackingUnit.hp -= retaliationDamage;
+                        triggerDamageVisual(attackingUnit, 'normal');
                         logParts.push(`Cavalry Screen! P${retaliatingArcher.player} ${retaliatingArcher.type.name} retaliates for ${retaliationDamage} damage.<br>Attacker HP: ${attackingUnit.hp}/${attackingUnit.maxHp}`);
-                        if (attackingUnit.hp <= 0) destroyUnit(attackingUnit, "retaliation");
+                        if (attackingUnit.hp <= 0) handleUnitDeath(attackingUnit, "retaliation");
                     }
                 }
             }
@@ -4323,6 +4487,62 @@ if (targetX !== undefined) {
             updateSelectedUnitInfoPanel(); 
             if (!gameState.gameOver) checkVictoryCondition();
         }
+    };
+    
+    // --- Phase 4: Push the correct animation to the queue ---
+    if (attackingUnit.type.attackType === 'melee') {
+        animation.type = 'attack_lunge';
+        animation.duration = 250;
+        animation.target = targetUnitInfo.unit; // Melee always has one target
+        gameState.activeAnimations.push(animation);
+    } else if (attackingUnit.type.attackType === 'ranged') {
+        let targets = [];
+        let maxDistance = 0;
+
+        // Check for split damage scenario
+        const edgeOfTarget = targetUnitInfo.edgeKey ? gameState.edges.get(targetUnitInfo.edgeKey) : null;
+        const enemyUnitsOnEdge = edgeOfTarget ? edgeOfTarget.units.filter(u => u.player !== attackingUnit.player) : [];
+
+        if (edgeOfTarget && enemyUnitsOnEdge.length === 2 && !targetUnitInfo.unit.isFortified) {
+            targets = enemyUnitsOnEdge;
+        } else {
+            targets.push(targetUnitInfo.unit);
+        }
+        
+        animation.targets = targets; // Use a 'targets' array
+
+        const startPos = getUnitScreenPosition(attackingUnit);
+        if (startPos) {
+            targets.forEach(t => {
+                const targetPos = getUnitScreenPosition(t);
+                if (targetPos) {
+                    const distance = pointDistance(startPos, targetPos);
+                    if (distance > maxDistance) maxDistance = distance;
+                }
+            });
+        }
+        
+        if (maxDistance > 0) {
+            const preShotDrawDuration = 150;
+            const preShotHoldDuration = 250;
+            const travelDuration = maxDistance / PROJECTILE_SPEED_PIXELS_PER_MS;
+            
+            animation.type = 'attack_projectile';
+            animation.duration = preShotDrawDuration + preShotHoldDuration + travelDuration;
+            animation.preShotDuration = { draw: preShotDrawDuration, hold: preShotHoldDuration };
+            animation.travelDuration = travelDuration;
+            
+            gameState.activeAnimations.push(animation);
+        } else {
+             animation.onComplete();
+        }
+    } else {
+        animation.onComplete();
+    }
+    
+    resetActionSelectionStates(); 
+    updateSelectedUnitInfoPanel();
+}
 
         function handleUnitSelectionClick(x, y) {
             let clickedOnUnit = null;
@@ -4946,7 +5166,7 @@ if (unit.isFortified || unit.currentMove < 1) continue;
                 }
             });
 
-            if (unitsToDestroy.length > 0) unitsToDestroy.forEach(u => destroyUnit(u, "zoc_turn_start"));
+            if (unitsToDestroy.length > 0) unitsToDestroy.forEach(u => handleUnitDeath(u, "zoc_turn_start"));
         }
 
         function updateAllHealingStatus() {
@@ -4970,51 +5190,71 @@ if (unit.isFortified || unit.currentMove < 1) continue;
             if (p2FlagStolen) { logAction(`P2's flag is stolen! Healing is disabled.`, 1, 3000); }
         }
 
-        function applyStartOfTurnHealing() {
-            const playerFlag = gameState.flags[`p${gameState.currentPlayer}_flag`];
-            if (playerFlag.status === 'carried') {
-                return; // No healing for anyone if their flag is stolen.
-            }
+function applyStartOfTurnHealing() {
+    const playerFlag = gameState.flags[`p${gameState.currentPlayer}_flag`];
+    if (playerFlag.status === 'carried') {
+        return; // No healing for anyone if their flag is stolen.
+    }
 
-            gameState.units.forEach(unit => {
-                if (unit.player !== gameState.currentPlayer || !unit.isFortified || unit.hp >= (unit.maxHp + 1)) {
-                    return;
-                }
-
-                const recentlyAttacked = gameState.globalTurnNumber < unit.lastAttackedByHostileOnTurn + 2;
-                if (recentlyAttacked) {
-                    return;
-                }
-                
-                let isSupplied = false;
-                const playerBaseTiles = [FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
-                
-                if (playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                    isSupplied = true;
-                } else if (unit.supplyLine && unit.supplyLine.path) {
-                    const isIntercepted = unit.supplyLine.path.some(edgeKey => {
-                        const edge = gameState.edges.get(edgeKey);
-                        return edge && edge.units.some(u => u.player !== unit.player);
-                    });
-                    if (!isIntercepted) {
-                        isSupplied = true;
-                    }
-                }
-
-                if (isSupplied) {
-                    const oldHp = unit.hp;
-                    unit.hp++;
-                    const activePlayer = gameState.currentPlayer;
-                    if (oldHp < unit.maxHp && unit.hp === unit.maxHp) {
-                        logAction(`P${unit.player} ${unit.type.name} healed to full HP.`, activePlayer, 2500);
-                    } else if (unit.hp === unit.maxHp + 1) {
-                        logAction(`P${unit.player} ${unit.type.name} gained a shield!`, activePlayer, 2500);
-                    } else {
-                         logAction(`P${unit.player} ${unit.type.name} healed 1 HP.`, activePlayer, 2500);
-                    }
-                }
-            });
+    gameState.units.forEach(unit => {
+        if (unit.player !== gameState.currentPlayer || !unit.isFortified || unit.hp >= (unit.maxHp + 1)) {
+            return;
         }
+
+        const recentlyAttacked = gameState.globalTurnNumber < unit.lastAttackedByHostileOnTurn + 2;
+        if (recentlyAttacked) {
+            return;
+        }
+        
+        let isSupplied = false;
+        const playerBaseTiles = [FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
+        
+        if (playerBaseTiles.includes(unit.fortifiedTileKey)) {
+            isSupplied = true;
+        } else if (unit.supplyLine && unit.supplyLine.path) {
+            const isIntercepted = unit.supplyLine.path.some(edgeKey => {
+                const edge = gameState.edges.get(edgeKey);
+                return edge && edge.units.some(u => u.player !== unit.player);
+            });
+            if (!isIntercepted) {
+                isSupplied = true;
+            }
+        }
+
+        if (isSupplied) {
+            const oldHp = unit.hp;
+            unit.hp++;
+            const activePlayer = gameState.currentPlayer;
+            if (oldHp < unit.maxHp && unit.hp === unit.maxHp) {
+                logAction(`P${unit.player} ${unit.type.name} healed to full HP.`, activePlayer, 2500);
+            } else if (unit.hp === unit.maxHp + 1) {
+                logAction(`P${unit.player} ${unit.type.name} gained a shield!`, activePlayer, 2500);
+                
+                // --- TRIGGER SHIELD EFFECT ---
+                let targetX, targetY, targetRadius;
+                const tile = gameState.tiles.get(unit.position);
+                if (tile) { // The unit must be fortified to heal, so it will be on a tile
+                    const center = axialToPixel(tile.q, tile.r);
+                    targetX = center.x;
+                    targetY = center.y;
+                    targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
+
+                    gameState.visualEffects.push({
+                        type: 'shield_ring',
+                        x: targetX, y: targetY,
+                        unitRadius: targetRadius,
+                        startTime: Date.now(),
+                        duration: 600 // A slightly longer, more graceful duration
+                    });
+                }
+                // --- END SHIELD EFFECT ---
+
+            } else {
+                 logAction(`P${unit.player} ${unit.type.name} healed 1 HP.`, activePlayer, 2500);
+            }
+        }
+    });
+}
 
         function logSiegeStatus() {
             const activePlayer = gameState.currentPlayer;
@@ -5274,7 +5514,7 @@ ui.endTurnButton.addEventListener('click', () => {
                 unit.turnsFortifiedAtBase++;
                 if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
                     logAction(`P${unit.player} ${unit.type.name} was destroyed for cowardice!`, gameState.currentPlayer);
-                    destroyUnit(unit, "cowardice");
+                    handleUnitDeath(unit, "cowardice");
                 }
             }
         }
