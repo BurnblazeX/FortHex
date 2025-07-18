@@ -1,3 +1,4 @@
+<!doctype html>
 <html lang="en"><head><script>(function() {
   const originalConsoleLog = console.log;
   const originalConsoleError = console.error;
@@ -39,7 +40,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FortHex</title>
-    <link rel="icon" href="data:image/svg+xml,<svg viewBox='0 0 225 225' xmlns='http://www.w3.org/2000/svg'><g transform='translate(0,225)scale(.075,.075)'><path fill='%23f1c40f' d='M929-2512c-294 169-547 315-562 325l-27 17 0 670 0 670 37 24c21 13 275 160 565 325 372 212 537 301 558 301 21 0 186-89 558-301 290-165 544-312 564-325l38-24 0-670 0-670-38-24c-20-13-274-160-564-325-404-231-535-301-560-300-24 0-177 82-569 307zm972 39l397 227-297 169c-163 93-319 182-347 198l-51 29-196-329c-108-182-198-335-199-342-2-10 273-179 292-179 3 0 183 102 401 227zm-506 503c158 267 393 661 521 877 129 216 237 398 239 405 4 9-39 39-126 88-72 41-133 74-136 73-4-2-251-423-528-903-172-297-495-852-510-875-12-20-6-25 113-93 70-39 130-68 133-64 3 4 136 225 294 492zm1143-137c9 7 12 35 10 94l-3 85-370 208c-203 115-370 208-371 207-12-13-134-225-134-232 0-5 168-105 373-222l372-211 55 31c30 16 61 35 68 40zm10 764l-3 447-135 78c-74 43-138 78-141 78-7 0-399-656-399-668 1-7 659-381 673-382 4 0 6 201 5 447zm-1281-22c35 61 62 113 61 117-2 5-170 102-373 217l-370 209-55-30c-83-47-80-42-80-129l0-78 368-210c202-115 371-209 376-207 5 1 38 51 73 111z'/></g></svg>">
+        <link rel="icon" href="data:image/svg+xml,<svg version='1.1' xmlns='http://www.w3.org/2000/svg' width='300' height='300'><path d='M0,0 L6,0 L31,13 L52,25 L80,41 L106,56 L119,64 L119,200 L104,209 L78,224 L55,237 L32,250 L10,262 L6,264 L0,264 L-23,252 L-46,239 L-74,223 L-100,208 L-113,200 L-113,64 L-91,51 L-65,36 L-37,20 L-10,5 Z ' fill='%23000000' transform='translate(147,18)'/><path d='M0,0 L4,2 L17,24 L29,44 L39,61 L54,86 L67,108 L83,135 L98,160 L107,175 L107,179 L92,188 L83,193 L80,192 L63,163 L49,139 L34,113 L20,89 L5,63 L-11,36 L-23,15 L-22,12 L-6,3 Z ' fill='%23F8BD28' transform='translate(108,54)'/><path d='M0,0 L6,2 L30,16 L55,30 L79,44 L79,47 L52,62 L28,76 L12,85 L9,82 L-8,53 L-17,38 L-28,19 L-27,16 L-6,3 Z ' fill='%2333485D' transform='translate(149,30)'/><path d='M0,0 L2,0 L2,90 L-9,96 L-25,105 L-27,105 L-43,78 L-55,58 L-66,39 L-62,35 L-34,19 L-16,9 L-6,3 Z ' fill='%232B3D4F' transform='translate(253,121)'/><path d='M0,0 L5,0 L16,7 L16,24 L6,30 L-21,45 L-42,57 L-56,65 L-60,64 L-70,47 L-72,42 L-54,31 L-33,19 L-12,7 Z ' fill='%23C13F3F' transform='translate(239,83)'/><path d='M0,0 L4,1 L14,17 L15,23 L0,32 L-26,47 L-44,57 L-58,65 L-68,60 L-72,56 L-72,41 L-59,33 L-34,19 L-11,6 Z ' fill='%233F3FC1' transform='translate(117,153)'/></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;700&family=Geostar&display=swap" rel="stylesheet">
     <style>
@@ -50,13 +51,73 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center; 
+            justify-content: center;
             min-height: 100vh;
             margin: 0;
             padding-top: 20px;
             padding-bottom: 100px;
             box-sizing: border-box; 
+            overflow-x: auto;
         }
+        #gameWrapper {
+            min-width: 1300px; /* Force a minimum width to ensure layout doesn't break */
+            transform-origin: top center; /* Scale from the top center */
+            transition: transform 0.2s ease-in-out; /* Smooth scaling transition */
+            padding-top: 60px; /* Add space at the top so it doesn't overlap the header icons */
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: #4a6075;
+            border-radius: 5px;
+            height: 10px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: 3px solid #ecf0f1;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: 3px solid #ecf0f1;
+        }
+
+        .settings-option:has(input:disabled) label,
+        .settings-option:has(input:disabled) span {
+            color: #7f8c8d;
+            cursor: not-allowed;
+        }
+        input[type="range"]:disabled {
+            background: #2c3e50;
+            cursor: not-allowed;
+        }
+        input[type="range"]:disabled::-webkit-slider-thumb {
+            background: #7f8c8d;
+            cursor: not-allowed;
+        }
+        input[type="range"]:disabled::-moz-range-thumb {
+            background: #7f8c8d;
+            cursor: not-allowed;
+        }
+
+        input[type="checkbox"]:disabled {
+            background: #4a6075;
+            border-color: #7f8c8d;
+            cursor: not-allowed;
+        }
+        input[type="checkbox"]:disabled::before {
+            box-shadow: inset 1em 1em #7f8c8d;
+        }
+
         h1.text-4xl {
              font-family: 'Geostar', cursive;
         }
@@ -78,6 +139,25 @@
     height: 20px;
     opacity: 0.9;
     transform-origin: center;
+}
+
+#connectionStatusContainer {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 2000;
+}
+
+#connectionStatusIcon {
+    /* Sets the transition target to the 'color' property */
+    transition: color 0.4s ease-in-out;
+}
+.status-online {
+    /* We now control the color using the standard CSS 'color' property */
+    color: #2ecc71; 
+}
+.status-offline {
+    color: #e74c3c; /* Bright Red */
 }
 
 #topLeftControlsContainer {
@@ -132,6 +212,62 @@
     font-size: 1.1em;
     margin: 0;
 }
+
+        .settings-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 12px 8px;
+            background-color: #2c3e50;
+            border-radius: 5px;
+            margin-bottom: 12px;
+            border: 1px solid #4a6075;
+        }
+
+        .settings-option label {
+            font-size: 1.1em;
+            color: #ecf0f1;
+            cursor: pointer;
+        }
+
+        .settings-option input[type="checkbox"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background-color: #4a6075;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.6em;
+            height: 1.6em;
+            border: 0.15em solid #7f8c8d;
+            border-radius: 0.25em;
+            transform: translateY(-0.075em);
+            display: grid;
+            place-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .settings-option input[type="checkbox"]::before {
+            content: "";
+            width: 0.85em;
+            height: 0.85em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em #f1c40f;
+            transform-origin: bottom left;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        .settings-option input[type="checkbox"]:checked {
+            background-color: #3498db;
+            border-color: #2980b9;
+        }
+
+        .settings-option input[type="checkbox"]:checked::before {
+            transform: scale(1);
+        }
 
         #gameLayoutContainer {
             display: flex;
@@ -209,6 +345,10 @@
             box-shadow: none;
             transform: translateY(3px);
         }
+
+        #settingsButton:hover:not(:disabled) {
+        background-color: #6c7a86;
+    }
 
         #generateMapButtonContainer {
             display: flex;
@@ -655,12 +795,14 @@
             font-weight: bold;
         }
         
-        #actionInfoContainer {
+         #actionInfoContainer {
             flex-grow: 1;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-height: 0;
         }
+        
         #actionLogContent {
             flex-grow: 1;
             overflow-y: auto;
@@ -846,10 +988,21 @@
 <body>
 <h1 class="text-4xl font-bold mb-6 text-center text-amber-400">FortHex</h1>
 
+<div id="connectionStatusContainer">       
+<svg id="connectionStatusIcon" fill="currentColor" height="34" width="34" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 494.45 494.45">
+        <g>
+            <path d="M395.225,277.325c-6.8,0-13.5-2.6-18.7-7.8c-71.4-71.3-187.4-71.3-258.8,0c-10.3,10.3-27.1,10.3-37.4,0 s-10.3-27.1,0-37.4c92-92,241.6-92,333.6,0c10.3,10.3,10.3,27.1,0,37.4C408.725,274.725,401.925,277.325,395.225,277.325z"/>
+            <path d="M323.625,348.825c-6.8,0-13.5-2.6-18.7-7.8c-15.4-15.4-36-23.9-57.8-23.9s-42.4,8.5-57.8,23.9 c-10.3,10.3-27.1,10.3-37.4,0c-10.3-10.3-10.3-27.1,0-37.4c25.4-25.4,59.2-39.4,95.2-39.4s69.8,14,95.2,39.5 c10.3,10.3,10.3,27.1,0,37.4C337.225,346.225,330.425,348.825,323.625,348.825z"/>
+            <circle cx="247.125" cy="398.925" r="35.3"/>
+            <path d="M467.925,204.625c-6.8,0-13.5-2.6-18.7-7.8c-111.5-111.4-292.7-111.4-404.1,0c-10.3,10.3-27.1,10.3-37.4,0 s-10.3-27.1,0-37.4c64-64,149-99.2,239.5-99.2s175.5,35.2,239.5,99.2c10.3,10.3,10.3,27.1,0,37.4 C481.425,202.025,474.625,204.625,467.925,204.625z"/>
+        </g>
+    </svg>
+</div>
+
 <!-- NEW MENU TRIGGER BUTTON -->
 <div id="topLeftControlsContainer">
     <a id="gameIconLink" title="Restart Game">
-        <svg version="1.0" width="30" height="30" viewBox="0 0 225 225" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <svg version="1.0" width="38" height="38" viewBox="0 0 225 225" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
             <g transform="translate(0,225)scale(.075,.075)">
                 <path fill="white" d="M 929 -2512 c -294 169 -547 315 -562 325 l -27 17 0 670 0 670 37 24 c 21 13 275 160 565 325 372 212 537 301 558 301 21 0 186 -89 558 -301 290 -165 544 -312 564 -325 l 38 -24 0 -670 0 -670 -38 -24 c -20 -13 -274 -160 -564 -325 -404 -231 -535 -301 -560 -300 -24 0 -177 82 -569 307 z m 972 39 l 397 227 -297 169 c -163 93 -319 182 -347 198 l -51 29 -196 -329 c -108 -182 -198 -335 -199 -342 -2 -10 273 -179 292 -179 3 0 183 102 401 227 z m -506 503 c 158 267 393 661 521 877 129 216 237 398 239 405 4 9 -39 39 -126 88 -72 41 -133 74 -136 73 -4 -2 -251 -423 -528 -903 -172 -297 -495 -852 -510 -875 -12 -20 -6 -25 113 -93 70 -39 130 -68 133 -64 3 4 136 225 294 492 z m 1143 -137 c 9 7 12 35 10 94 l -3 85 -370 208 c -203 115 -370 208 -371 207 -12 -13 -134 -225 -134 -232 0 -5 168 -105 373 -222 l 372 -211 55 31 c 30 16 61 35 68 40 z m 10 764 l -3 447 -135 78 c -74 43 -138 78 -141 78 -7 0 -399 -656 -399 -668 1 -7 659 -381 673 -382 4 0 6 201 5 447 z m -1281 -22 c 35 61 62 113 61 117 -2 5 -170 102 -373 217 l -370 209 -55 -30 c -83 -47 -80 -42 -80 -129 l 0 -78 368 -210 c 202 -115 371 -209 376 -207 5 1 38 51 73 111 z "></path>
             </g>
@@ -865,6 +1018,8 @@
 </a>
 </div>
 
+
+
 <!-- UNIFIED GAME MENU MODAL -->
 <div id="gameMenuModal" class="modal-overlay">
     <div class="modal-content">
@@ -874,6 +1029,13 @@
             <div class="menu-options-container">
                 <button id="singleplayerButton" class="action-button" >Singleplayer (WIP)</button>
                 <button id="multiplayerButton" class="action-button">Multiplayer</button>
+                <button id="settingsButton" class="action-button" style="background-color: #8e9eab; box-shadow: 0 3px #6c7a86; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    Settings
+                </button>
             </div>
         </div>
 
@@ -896,6 +1058,41 @@
             </div>
              <button id="backToMainMenuButtonMP" class="action-button action-button-cancel" style="margin-top: 25px;">Back</button>
         </div>
+    </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="settingsModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #f1c40f; margin-bottom: 25px;">Settings</h3>
+        <div id="settingsOptionsContainer">
+            <div class="settings-option">
+                <label for="settingFancyVisuals">Fancy Visuals</label>
+                <input type="checkbox" id="settingFancyVisuals" name="fancyVisuals" checked>
+            </div>
+            <div class="settings-option">
+                <label for="settingAnimations">Animations</label>
+                <input type="checkbox" id="settingAnimations" name="animations" checked>
+            </div>
+            <div class="settings-option">
+                <label for="settingPassTurnConfirmation">Pass Turn Confirmation</label>
+                <input type="checkbox" id="settingPassTurnConfirmation" name="passTurnConfirmation" checked>
+            </div>
+            <div class="settings-option">
+                <label for="settingTooltips">Tooltips</label>
+                <input type="checkbox" id="settingTooltips" name="tooltips" disabled>
+            </div>
+            <div class="settings-option" style="flex-direction: column; align-items: flex-start; padding-top: 15px; padding-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px;">
+                    <label for="settingUiScale">UI Scale</label>
+                    <span id="uiScaleValueLabel">100%</span>
+                </div>
+                <input type="range" id="settingUiScale" min="0.5" max="1.5" value="1" step="0.05" style="width: 100%;" disabled>
+            </div>
+
+    
+        </div>
+        <button id="settingsBackButton" class="action-button action-button-cancel" style="margin-top: 30px; width: 100%;">Back</button>
     </div>
 </div>
 
@@ -977,6 +1174,15 @@
         </svg>
         Load Game
     </button>
+</div>
+
+<div id="gameWrapper"> 
+    <div id="gameLayoutContainer">
+        <!-- ... (left panel, canvas, right panel) ... -->
+    </div>
+    <div id="generateMapButtonContainer">
+        <!-- ... (save, new map, load buttons) ... -->
+    </div>
 </div>
 
     <button id="tutorialButton" title="Game Tutorial">
@@ -1181,7 +1387,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B25";
+        const BUILD_VERSION = "B26";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1369,6 +1575,7 @@
             dragUnitRenderX: 0, dragUnitRenderY: 0,
             dragUnitOriginalPosition: null, dragUnitOriginalType: null,
             draggedDistance: 0,
+            dragStartTime: null,
             
             // Logical Game State
             currentActionState: ACTION_STATES.IDLE,
@@ -1389,7 +1596,41 @@
     lastDebugPathKey: null, 
     debugAttackRangeHighlights: [],
     visualEffects: [],
+    playerActionTaken: { player1: false, player2: false },
 };
+
+let gameSettings = {
+    animationsEnabled: true, //Enable/Disable All Animations
+    fancyVisualsEnabled: true, //Enable/Disable New Tile Textures
+    passTurnConfirmationEnabled: true, //Enable/Disable the Skip Turn Confirmation Modal
+    tooltipsEnabled: true, //Enable/Disable Tooltips
+    //uiScale: 1.0
+};
+
+const SETTINGS_STORAGE_KEY = 'forthex_user_settings';
+
+function saveSettings() {
+    try {
+        const settingsString = JSON.stringify(gameSettings);
+        localStorage.setItem(SETTINGS_STORAGE_KEY, settingsString);
+    } catch (error) {
+        console.error("Could not save settings:", error);
+    }
+}
+
+function loadSettings() {
+    try {
+        const savedSettingsString = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (savedSettingsString) {
+            const loadedSettings = JSON.parse(savedSettingsString);
+            // Merge loaded settings with defaults to handle new settings in future updates
+            gameSettings = Object.assign({}, gameSettings, loadedSettings);
+        }
+        // If no saved settings, the default gameSettings object is used.
+    } catch (error) {
+        console.error("Could not load settings:", error);
+    }
+}
 
         let currentConfirmAction = null;
 
@@ -1488,6 +1729,10 @@
             const projection = { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) };
             return distSq(p, projection);
         }
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function lerp(start, end, amount) {
     return start + (end - start) * amount;
@@ -1774,6 +2019,8 @@ if (tileLayoutMap) {
     isFortified: false, fortifiedTileKey: null, hasPerformedMajorAction: false,
     isCarryingFlag: false,
     turnsFortifiedAtBase: 0,
+    turnsFortified: 0,
+    fortifyCooldown: 0,
     canHeal: true,
     supplyLine: null,
     lastAttackedByHostileOnTurn: 0,
@@ -1814,15 +2061,154 @@ if (tileLayoutMap) {
             return false;
         }
 
+        function pointDistance(p1, p2) { return Math.sqrt(distSq(p1,p2)); }
+
         // --- Drawing Functions ---
-         function drawHexFill(q, r, fillColor) {
-            const { x, y } = axialToPixel(q, r); ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-                const angle = Math.PI / 180 * (60 * i - 30);
-                const vx = x + HEX_SIZE * Math.cos(angle); const vy = y + HEX_SIZE * Math.sin(angle);
-                if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+        function drawHexFill(q, r, tileType) {
+            const { x, y } = axialToPixel(q, r);
+
+            if (gameSettings.fancyVisualsEnabled) {
+                // --- FANCY VISUALS ON ---
+                if (tileType === TILE_TYPES.MOUNTAIN) {
+                    const mountainColors = [
+                        '#808080', '#707070', '#606060', '#707070', '#808080', '#A0A0A0'
+                    ];
+                    const vertices = [];
+                    for (let i = 0; i < 6; i++) {
+                        const angle = Math.PI / 180 * (60 * i - 30);
+                        vertices.push({ x: x + HEX_SIZE * Math.cos(angle), y: y + HEX_SIZE * Math.sin(angle) });
+                    }
+                    for (let i = 0; i < 6; i++) {
+                        const v1 = vertices[i];
+                        const v2 = vertices[(i + 1) % 6];
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(v1.x, v1.y);
+                        ctx.lineTo(v2.x, v2.y);
+                        ctx.closePath();
+                        ctx.fillStyle = mountainColors[i];
+                        ctx.fill();
+                    }
+                } else if (tileType === TILE_TYPES.FOREST) {
+                    const forestEdgeColors = [
+                        '#209020', '#207020', '#206020', '#207020', '#209020', '#209F20'
+                    ];
+                    const baseVertices = [];
+                    for (let i = 0; i < 6; i++) {
+                        const angle = Math.PI / 180 * (60 * i - 30);
+                        baseVertices.push({ x: x + HEX_SIZE * Math.cos(angle), y: y + HEX_SIZE * Math.sin(angle) });
+                    }
+                    for (let i = 0; i < 6; i++) {
+                        const v1 = baseVertices[i];
+                        const v2 = baseVertices[(i + 1) % 6];
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(v1.x, v1.y);
+                        ctx.lineTo(v2.x, v2.y);
+                        ctx.closePath();
+                        ctx.fillStyle = forestEdgeColors[i];
+                        ctx.fill();
+                    }
+                    const topHexSize = HEX_SIZE * 0.75;
+                    const topHexColor = '#208020';
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        const angle = Math.PI / 180 * (60 * i - 30);
+                        const vx = x + topHexSize * Math.cos(angle);
+                        const vy = y + topHexSize * Math.sin(angle);
+                        if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+                    }
+                    ctx.closePath();
+                    ctx.fillStyle = topHexColor;
+                    ctx.fill();
+                } else if (tileType === TILE_TYPES.WATER) {
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(-60 * Math.PI / 180);
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        const angle = Math.PI / 180 * (60 * i - 30);
+                        const vx = HEX_SIZE * Math.cos(angle);
+                        const vy = HEX_SIZE * Math.sin(angle);
+                        if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+                    }
+                    ctx.closePath();
+                    ctx.clip();
+                    const stripeColors = ['#60B0CF', '#6AC0D4', '#75D0DA', '#80E0E0'];
+                    const stripeCount = 4;
+                    const hexTotalWidth = HEX_SIZE * Math.sqrt(3);
+                    const stripeWidth = hexTotalWidth / stripeCount;
+                    const startX = -(hexTotalWidth / 2);
+                    for (let i = 0; i < stripeCount; i++) {
+                        ctx.fillStyle = stripeColors[i];
+                        const stripeX = startX + (i * stripeWidth);
+                        ctx.fillRect(stripeX, -HEX_SIZE, stripeWidth + 1, HEX_SIZE * 2);
+                    }
+                    ctx.restore();
+                } else if (tileType === TILE_TYPES.PLAINS) {
+                    // --- NEW: Logic for concentric Plains hexagons ---
+                    const plainsColors = ['#70E070', '#7AE07A', '#85E085', '#90E090']; // 25, 26, 27, 28
+                    const plainsSizeMultipliers = [1.0, 0.75, 0.50, 0.25]; // 100%, 75%, 50%, 25%
+
+                    // Loop from largest to smallest to draw them on top of each other
+                    for (let i = 0; i < plainsSizeMultipliers.length; i++) {
+                        const currentSize = HEX_SIZE * plainsSizeMultipliers[i];
+                        ctx.fillStyle = plainsColors[i];
+                        
+                        ctx.beginPath();
+                        for (let j = 0; j < 6; j++) {
+                            const angle = Math.PI / 180 * (60 * j - 30);
+                            const vx = x + currentSize * Math.cos(angle);
+                            const vy = y + currentSize * Math.sin(angle);
+                            if (j === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+
+                } else { 
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        const angle = Math.PI / 180 * (60 * i - 30);
+                        const vx = x + HEX_SIZE * Math.cos(angle); 
+                        const vy = y + HEX_SIZE * Math.sin(angle);
+                        if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+                    }
+                    ctx.closePath(); 
+                    ctx.fillStyle = tileType.color;
+                    ctx.fill();
+                }
+            } else {
+                // --- FANCY VISUALS OFF (SIMPLE SOLID COLORS) ---
+                let fallbackColor;
+                switch (tileType) {
+                    case TILE_TYPES.MOUNTAIN:
+                        fallbackColor = '#808080';
+                        break;
+                    case TILE_TYPES.FOREST:
+                        fallbackColor = '#208020';
+                        break;
+                    case TILE_TYPES.WATER:
+                        fallbackColor = '#80E0E0';
+                        break;
+                    case TILE_TYPES.PLAINS:
+                        fallbackColor = '#90E090';
+                        break;
+                    default:
+                        fallbackColor = tileType.color;
+                }
+                
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = Math.PI / 180 * (60 * i - 30);
+                    const vx = x + HEX_SIZE * Math.cos(angle); 
+                    const vy = y + HEX_SIZE * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+                }
+                ctx.closePath(); 
+                ctx.fillStyle = fallbackColor;
+                ctx.fill();
             }
-            ctx.closePath(); ctx.fillStyle = fillColor; ctx.fill();
         }
 
         function drawHexEdgesAndBoundaries() {
@@ -1832,7 +2218,7 @@ if (tileLayoutMap) {
                 const tileB = gameState.tiles.get(getTileKey(edge.q2, edge.r2));
                 if (!tileA || !tileB) return;
                 const typeA = tileA.type; const typeB = tileB.type; let edgeStrokeColor;
-                const landEdgeColor = '#A0522D'; const beachEdgeColor = '#F0E68C'; const waterEdgeColor = '#4682B4';
+                const landEdgeColor = '#A05030'; const beachEdgeColor = '#F0E090'; const waterEdgeColor = '#4080C0';
                 if (isLand(typeA) && isLand(typeB)) edgeStrokeColor = landEdgeColor;
                 else if ((isLand(typeA) && typeB === TILE_TYPES.WATER) || (typeA === TILE_TYPES.WATER && isLand(typeB))) edgeStrokeColor = beachEdgeColor;
                 else if (typeA === TILE_TYPES.WATER && typeB === TILE_TYPES.WATER) edgeStrokeColor = waterEdgeColor;
@@ -2057,6 +2443,8 @@ if (tileLayoutMap) {
                         }
                     });
                     break;
+                
+
             }
         }
 
@@ -2487,8 +2875,31 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
                 const unit = gameState.draggingUnit;
                 const unitX = gameState.dragUnitRenderX;
                 const unitY = gameState.dragUnitRenderY;
-                const radius = (unit.isFortified ? FORTIFIED_UNIT_DRAW_SIZE : UNIT_DRAW_SIZE_ON_EDGE) * DRAG_SCALE_FACTOR;
-                drawSingleUnit(ctx, unit, unitX, unitY, radius);
+                const fullRadius = (unit.isFortified ? FORTIFIED_UNIT_DRAW_SIZE : UNIT_DRAW_SIZE_ON_EDGE) * DRAG_SCALE_FACTOR;
+
+                if (gameSettings.fancyVisualsEnabled) {
+                    // --- FANCY VISUALS ON: Draw the shadow first ---
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                    ctx.shadowBlur = 25;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    
+                    const shadowCasterRadius = fullRadius * 0.8;
+                    ctx.beginPath();
+                    ctx.arc(unitX, unitY, shadowCasterRadius, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#000';
+                    ctx.fill();
+
+                    // Reset shadow properties before drawing the main unit
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+
+                    // Then draw the unit on top
+                    drawSingleUnit(ctx, unit, unitX, unitY, fullRadius);
+                } else {
+                    // --- FANCY VISUALS OFF: Just draw the unit, no shadow ---
+                    drawSingleUnit(ctx, unit, unitX, unitY, fullRadius);
+                }
             }
         }
 
@@ -2801,12 +3212,9 @@ function drawVisualEffects() {
             if (!unit) return;
 
             let isVisible = false;
-            // Use the new flashCount property to determine timing
             if (effect.flashCount === 2) {
-                // Two quick flashes
                 isVisible = (progress >= 0 && progress < 0.15) || (progress >= 0.25 && progress < 0.40);
             } else {
-                // A single, slightly longer flash
                 isVisible = (progress >= 0 && progress < 0.40);
             }
 
@@ -2843,12 +3251,55 @@ function drawVisualEffects() {
                 }
                 
                 if (unitX !== undefined) {
-                    // Use the color passed in from the effect object
                     ctx.fillStyle = effect.color;
                     ctx.beginPath();
                     ctx.arc(unitX, unitY, unitRadius, 0, 2 * Math.PI);
                     ctx.fill();
                 }
+            }
+        } else if (effect.type === 'flag_capture_burst') {
+            const easedProgress = 1 - Math.pow(1 - progress, 3); // A strong ease-out for the expansion
+
+            // The maximum length the line will grow to, using your adjusted factor.
+            const maxLineLength = HEX_SIZE * 0.4; 
+            
+            // The line's length at the current moment in the animation.
+            const currentLineLength = maxLineLength * easedProgress;
+
+            // Overall effect opacity (fades out the whole effect over time).
+            const globalOpacity = 1.0 - progress;
+
+            const baseColor = effect.player === 1 ? `rgb(91, 148, 255)` : `rgb(231, 76, 60)`;
+            
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i; 
+                
+                // --- THE FIX: Anchor the start and only animate the end ---
+
+                // The START of the line is now FIXED at the unit's border.
+                const startRadius = UNIT_DRAW_SIZE_ON_EDGE * 1.1;
+                const startX = effect.x + Math.cos(angle) * startRadius;
+                const startY = effect.y + Math.sin(angle) * startRadius;
+                
+                // The END of the line moves outwards from the start point.
+                const endX = startX + Math.cos(angle) * currentLineLength;
+                const endY = startY + Math.sin(angle) * currentLineLength;
+                // --- END OF FIX ---
+
+                // The gradient should fade from opaque at the base to transparent at the tip.
+                const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
+                gradient.addColorStop(0, baseColor.replace(')', `, ${globalOpacity})`).replace('rgb', 'rgba'));
+                gradient.addColorStop(1, baseColor.replace(')', `, 0)`).replace('rgb', 'rgba'));
+
+                ctx.strokeStyle = gradient;
+
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
             }
         }
     });
@@ -3085,7 +3536,7 @@ function drawAnimations() {
 
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            gameState.tiles.forEach(tile => drawHexFill(tile.q, tile.r, tile.type.color));
+            gameState.tiles.forEach(tile => drawHexFill(tile.q, tile.r, tile.type));
             drawHexEdgesAndBoundaries();
             drawFortificationOutlines();
             drawContestedEdgeIndicator();
@@ -3353,16 +3804,6 @@ drawVisualEffects();
         }
 
 function handleUnitDeath(unitToDie, reason = "destroyed") {
-    // Check if the unit is still in the game's master list.
-    // This is the most reliable way to prevent errors from destroying the same unit twice.
-    const unitExists = gameState.units.some(u => u.id === unitToDie.id);
-    if (!unitExists) {
-        return; // Already destroyed in this action.
-    }
-
-    // Immediately call destroyUnit, no animation.
-    destroyUnit(unitToDie, reason);
-}function handleUnitDeath(unitToDie, reason = "destroyed") {
     // Check if the unit is still in the game's master list.
     // This is the most reliable way to prevent errors from destroying the same unit twice.
     const unitExists = gameState.units.some(u => u.id === unitToDie.id);
@@ -3808,9 +4249,8 @@ function getPotentialUnfortifyTargets(unit) {
      return validTargets;
 }
 
-function completeFortify(targetTileKeyToFortify) {
-    const { selectedUnit } = gameState;
-     if (!selectedUnit || selectedUnit.hasPerformedMajorAction || selectedUnit.isFortified) { showInstruction("Cannot fortify now.", 2000); return; }
+function completeFortify(unitToFortify, targetTileKeyToFortify) {
+    if (!unitToFortify || unitToFortify.hasPerformedMajorAction || unitToFortify.isFortified) { showInstruction("Cannot fortify now.", 2000); return; }
     const targetTileObject = gameState.tiles.get(targetTileKeyToFortify);
     if (!targetTileObject || !targetTileObject.type.canFortify) { showInstruction("Invalid tile to fortify.", 2000); return; }
     if (targetTileObject.fortifiedByPlayer !== null) {
@@ -3819,31 +4259,34 @@ function completeFortify(targetTileKeyToFortify) {
         updateSelectedUnitInfoPanel(); return;
     }
     
-    // Create the animation object
     const animation = {
         type: 'fortify',
-        unit: selectedUnit,
+        unit: unitToFortify,
         targetTileKey: targetTileKeyToFortify,
         startTime: Date.now(),
         duration: 450,
 
-        onComplete: () => {
-            // All the original logic now happens AFTER the animation
-            const fortifyingPlayer = selectedUnit.player;
+        onComplete: async () => {
+            gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
+            const fortifyingPlayer = unitToFortify.player;
             
-            const currentEdge = gameState.edges.get(selectedUnit.position);
-            if (currentEdge) currentEdge.units = currentEdge.units.filter(u => u.id !== selectedUnit.id);
-            selectedUnit.isFortified = true; selectedUnit.fortifiedTileKey = targetTileKeyToFortify;
-            selectedUnit.positionType = 'center'; selectedUnit.position = targetTileKeyToFortify;
-            selectedUnit.currentMove = 0; selectedUnit.hasPerformedMajorAction = true;
+            const currentEdge = gameState.edges.get(unitToFortify.position);
+            if (currentEdge) currentEdge.units = currentEdge.units.filter(u => u.id !== unitToFortify.id);
+            unitToFortify.isFortified = true; unitToFortify.fortifiedTileKey = targetTileKeyToFortify;
+            unitToFortify.positionType = 'center'; unitToFortify.position = targetTileKeyToFortify;
+            unitToFortify.currentMove = 0; unitToFortify.hasPerformedMajorAction = true;
             targetTileObject.fortifiedByPlayer = fortifyingPlayer;
-            logAction(`${selectedUnit.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
+            logAction(`${unitToFortify.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
 
             const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
             if (playerFlag && playerFlag.status !== 'carried') {
-                fundNewFortification(selectedUnit);
+                // --- THIS IS THE FIX ---
+                // Instead of funding one fort, recalculate the entire player's network
+                // to account for shared supply lines.
+                recalculatePlayerSupplyNetwork(fortifyingPlayer);
+                // --- END OF FIX ---
             } else {
-                logAction(`P${fortifyingPlayer} ${selectedUnit.type.name} fortified, but is unsupplied due to stolen flag.`, fortifyingPlayer, 3000);
+                logAction(`P${unitToFortify.player} ${unitToFortify.type.name} fortified, but is unsupplied due to stolen flag.`, fortifyingPlayer, 3000);
             }
 
             let unitsToDestroy = [];
@@ -3860,7 +4303,7 @@ function completeFortify(targetTileKeyToFortify) {
                      });
                  }
              });
-            unitsToDestroy.forEach(u => handleUnitDeath(u, "fort_zoc"));
+            unitsToDestroy.forEach(u => handleUnitDeath(u, "zoc_fort"));
 
             gameState.currentReachableMoves.clear();
             resetActionSelectionStates();
@@ -3869,42 +4312,46 @@ function completeFortify(targetTileKeyToFortify) {
         }
     };
     
-    // Push the animation to the queue
-    gameState.activeAnimations.push(animation);
+    if (gameSettings.animationsEnabled) {
+        gameState.activeAnimations.push(animation);
+    } else {
+        animation.onComplete();
+    }
+    
     resetActionSelectionStates(); 
     updateSelectedUnitInfoPanel();
 }
 
-function handleFortifyActionLogic() {
-    const { selectedUnit } = gameState;
-     if (!selectedUnit || selectedUnit.hasPerformedMajorAction || selectedUnit.isFortified || selectedUnit.positionType !== 'edge') { showInstruction("Cannot fortify.", 2000); return; }
-    const edgeCoords = parseEdgeKey(selectedUnit.position);
-     if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { showInstruction("Unit not on valid edge.", 2000); return; }
+        function handleFortifyActionLogic() {
+            const { selectedUnit } = gameState;
+             if (!selectedUnit || selectedUnit.hasPerformedMajorAction || selectedUnit.isFortified || selectedUnit.positionType !== 'edge') { showInstruction("Cannot fortify.", 2000); return; }
+            const edgeCoords = parseEdgeKey(selectedUnit.position);
+             if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { showInstruction("Unit not on valid edge.", 2000); return; }
 
-    // Define the enemy player's base tiles
-    const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
-    const enemyBaseEdgeKey = FLAG_HOME_POSITIONS[`player${enemyPlayer}`];
-    const [enemy_h1, enemy_h2] = parseEdgeKey(enemyBaseEdgeKey);
-    const enemyBaseTileKeys = new Set([getTileKey(enemy_h1.q, enemy_h1.r), getTileKey(enemy_h2.q, enemy_h2.r)]);
+            const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
+            const enemyBaseEdgeKey = FLAG_HOME_POSITIONS[`player${enemyPlayer}`];
+            const [enemy_h1, enemy_h2] = parseEdgeKey(enemyBaseEdgeKey);
+            const enemyBaseTileKeys = new Set([getTileKey(enemy_h1.q, enemy_h1.r), getTileKey(enemy_h2.q, enemy_h2.r)]);
 
-    const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); 
-    const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
-    const tile1 = gameState.tiles.get(tile1Key); 
-    const tile2 = gameState.tiles.get(tile2Key);
-    
-    gameState.validFortifyTargetTileKeys = [];
-    // Check Tile 1
-    if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key)) {
-        gameState.validFortifyTargetTileKeys.push(tile1Key);
-    }
-    // Check Tile 2
-    if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key)) {
-        gameState.validFortifyTargetTileKeys.push(tile2Key);
-    }
+            const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); 
+            const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
+            const tile1 = gameState.tiles.get(tile1Key); 
+            const tile2 = gameState.tiles.get(tile2Key);
+            
+            gameState.validFortifyTargetTileKeys = [];
+            if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key)) {
+                gameState.validFortifyTargetTileKeys.push(tile1Key);
+            }
+            if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key)) {
+                gameState.validFortifyTargetTileKeys.push(tile2Key);
+            }
 
-    if (gameState.validFortifyTargetTileKeys.length === 0) { showInstruction("No valid adjacent tile.", 2000); return; }
+            if (gameState.validFortifyTargetTileKeys.length === 0) { showInstruction("No valid adjacent tile to fortify.", 2000); return; }
+            
             if (gameState.validFortifyTargetTileKeys.length === 1) {
-                completeFortify(gameState.validFortifyTargetTileKeys[0]);
+                // --- THIS IS THE FIX ---
+                // We now pass both the selected unit and the target tile key, as required.
+                completeFortify(selectedUnit, gameState.validFortifyTargetTileKeys[0]);
             } else { 
                 gameState.currentActionState = ACTION_STATES.SELECTING_FORTIFY_TILE;
                 showInstruction("Select tile to fortify.", 3000); 
@@ -3912,51 +4359,55 @@ function handleFortifyActionLogic() {
             updateSelectedUnitInfoPanel();
         }
 
-function completeUnfortify(targetEdgeKey) {
-    const { selectedUnit } = gameState;
-    if (!selectedUnit || !selectedUnit.isFortified || selectedUnit.hasPerformedMajorAction) {
+function completeUnfortify(unitToUnfortify, targetEdgeKey) {
+    if (!unitToUnfortify || !unitToUnfortify.isFortified || unitToUnfortify.hasPerformedMajorAction) {
         showInstruction("Cannot unfortify now.", 2000); 
         return; 
     }
-    const targetEdge = gameState.edges.get(targetEdgeKey); if (!targetEdge) { showInstruction("Invalid target edge.", 2000); return; }
-    if (targetEdge.units.some(u => u.player !== selectedUnit.player) || targetEdge.units.filter(u => u.player === selectedUnit.player).length >= 2) {
+    const targetEdge = gameState.edges.get(targetEdgeKey); 
+    if (!targetEdge) { 
+        showInstruction("Invalid target edge.", 2000); 
+        return; 
+    }
+    if (targetEdge.units.some(u => u.player !== unitToUnfortify.player) || targetEdge.units.filter(u => u.player === unitToUnfortify.player).length >= 2) {
          showInstruction("Target edge blocked.", 2000); 
          resetActionSelectionStates();
          updateSelectedUnitInfoPanel(); 
          return;
     }
 
-    const startTileKey = selectedUnit.position;
+    const startTileKey = unitToUnfortify.position;
     const oldFortifiedTile = gameState.tiles.get(startTileKey);
     
-    // --- IMPORTANT: Update tile state immediately to make border disappear ---
     if (oldFortifiedTile) {
         oldFortifiedTile.fortifiedByPlayer = null;
     }
-    selectedUnit.supplyLine = null;
+    unitToUnfortify.supplyLine = null;
 
     const animation = {
         type: 'unfortify',
-        unit: selectedUnit,
+        unit: unitToUnfortify,
         startTileKey: startTileKey,
         targetEdgeKey: targetEdgeKey,
         startTime: Date.now(),
-        duration: 600, // Longer duration for a 2-phase animation
+        duration: 600,
 
-        onComplete: () => {
-            // This logic now runs AFTER the animation is complete
-            const unfortifyingPlayer = selectedUnit.player;
+        onComplete: async () => {
+            const unfortifyingPlayer = unitToUnfortify.player;
+            
+            unitToUnfortify.fortifyCooldown = unitToUnfortify.turnsFortified * 5; 
 
-            selectedUnit.isFortified = false;
-            selectedUnit.turnsFortifiedAtBase = 0;
-            selectedUnit.supplyLine = null;
-            selectedUnit.fortifiedTileKey = null;
-            selectedUnit.positionType = 'edge'; 
-            selectedUnit.position = targetEdgeKey;
-            selectedUnit.currentMove = 0; 
-            selectedUnit.hasPerformedMajorAction = true;
-            targetEdge.units.push(selectedUnit);
-            logAction(`${selectedUnit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, unfortifyingPlayer, 2500);
+            unitToUnfortify.isFortified = false;
+            unitToUnfortify.turnsFortifiedAtBase = 0;
+            unitToUnfortify.turnsFortified = 0;      
+            unitToUnfortify.supplyLine = null;
+            unitToUnfortify.fortifiedTileKey = null;
+            unitToUnfortify.positionType = 'edge'; 
+            unitToUnfortify.position = targetEdgeKey;
+            unitToUnfortify.currentMove = 0; 
+            unitToUnfortify.hasPerformedMajorAction = true;
+            targetEdge.units.push(unitToUnfortify);
+            logAction(`${unitToUnfortify.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, unfortifyingPlayer, 2500);
             
             recalculatePlayerSupplyNetwork(unfortifyingPlayer);
 
@@ -3965,7 +4416,12 @@ function completeUnfortify(targetEdgeKey) {
         }
     };
 
-    gameState.activeAnimations.push(animation);
+    if (gameSettings.animationsEnabled) {
+        gameState.activeAnimations.push(animation);
+    } else {
+        animation.onComplete();
+    }
+    
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 }
@@ -4069,10 +4525,9 @@ function completeBuildBridge(targetEdgeKey) {
         unit: selectedUnit,
         targetEdgeKey: targetEdgeKey,
         startTime: Date.now(),
-        duration: 500, // A longer animation for a complex build process
+        duration: 500,
 
         onComplete: () => {
-            // Logic that runs AFTER the animation is complete
             edgeToBridge.bridge = true; 
             edgeToBridge.bridgeHp = BRIDGE_MAX_HP;
             selectedUnit.currentMove = 0; 
@@ -4083,7 +4538,12 @@ function completeBuildBridge(targetEdgeKey) {
         }
     };
     
-    gameState.activeAnimations.push(animation);
+    if (gameSettings.animationsEnabled) {
+        gameState.activeAnimations.push(animation);
+    } else {
+        animation.onComplete();
+    }
+    
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 }
@@ -4512,7 +4972,6 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         updateSelectedUnitInfoPanel(); return;
     }
     
-    // Phase 1: Calculate outcome (Unchanged)
     let damageModifier = 0;
     let advantageMessage = "";
     let baseDamage = attackingUnit.type.attack;
@@ -4543,13 +5002,13 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         attackStatus = 'disadvantage';
     }
 
-    // Phase 2: Create a generic animation object
     const animation = {
         attacker: attackingUnit,
         targetInfo: targetUnitInfo,
         startTime: Date.now(),
-        onComplete: () => {
-            // ... (The entire onComplete function remains exactly the same as before)
+        
+        onComplete: async () => {
+            gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
             attackingUnit.hasPerformedMajorAction = true;
             let hitAndRunMessage = "";
             if (attackingUnit.type.canMoveAfterAttack) {
@@ -4629,7 +5088,7 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                         logParts.push(`Damage split between 2 units!`);
                         allEnemyUnitsOnEdge.forEach(unitToHit => {
                             unitToHit.hp -= splitDamage;
-                            triggerDamageVisual(unitToHit, attackStatus); // Trigger effect for second unit
+                            triggerDamageVisual(unitToHit, attackStatus);
                             logParts.push(`P${unitToHit.player} ${unitToHit.type.name} takes ${splitDamage} damage. HP: ${unitToHit.hp}`);
                             if (attackingUnit.player !== unitToHit.player) unitToHit.lastAttackedByHostileOnTurn = gameState.globalTurnNumber;
                             if (unitToHit.hp <= 0) handleUnitDeath(unitToHit);
@@ -4667,60 +5126,63 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         }
     };
     
-    // --- Phase 4: Push the correct animation to the queue ---
-    if (attackingUnit.type.attackType === 'melee') {
-        animation.type = 'attack_lunge';
-        animation.duration = 250;
-        animation.target = targetUnitInfo.unit; // Melee always has one target
-        gameState.activeAnimations.push(animation);
-    } else if (attackingUnit.type.attackType === 'ranged') {
-        let targets = [];
-        let maxDistance = 0;
-
-        // Check for split damage scenario
-        const edgeOfTarget = targetUnitInfo.edgeKey ? gameState.edges.get(targetUnitInfo.edgeKey) : null;
-        const enemyUnitsOnEdge = edgeOfTarget ? edgeOfTarget.units.filter(u => u.player !== attackingUnit.player) : [];
-
-        if (edgeOfTarget && enemyUnitsOnEdge.length === 2 && !targetUnitInfo.unit.isFortified) {
-            targets = enemyUnitsOnEdge;
-        } else {
-            targets.push(targetUnitInfo.unit);
-        }
-        
-        animation.targets = targets; // Use a 'targets' array
-
-        const startPos = getUnitScreenPosition(attackingUnit);
-        if (startPos) {
-            targets.forEach(t => {
-                const targetPos = getUnitScreenPosition(t);
-                if (targetPos) {
-                    const distance = pointDistance(startPos, targetPos);
-                    if (distance > maxDistance) maxDistance = distance;
-                }
-            });
-        }
-        
-        if (maxDistance > 0) {
-            const preShotDrawDuration = 150;
-            const preShotHoldDuration = 250;
-            const travelDuration = maxDistance / PROJECTILE_SPEED_PIXELS_PER_MS;
-            
-            animation.type = 'attack_projectile';
-            animation.duration = preShotDrawDuration + preShotHoldDuration + travelDuration;
-            animation.preShotDuration = { draw: preShotDrawDuration, hold: preShotHoldDuration };
-            animation.travelDuration = travelDuration;
-            
+    if (gameSettings.animationsEnabled) {
+        if (attackingUnit.type.attackType === 'melee') {
+            animation.type = 'attack_lunge';
+            animation.duration = 250;
+            animation.target = targetUnitInfo.unit;
             gameState.activeAnimations.push(animation);
+        } else if (attackingUnit.type.attackType === 'ranged') {
+            let targets = [];
+            let maxDistance = 0;
+
+            const edgeOfTarget = targetUnitInfo.edgeKey ? gameState.edges.get(targetUnitInfo.edgeKey) : null;
+            const enemyUnitsOnEdge = edgeOfTarget ? edgeOfTarget.units.filter(u => u.player !== attackingUnit.player) : [];
+
+            if (edgeOfTarget && enemyUnitsOnEdge.length === 2 && !targetUnitInfo.unit.isFortified) {
+                targets = enemyUnitsOnEdge;
+            } else {
+                targets.push(targetUnitInfo.unit);
+            }
+            
+            animation.targets = targets;
+
+            const startPos = getUnitScreenPosition(attackingUnit);
+            if (startPos) {
+                targets.forEach(t => {
+                    const targetPos = getUnitScreenPosition(t);
+                    if (targetPos) {
+                        const distance = pointDistance(startPos, targetPos);
+                        if (distance > maxDistance) maxDistance = distance;
+                    }
+                });
+            }
+            
+            if (maxDistance > 0) {
+                const preShotDrawDuration = 150;
+                const preShotHoldDuration = 250;
+                const travelDuration = maxDistance / PROJECTILE_SPEED_PIXELS_PER_MS;
+                
+                animation.type = 'attack_projectile';
+                animation.duration = preShotDrawDuration + preShotHoldDuration + travelDuration;
+                animation.preShotDuration = { draw: preShotDrawDuration, hold: preShotHoldDuration };
+                animation.travelDuration = travelDuration;
+                
+                gameState.activeAnimations.push(animation);
+            } else {
+                 animation.onComplete();
+            }
         } else {
-             animation.onComplete();
+            animation.onComplete();
         }
     } else {
+        // Animations are disabled, so execute the result immediately.
         animation.onComplete();
     }
     
     resetActionSelectionStates(); 
     updateSelectedUnitInfoPanel();
-}
+}                                                                    
 
         function handleUnitSelectionClick(x, y) {
             let clickedOnUnit = null;
@@ -4799,6 +5261,7 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
 
     
 function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
+    gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
     // --- PRE-MOVE: Remove unit from old position ---
     if (unitToMove.positionType === 'edge') {
         const oldEdge = gameState.edges.get(unitToMove.position);
@@ -4815,13 +5278,38 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
     finalTargetEdgeData.units.push(unitToMove);
     clearDebugPath();
 
-    // --- CHECK FOR VICTORY IMMEDIATELY ---
-    // If the move resulted in a win, stop everything else.
+    // --- FLAG CAPTURE LOGIC & EFFECT TRIGGER ---
+    const enemyFlag = unitToMove.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+    if (enemyFlag.status === 'at_base' && targetEdgeKey === enemyFlag.homePosition) {
+        enemyFlag.status = 'carried';
+        enemyFlag.carrierId = unitToMove.id;
+        unitToMove.isCarryingFlag = true;
+        unitToMove.currentMove = 0;
+        logAction(`P${unitToMove.player} ${unitToMove.type.name} has picked up the flag!`, gameState.currentPlayer);
+        updateAllHealingStatus();
+        severSupplyLinesForPlayer(enemyFlag.player);
+
+        // --- CREATE THE STARBURST EFFECT ---
+        const unitPos = getUnitScreenPosition(unitToMove);
+        if (unitPos) {
+            gameState.visualEffects.push({
+                type: 'flag_capture_burst',
+                x: unitPos.x,
+                y: unitPos.y,
+                // --- FIX #2 & #3: Use the OPPOSING player's color and add a delay ---
+                player: enemyFlag.player, // Color of the flag being stolen
+                startTime: Date.now(),
+                duration: 500 // Shorter duration for a snappier effect
+            });
+        }
+        // --- END OF EFFECT CREATION ---
+    }
+    
+    // --- CHECK FOR VICTORY & POST-MOVE LOGIC ---
     if (checkVictoryCondition()) {
-        return; // Halt execution to prevent duplication and further actions.
+        return; 
     }
 
-    // --- POST-MOVE LOGIC (only runs if game is not over) ---
     const unitDestroyedByZoC = applyFortificationDamageOnMove(unitToMove, targetEdgeKey);
     
     if (!unitDestroyedByZoC && unitToMove.hp > 0) {
@@ -4835,18 +5323,6 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
         }
     } else {
          gameState.currentReachableMoves.clear();
-    }
-    
-    // Flag capture logic (picking up the flag)
-    const enemyFlag = unitToMove.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
-    if (enemyFlag.status === 'at_base' && targetEdgeKey === enemyFlag.homePosition) {
-        enemyFlag.status = 'carried';
-        enemyFlag.carrierId = unitToMove.id;
-        unitToMove.isCarryingFlag = true;
-        unitToMove.currentMove = 0;
-        logAction(`P${unitToMove.player} ${unitToMove.type.name} has picked up the flag!`, gameState.currentPlayer);
-        updateAllHealingStatus();
-        severSupplyLinesForPlayer(enemyFlag.player);
     }
 
     updateSelectedUnitInfoPanel();
@@ -4879,120 +5355,120 @@ function handleMoveClick(x, y) {
              return false;
         }
 
-        function handleActionTargetSelectionClick(x, y) {
-            const { selectedUnit, currentActionState } = gameState;
-            if (!selectedUnit) return false;
+function handleActionTargetSelectionClick(x, y) {
+    const { selectedUnit, currentActionState } = gameState;
+    if (!selectedUnit) return false;
 
-            let clickHandled = true;
-            let clickedValidTarget = false;
+    let clickHandled = true;
+    let clickedValidTarget = false;
 
-            switch (currentActionState) {
-                case ACTION_STATES.SELECTING_FORTIFY_TILE:
-                    const clickedAxial = pixelToAxial(x, y);
-                    const clickedTileKey = getTileKey(clickedAxial.q, clickedAxial.r);
-                    if (gameState.validFortifyTargetTileKeys.includes(clickedTileKey)) {
-                        completeFortify(clickedTileKey);
+    switch (currentActionState) {
+        case ACTION_STATES.SELECTING_FORTIFY_TILE:
+            const clickedAxial = pixelToAxial(x, y);
+            const clickedTileKey = getTileKey(clickedAxial.q, clickedAxial.r);
+            if (gameState.validFortifyTargetTileKeys.includes(clickedTileKey)) {
+                completeFortify(selectedUnit, clickedTileKey);
+                clickedValidTarget = true;
+            }
+            break;
+
+        case ACTION_STATES.SELECTING_UNFORTIFY_EDGE:
+            for (const edgeKey of gameState.validUnfortifyTargetEdgeKeys) {
+                const edge = gameState.edges.get(edgeKey);
+                if (edge) {
+                    const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                    if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < HIGHLIGHT_CLICK_RADIUS) {
+                        completeUnfortify(selectedUnit, edgeKey);
                         clickedValidTarget = true;
+                        break;
                     }
-                    break;
+                }
+            }
+            break;
 
-                case ACTION_STATES.SELECTING_UNFORTIFY_EDGE:
-                    for (const edgeKey of gameState.validUnfortifyTargetEdgeKeys) {
-                        const edge = gameState.edges.get(edgeKey);
-                        if (edge) {
-                            const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                            if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < HIGHLIGHT_CLICK_RADIUS) {
-                                completeUnfortify(edgeKey);
+        case ACTION_STATES.SELECTING_BRIDGE_EDGE:
+            for (const edgeKey of gameState.validBridgeTargetEdgeKeys) {
+                const edge = gameState.edges.get(edgeKey);
+                if (edge) {
+                    const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                    if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < HIGHLIGHT_CLICK_RADIUS) {
+                        completeBuildBridge(edgeKey);
+                        clickedValidTarget = true;
+                        break;
+                    }
+                }
+            }
+            break;
+        
+        case ACTION_STATES.SELECTING_ATTACK_TARGET:
+            const currentAttackTargets = selectedUnit.type.attackType === 'melee' 
+                ? gameState.validMeleeAttackTargets 
+                : gameState.validArcherAttackTargets;
+            const attackType = selectedUnit.type.attackType === 'melee' ? 'Melee' : 'Archer';
+
+            for (const targetInfo of currentAttackTargets) {
+                if (targetInfo.isBridgeTarget && targetInfo.edgeKey) {
+                    const edge = gameState.edges.get(targetInfo.edgeKey);
+                    if (edge && edge.bridge) {
+                        const p = { x, y };
+                        const p1_center = axialToPixel(edge.q1, edge.r1); const p2_center = axialToPixel(edge.q2, edge.r2);
+                        const edgeMidX = (p1_center.x + p2_center.x) / 2; const edgeMidY = (p1_center.y + p2_center.y) / 2;
+                        let perp_dx = -(p2_center.y - p1_center.y); let perp_dy = p2_center.x - p1_center.x;
+                        const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
+
+                        if (len_perp_vec > 0) {
+                            const scale = HEX_SIZE / 2;
+                            perp_dx = (perp_dx / len_perp_vec) * scale;
+                            perp_dy = (perp_dy / len_perp_vec) * scale;
+                            const v = { x: edgeMidX + perp_dx, y: edgeMidY + perp_dy };
+                            const w = { x: edgeMidX - perp_dx, y: edgeMidY - perp_dy };
+
+                            if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * 2)**2) {
+                                completeAttack(selectedUnit, targetInfo, attackType);
                                 clickedValidTarget = true;
                                 break;
                             }
                         }
                     }
-                    break;
-
-                case ACTION_STATES.SELECTING_BRIDGE_EDGE:
-                    for (const edgeKey of gameState.validBridgeTargetEdgeKeys) {
-                        const edge = gameState.edges.get(edgeKey);
-                        if (edge) {
-                            const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                            if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < HIGHLIGHT_CLICK_RADIUS) {
-                                completeBuildBridge(edgeKey);
-                                clickedValidTarget = true;
-                                break;
-                            }
+                } else if (targetInfo.unit) {
+                    const targetUnit = targetInfo.unit; let unitX_val, unitY_val, clickRadius = UNIT_CLICK_RADIUS;
+                    if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
+                        const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
+                        if (tile) { const centerPixel = axialToPixel(tile.q, tile.r); unitX_val = centerPixel.x; unitY_val = centerPixel.y; clickRadius = FORTIFIED_UNIT_DRAW_SIZE * 1.5; }
+                        else continue;
+                    } else if (targetInfo.edgeKey) {
+                        const edgeOfTarget = gameState.edges.get(targetInfo.edgeKey); if (!edgeOfTarget) continue;
+                        const mid = getEdgeMidpoint(edgeOfTarget.q1, edgeOfTarget.r1, edgeOfTarget.q2, edgeOfTarget.r2); unitX_val = mid.x; unitY_val = mid.y;
+                        const edgeUnitsOnly = edgeOfTarget.units.filter(u => u.positionType === 'edge');
+                        const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === targetUnit.id);
+                        if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
+                            const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
+                            const p1 = axialToPixel(edgeOfTarget.q1, edgeOfTarget.r1); const p2 = axialToPixel(edgeOfTarget.q2, edgeOfTarget.r2);
+                            let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
+                            let perpX = -dy_val / len, perpY = dx_val / len;
+                            unitX_val += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5); unitY_val += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
                         }
+                    } else continue;
+                    if (Math.sqrt((x - unitX_val)**2 + (y - unitY_val)**2) < clickRadius) { 
+                        completeAttack(selectedUnit, targetInfo, attackType); 
+                        clickedValidTarget = true; 
+                        break; 
                     }
-                    break;
-                
-                case ACTION_STATES.SELECTING_ATTACK_TARGET:
-                    const currentAttackTargets = selectedUnit.type.attackType === 'melee' 
-                        ? gameState.validMeleeAttackTargets 
-                        : gameState.validArcherAttackTargets;
-                    const attackType = selectedUnit.type.attackType === 'melee' ? 'Melee' : 'Archer';
-
-                    for (const targetInfo of currentAttackTargets) {
-                        if (targetInfo.isBridgeTarget && targetInfo.edgeKey) {
-                            const edge = gameState.edges.get(targetInfo.edgeKey);
-                            if (edge && edge.bridge) {
-                                const p = { x, y };
-                                const p1_center = axialToPixel(edge.q1, edge.r1); const p2_center = axialToPixel(edge.q2, edge.r2);
-                                const edgeMidX = (p1_center.x + p2_center.x) / 2; const edgeMidY = (p1_center.y + p2_center.y) / 2;
-                                let perp_dx = -(p2_center.y - p1_center.y); let perp_dy = p2_center.x - p1_center.x;
-                                const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
-
-                                if (len_perp_vec > 0) {
-                                    const scale = HEX_SIZE / 2;
-                                    perp_dx = (perp_dx / len_perp_vec) * scale;
-                                    perp_dy = (perp_dy / len_perp_vec) * scale;
-                                    const v = { x: edgeMidX + perp_dx, y: edgeMidY + perp_dy };
-                                    const w = { x: edgeMidX - perp_dx, y: edgeMidY - perp_dy };
-
-                                    if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * 2)**2) {
-                                        completeAttack(selectedUnit, targetInfo, attackType);
-                                        clickedValidTarget = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        } else if (targetInfo.unit) {
-                            const targetUnit = targetInfo.unit; let unitX_val, unitY_val, clickRadius = UNIT_CLICK_RADIUS;
-                            if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
-                                const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
-                                if (tile) { const centerPixel = axialToPixel(tile.q, tile.r); unitX_val = centerPixel.x; unitY_val = centerPixel.y; clickRadius = FORTIFIED_UNIT_DRAW_SIZE * 1.5; }
-                                else continue;
-                            } else if (targetInfo.edgeKey) {
-                                const edgeOfTarget = gameState.edges.get(targetInfo.edgeKey); if (!edgeOfTarget) continue;
-                                const mid = getEdgeMidpoint(edgeOfTarget.q1, edgeOfTarget.r1, edgeOfTarget.q2, edgeOfTarget.r2); unitX_val = mid.x; unitY_val = mid.y;
-                                const edgeUnitsOnly = edgeOfTarget.units.filter(u => u.positionType === 'edge');
-                                const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === targetUnit.id);
-                                if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
-                                    const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
-                                    const p1 = axialToPixel(edgeOfTarget.q1, edgeOfTarget.r1); const p2 = axialToPixel(edgeOfTarget.q2, edgeOfTarget.r2);
-                                    let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
-                                    let perpX = -dy_val / len, perpY = dx_val / len;
-                                    unitX_val += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5); unitY_val += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
-                                }
-                            } else continue;
-                            if (Math.sqrt((x - unitX_val)**2 + (y - unitY_val)**2) < clickRadius) { 
-                                completeAttack(selectedUnit, targetInfo, attackType); 
-                                clickedValidTarget = true; 
-                                break; 
-                            }
-                        }
-                    }
-                    if (clickedValidTarget) break; 
-                    break; 
-
-                default:
-                    clickHandled = false;
-                    break;
+                }
             }
+            if (clickedValidTarget) break; 
+            break; 
 
-            if (clickHandled && !clickedValidTarget) {
-                showInstruction("Invalid selection. Click a highlighted target or Cancel.", 2000);
-            }
-            return clickHandled;
-        }
+        default:
+            clickHandled = false;
+            break;
+    }
+
+    if (clickHandled && !clickedValidTarget) {
+        showInstruction("Invalid selection. Click a highlighted target or Cancel.", 2000);
+    }
+    return clickHandled;
+}
 
         // --- REFACTORED GENERIC EVENT HANDLERS ---
         function handleInteractionStart(x, y, isTouchEvent = false) {
@@ -5036,6 +5512,7 @@ if (unit.isFortified || unit.currentMove < 1) continue;
 
             if (unitToDrag) {
                 gameState.isDragging = true; 
+                gameState.dragStartTime = Date.now();
                 gameState.draggingUnit = unitToDrag;
                 gameState.dragUnitOriginalPosition = unitToDrag.position; 
                 gameState.dragUnitOriginalType = unitToDrag.positionType;
@@ -5135,6 +5612,7 @@ if (unit.isFortified || unit.currentMove < 1) continue;
             }
             
             gameState.isDragging = false; 
+            gameState.dragStartTime = null;
             gameState.draggingUnit = null; 
             gameState.dragUnitOriginalPosition = null; 
             gameState.dragUnitOriginalType = null;
@@ -5154,6 +5632,7 @@ if (unit.isFortified || unit.currentMove < 1) continue;
                      unit.position = gameState.dragUnitOriginalPosition; unit.positionType = 'edge';
                  }
                 gameState.isDragging = false; 
+                gameState.dragStartTime = null;
                 gameState.draggingUnit = null; 
                 gameState.dragUnitOriginalPosition = null; 
                 gameState.dragUnitOriginalType = null;
@@ -5530,75 +6009,210 @@ function triggerConfetti() {
     }
 }
 
-function executeAITurn(unitsToProcess = null) {
-    if (gameState.gameOver) return;
+// ========================================================================
+// --- COMPLETE AI SYSTEM (VERSION 2.0) ---
+// ========================================================================
 
-    // On the first run for a turn, get a list of all AI units that can still act.
-    if (unitsToProcess === null) {
-        console.log(`Executing AI Turn for Player ${gameState.currentPlayer}...`);
-        unitsToProcess = gameState.units.filter(u => u.player === gameState.currentPlayer && !u.hasPerformedMajorAction);
+// AI Brain: Gathers and scores all possible actions for a single unit.
+function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
+    if (unit.hasPerformedMajorAction) return null;
+
+    let possibleActions = [];
+
+    // --- SUB-FUNCTION to score a potential attack ---
+    const scoreAttack = (targetInfo) => {
+        let score = 50.0;
+        if(targetInfo.unit){
+            if(targetInfo.unit.isCarryingFlag) score += 200;
+            const predictedDmg = unit.type.attack + (unit.isFortified && unit.type.name === 'Archer' ? 1 : 0);
+            if(targetInfo.unit.hp <= predictedDmg) score += 100;
+            if(unit.type.strengths.includes(targetInfo.unit.type.name)) score += 25;
+            if(unit.type.weaknesses.includes(targetInfo.unit.type.name)) score -= 25;
+        } else { score = 5; } // Low score for bridge
+        return score;
+    };
+
+    // --- SUB-FUNCTION to score a potential move ---
+    const scoreMove = (edgeKey) => {
+        let moveScore = 5.0; // Base incentive to not just stand still
+        const unitPos = getUnitScreenPosition(unit);
+        if (!unitPos) return 0;
+        
+        const moveMidPoint = getEdgeMidpoint(...parseEdgeKey(edgeKey).flatMap(c=>[c.q,c.r]));
+        
+        // Role-based scoring for the move itself
+        if (unit.type.name === 'Pikeman' && strategy === 'IRON_WALL') {
+            const centerDist = axialDistance(...edgeKey.split('_')[0].split(',').map(Number), 0, 0);
+            moveScore += (4 - centerDist) * 5; // Move to the center to form the wall
+        } else if (unit.type.name === 'Horseman' && strategy === 'BLITZ') {
+            const flankTarget = allEnemies.find(e => e.type.name === 'Archer' || e.type.name === 'Melee');
+            if(flankTarget) {
+                const targetPos = getUnitScreenPosition(flankTarget);
+                const currentDist = pointDistance(unitPos, targetPos);
+                const afterDist = pointDistance(moveMidPoint, targetPos);
+                if(afterDist < currentDist) moveScore += (1 - (afterDist / currentDist)) * 40;
+            }
+        } else { // Generic advance for others
+             const closestEnemy = allEnemies[0];
+             if(closestEnemy){
+                const targetPos = getUnitScreenPosition(closestEnemy);
+                const currentDist = pointDistance(unitPos, targetPos);
+                const afterDist = pointDistance(moveMidPoint, targetPos);
+                if(afterDist < currentDist) moveScore += (1 - (afterDist / currentDist)) * 20;
+             }
+        }
+        return moveScore;
+    };
+
+
+    // === ACTION GENERATION ===
+
+    // 1. Actions from CURRENT POSITION (no move)
+    if (!unit.isFortified) {
+        // ATTACK_ONLY
+        const attackTargets = getValidMeleeAttackTargets(unit).concat(getValidArcherAttackTargets(unit));
+        attackTargets.forEach(targetInfo => {
+            possibleActions.push({ type: 'ATTACK_ONLY', unit, targetInfo, score: scoreAttack(targetInfo) });
+        });
+        // FORTIFY_ONLY
+        if (unit.type.canFortify) {
+             const edgeCoords = parseEdgeKey(unit.position);
+             if (edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
+                [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {
+                    const tile = gameState.tiles.get(tileKey);
+                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null) {
+                         let score = 5 - unit.fortifyCooldown;
+                         if(strategy === 'IRON_WALL' && unit.type.name === 'Pikeman') score += 25;
+                         if(unit.hp < unit.maxHp) score+=20;
+                         if(axialDistance(...tileKey.split(',').map(Number),0,0) > 1) score-= 15;
+                         if(score > 0) possibleActions.push({ type: 'FORTIFY_ONLY', unit, targetTileKey: tileKey, score });
+                    }
+                });
+             }
+        }
+    } else { // Unit is fortified
+        // UNFORTIFY_ONLY
+        const unfortifyTargets = getPotentialUnfortifyTargets(unit);
+        if (unfortifyTargets.length > 0) {
+            let score = (unit.hp >= unit.maxHp && unit.turnsFortified > 2) ? (unit.turnsFortified * 5) : 0;
+            if(score > 0) possibleActions.push({ type: 'UNFORTIFY_ONLY', unit, targetEdgeKey: unfortifyTargets[0], score });
+        }
     }
 
-// BASE CASE: If there are no more units to process, the AI's turn is over.
-if (unitsToProcess.length === 0) {
-    console.log("AI has no more actions. Ending turn.");
-    if (!gameState.gameOver) {
-        // End the turn after the standard 1-second delay.
-        setTimeout(() => {
-            // CRITICAL FIX: The button must be enabled before it can be clicked.
-            ui.endTurnButton.disabled = false; 
-            ui.endTurnButton.click();
-        }, 1000); 
-    }
-    return;
+    // 2. Actions AFTER MOVING
+    const possibleMoves = getPossibleMoves(unit);
+    possibleMoves.forEach((moveData, edgeKey) => {
+        const moveScore = scoreMove(edgeKey);
+        const ghostUnit = { ...unit, position: edgeKey, currentMove: unit.currentMove - moveData.cost };
+
+        // MOVE_AND_ATTACK (for Horseman)
+        if (ghostUnit.type.name === 'Horseman' && ghostUnit.currentMove >= ATTACK_COST) {
+            const attackTargets = getValidMeleeAttackTargets(ghostUnit);
+            if (attackTargets.length > 0) {
+                const bestTarget = attackTargets.sort((a,b) => scoreAttack(b) - scoreAttack(a))[0];
+                const combinedScore = moveScore + scoreAttack(bestTarget);
+                possibleActions.push({ type: 'MOVE_AND_ATTACK', unit, moveData, targetInfo: bestTarget, score: combinedScore });
+            }
+        }
+        
+        // MOVE_ONLY is always an option
+        possibleActions.push({ type: 'MOVE_ONLY', unit, moveData, score: moveScore });
+    });
+    
+    if (possibleActions.length === 0) return null;
+    
+    // Return the single best action for this unit
+    possibleActions.sort((a, b) => b.score - a.score);
+    return possibleActions[0];
 }
 
-    // Get the next unit to command.
-    const unit = unitsToProcess.shift();
 
-    // --- AI ACTION DECISION ---
+// AI Executor: Takes a chosen action and performs it with animations.
+async function executeAIAction(action) {
+    if (!action) return;
+    console.log(`AI Executing: ${action.type} for ${action.unit.type.name}`, `Score: ${action.score.toFixed(2)}`);
+    gameState.selectedUnit = action.unit;
+    updateSelectedUnitInfoPanel();
+    await delay(400);
 
-    // 1. Prioritize Attack
-    const attackTargets = getValidMeleeAttackTargets(unit).concat(getValidArcherAttackTargets(unit));
-    if (attackTargets.length > 0) {
-        const randomTarget = attackTargets[Math.floor(Math.random() * attackTargets.length)];
-        const attackType = unit.type.attackType === 'melee' ? 'Melee' : 'Archer';
-        
-        gameState.selectedUnit = unit; // Briefly select to show who is attacking
-        updateSelectedUnitInfoPanel();
-        
-        // Execute the attack, and once the delay is over, process the next unit.
-        setTimeout(() => {
-            completeAttack(unit, randomTarget, attackType);
-            executeAITurn(unitsToProcess); // Immediately start thinking about the next unit.
-        }, 1000); // 1-second delay for the attack action.
-        return;
-    }
-
-    // 2. If no attack, try to move
-    const possibleMoves = getPossibleMoves(unit);
-    if (possibleMoves.size > 0) {
-        const moveKeys = Array.from(possibleMoves.keys());
-        const randomMoveKey = moveKeys[Math.floor(Math.random() * moveKeys.length)];
-        const moveData = possibleMoves.get(randomMoveKey);
-
-        // Trigger the line-draw animation
+    const animateAndMove = async (unit, moveData) => {
         gameState.potentialDebugPathToDraw = moveData.path;
-        gameState.debugPathHoverStartTime = Date.now();
-        
-        const totalAnimationTime = PATH_DRAW_HOVER_DELAY_MS + PATH_DRAW_ANIMATION_DURATION_MS + 200;
+        gameState.debugPathHoverStartTime = Date.now() - PATH_DRAW_HOVER_DELAY_MS;
+        await delay(PATH_DRAW_ANIMATION_DURATION_MS + 200);
+        handleMoveAction(unit, moveData.path[moveData.path.length - 1], moveData.cost);
+    };
 
-        // After the animation finishes, execute the move and then process the next unit.
-        setTimeout(() => {
-            handleMoveAction(unit, randomMoveKey, moveData.cost);
-            executeAITurn(unitsToProcess); // Immediately start thinking about the next unit.
-        }, totalAnimationTime);
-        return;
+    switch (action.type) {
+        case 'MOVE_ONLY':
+            await animateAndMove(action.unit, action.moveData);
+            break;
+        case 'ATTACK_ONLY':
+            completeAttack(action.unit, action.targetInfo, action.unit.type.attackType === 'melee' ? 'Melee' : 'Archer');
+            await delay(800);
+            break;
+        case 'FORTIFY_ONLY':
+            completeFortify(action.unit, action.targetTileKey);
+            await delay(600);
+            break;
+        case 'UNFORTIFY_ONLY':
+            completeUnfortify(action.unit, action.targetEdgeKey);
+            await delay(700);
+            break;
+        case 'MOVE_AND_ATTACK':
+            await animateAndMove(action.unit, action.moveData);
+            await delay(400);
+            completeAttack(action.unit, action.targetInfo, action.unit.type.attackType === 'melee' ? 'Melee' : 'Archer');
+            await delay(800);
+            break;
     }
+
+    gameState.selectedUnit = null;
+    updateSelectedUnitInfoPanel();
+    await delay(400);
+}
+
+
+// AI Turn Manager: The main loop that commands the AI turn.
+async function executeAITurn() {
+    if (gameState.gameOver) return;
+    console.log(`--- AI Turn ${gameState.globalTurnNumber} (Player ${gameState.currentPlayer}) ---`);
+
+    const aiStrategy = 'IRON_WALL'; // Will be dynamic later
+    const allEnemies = gameState.units.filter(u => u.player !== gameState.currentPlayer);
+    const allAllies = gameState.units.filter(u => u.player === gameState.currentPlayer);
     
-    // 3. If this unit could not do anything, process the next unit immediately.
-    console.log(`Unit ${unit.id} has no valid actions.`);
-    executeAITurn(unitsToProcess);
+    let unitsToProcess = allAllies.filter(u => !u.hasPerformedMajorAction);
+
+    while (unitsToProcess.length > 0) {
+        let bestActionOverall = null;
+
+        for (const unit of unitsToProcess) {
+            const bestActionForThisUnit = getUnitAIAction(unit, aiStrategy, allEnemies, allAllies);
+            if (bestActionForThisUnit) {
+                if (!bestActionOverall || bestActionForThisUnit.score > bestActionOverall.score) {
+                    bestActionOverall = bestActionForThisUnit;
+                }
+            }
+        }
+        
+        if (!bestActionOverall) {
+            console.log("AI has no more possible actions.");
+            break;
+        }
+
+        const actingUnit = bestActionOverall.unit;
+        await executeAIAction(bestActionOverall);
+        
+        // This is the correct way to handle the action attempt.
+        actingUnit.hasPerformedMajorAction = true;
+        unitsToProcess = unitsToProcess.filter(u => u.id !== actingUnit.id);
+    }
+
+    console.log("AI turn finished.");
+    if (!gameState.gameOver) {
+        ui.endTurnButton.disabled = false;
+        ui.endTurnButton.click();
+    }
 }
 
         // --- Game Flow & Event Listeners ---
@@ -5661,65 +6275,94 @@ for (const unit of gameState.units) {
         ui.buildBridgeButton.addEventListener('click', handleBuildBridgeAction);
         ui.attackButton.addEventListener('click', handleAttackAction);
 
-ui.endTurnButton.addEventListener('click', () => {
-    if (gameState.isDragging || gameState.gameOver) return;
+        function proceedToEndTurn() {
+            if (gameState.isDragging || gameState.gameOver) return;
     
-    const previousPlayer = gameState.currentPlayer;
-    gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+            const previousPlayer = gameState.currentPlayer;
+            // Reset the action flag for the player whose turn just ended.
+            gameState.playerActionTaken[`player${previousPlayer}`] = false;
 
-    if (previousPlayer === 2 && gameState.currentPlayer === 1) { 
-        gameState.globalTurnNumber++;
-        updateGlobalTurnDisplay();
-    }
-    
-    gameState.selectedUnit = null; 
-    gameState.currentReachableMoves.clear();
-    gameState.hoveredUnitId = null; 
-    canvas.style.cursor = 'default';
-    resetActionSelectionStates();
-    
-    gameState.units.forEach(unit => {
-        if (unit.player === gameState.currentPlayer) {
-            unit.hasPerformedMajorAction = false; 
-            let baseMoveForTurn = unit.type.baseMove;
-            if (unit.isCarryingFlag) {
-                baseMoveForTurn -= 1; 
+            gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+            // Reset the flag for the player whose turn is now STARTING.
+            gameState.playerActionTaken[`player${gameState.currentPlayer}`] = false;
+
+            if (previousPlayer === 2 && gameState.currentPlayer === 1) { 
+                gameState.globalTurnNumber++;
+                updateGlobalTurnDisplay();
             }
-            unit.currentMove = Math.max(0, baseMoveForTurn); 
             
-            const playerBaseTiles = [FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
-            if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                unit.turnsFortifiedAtBase++;
-                if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
-                    logAction(`P${unit.player} ${unit.type.name} was destroyed for cowardice!`, gameState.currentPlayer);
-                    handleUnitDeath(unit, "cowardice");
+            gameState.selectedUnit = null; 
+            gameState.currentReachableMoves.clear();
+            gameState.hoveredUnitId = null; 
+            canvas.style.cursor = 'default';
+            resetActionSelectionStates();
+            
+            gameState.units.forEach(unit => {
+                if (unit.player === gameState.currentPlayer) {
+                    unit.hasPerformedMajorAction = false; 
+                    let baseMoveForTurn = unit.type.baseMove;
+                    if (unit.isCarryingFlag) {
+                        baseMoveForTurn -= 1; 
+                    }
+                    unit.currentMove = Math.max(0, baseMoveForTurn); 
+                    
+                    if (unit.isFortified) {
+                        unit.turnsFortified++;
+                    } else {
+                        unit.turnsFortified = 0;
+                        if (unit.fortifyCooldown > 0) {
+                            unit.fortifyCooldown = Math.max(0, unit.fortifyCooldown - 5);
+                        }
+                    }
+
+                    const playerBaseTiles = [FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
+                    if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                        unit.turnsFortifiedAtBase++;
+                        if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
+                            logAction(`P${unit.player} ${unit.type.name} was destroyed for cowardice!`, gameState.currentPlayer);
+                            handleUnitDeath(unit, "cowardice");
+                        }
+                    }
                 }
+            });
+            
+            handleRespawnQueue();
+            applyStartOfTurnZoCDamage(); 
+            logSiegeStatus();
+            applyStartOfTurnHealing(); 
+            updateTurnDisplay();
+            updateSelectedUnitInfoPanel(); 
+            
+            showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
+            logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
+            autoSaveGame(true);
+            checkVictoryCondition();
+
+            if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
+                ui.endTurnButton.disabled = true;
+                setTimeout(() => {
+                    executeAITurn();
+                }, 1500);
+            } else {
+                ui.endTurnButton.disabled = false;
             }
         }
-    });
-    
-    handleRespawnQueue();
-    applyStartOfTurnZoCDamage(); 
-    logSiegeStatus();
-    applyStartOfTurnHealing(); 
-    updateTurnDisplay();
-    updateSelectedUnitInfoPanel(); 
-    
-    showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
-    logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
-    autoSaveGame(true);
-    checkVictoryCondition();
 
-    // --- NEW AI TRIGGER LOGIC ---
-    if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
-        // It's the AI's turn. Disable the button and start the AI's turn after a short delay.
-        ui.endTurnButton.disabled = true;
-        setTimeout(() => {
-            executeAITurn();
-        }, 1500); // 1.5 second delay to feel more natural
+ui.endTurnButton.addEventListener('click', () => {
+    const playerHasActed = gameState.playerActionTaken[`player${gameState.currentPlayer}`];
+
+    if (playerHasActed || !gameSettings.passTurnConfirmationEnabled || gameState.gameOver) {
+        // If the player acted, or the setting is off, or game is over, end turn immediately.
+        proceedToEndTurn();
     } else {
-        // It's a human's turn.
-        ui.endTurnButton.disabled = false;
+        // Otherwise, show the confirmation modal.
+        document.getElementById('customConfirmMessage').textContent = 'You have not performed any actions. Are you sure you want to end your turn?';
+        currentConfirmAction = proceedToEndTurn; // Set the action to run if "Confirm" is clicked.
+        
+        if (ui.customConfirmModal) {
+            ui.customConfirmModal.style.display = 'flex';
+            setTimeout(() => ui.customConfirmModal.classList.add('modal-visible'), 10);
+        }
     }
 });
 
@@ -5798,6 +6441,14 @@ function startSingleplayerGame(playerSide) {
     // Force the default map for singleplayer
     initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
     showInstruction(`Singleplayer game started. You are Player ${playerSide}.`, 3000);
+    // If the human chose to be P2, the AI (P1) must take the first turn.
+    if (gameState.playerSide === 2) {
+        console.log("Player is P2, triggering AI's first turn.");
+        ui.endTurnButton.disabled = true; // Disable button during AI turn
+        setTimeout(() => {
+            executeAITurn();
+        }, 1500); // Wait a moment before AI starts
+    }
 }
 
 function autoSaveGame(isSilent = false) {
@@ -6410,8 +7061,37 @@ function isCoordInRadius(key, radius) {
 
         window.onload = function () {
             document.getElementById('buildVersionDisplay').textContent = `FortHex Build ${BUILD_VERSION}`;
+            
+            loadSettings(); // Load settings from localStorage into the gameSettings object
 
-    // --- NEW: Main Menu System Listeners ---
+            // Sync UI checkboxes to match the loaded settings
+            document.getElementById('settingAnimations').checked = gameSettings.animationsEnabled;
+            document.getElementById('settingFancyVisuals').checked = gameSettings.fancyVisualsEnabled;
+            document.getElementById('settingPassTurnConfirmation').checked = gameSettings.passTurnConfirmationEnabled;
+            document.getElementById('settingTooltips').checked = gameSettings.tooltipsEnabled;
+
+            // --- Connection Status Indicator ---
+            const connectionIcon = document.getElementById('connectionStatusIcon');
+
+            function updateConnectionStatus() {
+                if (navigator.onLine) {
+                    connectionIcon.classList.remove('status-offline');
+                    connectionIcon.classList.add('status-online');
+                } else {
+                    connectionIcon.classList.remove('status-online');
+                    connectionIcon.classList.add('status-offline');
+                }
+            }
+
+            window.addEventListener('online', updateConnectionStatus);
+            window.addEventListener('offline', updateConnectionStatus);
+
+            // Set initial state on load
+            updateConnectionStatus();
+
+
+
+// --- NEW: Main Menu System Listeners ---
 
 // The top-left ICON listener (simple refresh with custom modal)
 document.getElementById('gameIconLink').addEventListener('click', (event) => {
@@ -6483,6 +7163,107 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
     }
 });
 
+            // --- NEW: Settings Modal Listeners ---
+            const settingsButton = document.getElementById('settingsButton');
+            const settingsModal = document.getElementById('settingsModal');
+            const settingsBackButton = document.getElementById('settingsBackButton');
+            const gameMenuModal = document.getElementById('gameMenuModal');
+
+            settingsButton.addEventListener('click', () => {
+                // Hide the main menu modal
+                if (gameMenuModal) {
+                    gameMenuModal.classList.remove('modal-visible');
+                    setTimeout(() => { gameMenuModal.style.display = 'none'; }, 300);
+                }
+                // Show the settings modal after a short delay
+                if (settingsModal) {
+                    setTimeout(() => {
+                        settingsModal.style.display = 'flex';
+                        setTimeout(() => settingsModal.classList.add('modal-visible'), 10);
+                    }, 350);
+                }
+            });
+
+            settingsBackButton.addEventListener('click', () => {
+                // Hide the settings modal
+                if (settingsModal) {
+                    settingsModal.classList.remove('modal-visible');
+                    setTimeout(() => { settingsModal.style.display = 'none'; }, 300);
+                }
+                // Show the main menu modal again
+                if (gameMenuModal) {
+                     setTimeout(() => {
+                        gameMenuModal.style.display = 'flex';
+                        setTimeout(() => gameMenuModal.classList.add('modal-visible'), 10);
+                    }, 350);
+                }
+            });
+
+            // Add click-outside-to-close for the settings modal
+            settingsModal.addEventListener('click', (e) => {
+                if (e.target.id === 'settingsModal') {
+                    // This now closes the settings modal directly without going back to the menu.
+                    const modal = e.target;
+                    modal.classList.remove('modal-visible');
+                    setTimeout(() => modal.style.display = 'none', 300);
+                }
+            });
+
+            // --- Settings Initialization and Event Listeners ---
+            const gameWrapper = document.getElementById('gameWrapper');
+
+            // Find all settings UI elements
+            const animationsCheckbox = document.getElementById('settingAnimations');
+            const passTurnCheckbox = document.getElementById('settingPassTurnConfirmation');
+            const fancyVisualsCheckbox = document.getElementById('settingFancyVisuals');
+            const tooltipsCheckbox = document.getElementById('settingTooltips');
+            const uiScaleSlider = document.getElementById('settingUiScale');
+            const uiScaleValueLabel = document.getElementById('uiScaleValueLabel');
+
+            // Function to apply the current scale setting to the UI
+            function applyUiScale() {
+                uiScaleSlider.value = gameSettings.uiScale;
+                uiScaleValueLabel.textContent = `${Math.round(gameSettings.uiScale * 100)}%`;
+                gameWrapper.style.transform = `scale(${gameSettings.uiScale})`;
+            }
+
+            // --- Apply settings on initial game load ---
+            loadSettings(); // Load all settings from localStorage first
+
+            // Sync the UI to match the loaded settings
+            animationsCheckbox.checked = gameSettings.animationsEnabled;
+            passTurnCheckbox.checked = gameSettings.passTurnConfirmationEnabled;
+            fancyVisualsCheckbox.checked = gameSettings.fancyVisualsEnabled;
+            tooltipsCheckbox.checked = gameSettings.tooltipsEnabled;
+            applyUiScale(); // Apply the loaded scale value to the slider and the game wrapper
+
+            // --- Add event listeners to save settings when they change ---
+            animationsCheckbox.addEventListener('change', (e) => {
+                gameSettings.animationsEnabled = e.target.checked;
+                saveSettings();
+            });
+
+            passTurnCheckbox.addEventListener('change', (e) => {
+                gameSettings.passTurnConfirmationEnabled = e.target.checked;
+                saveSettings();
+            });
+            
+            fancyVisualsCheckbox.addEventListener('change', (e) => {
+                gameSettings.fancyVisualsEnabled = e.target.checked;
+                saveSettings();
+            });
+
+            tooltipsCheckbox.addEventListener('change', (e) => {
+                gameSettings.tooltipsEnabled = e.target.checked;
+                saveSettings();
+            });
+
+            uiScaleSlider.addEventListener('input', (e) => {
+                const scaleValue = parseFloat(e.target.value);
+                gameSettings.uiScale = scaleValue;
+                applyUiScale(); // Update the transform and label
+                saveSettings(); // Save the new scale value
+            });
 
                     // --- NEW: Confirmation Modal "Click Outside" Listener ---
         const customConfirmModalOverlay = document.getElementById('customConfirmModal');
@@ -6556,12 +7337,23 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
                         if (unitType) {
                             const spawnSuccess = spawnUnit(gameState.currentPlayer, unitType);
 
-                            if (spawnSuccess) {
+                                                        if (spawnSuccess) {
                                 const queueKey = `player${gameState.currentPlayer}`;
-                                gameState.respawnQueue[queueKey].shift();
-                                
-                                hideRespawnModal();
-                                updateRespawnQueueDisplay();
+                                gameState.respawnQueue[queueKey].shift(); // Remove the unit that was just spawned
+
+                                updateRespawnQueueDisplay(); // Update the list UI immediately
+
+                                // Check if another unit is ready to be spawned for the same player
+                                const queue = gameState.respawnQueue[queueKey];
+                                const nextInQueue = queue.length > 0 ? queue[0] : null;
+
+                                if (nextInQueue && nextInQueue.turnsRemaining <= 0) {
+                                    // There's another one ready. Re-show the modal for the next choice.
+                                    showRespawnModal(gameState.currentPlayer);
+                                } else {
+                                    // No more units are ready, so hide the modal.
+                                    hideRespawnModal();
+                                }
                             } else {
                                 showInstruction("Could not spawn unit, base is blocked!", 3000);
                                 hideRespawnModal();
@@ -6579,5 +7371,6 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
           
 <div id="buildVersionDisplay"></div>
 <div id="confettiContainer"></div>
+
 
 </body></html>
