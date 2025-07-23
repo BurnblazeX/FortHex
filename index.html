@@ -1611,7 +1611,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B27";
+        const BUILD_VERSION = "B27/2";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -7539,7 +7539,7 @@ function isCoordInRadius(key, radius) {
 
             changelogModal.addEventListener('click', (e) => {
                 if (e.target.id === 'changelogModal') {
-                    changelogBackButton.click(); // Programmatically click the back button
+                    hideAllModals(); // Close all modals and return to the game
                 }
             });
 
