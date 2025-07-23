@@ -46,7 +46,7 @@
     <style>
         body {
             font-family: 'Exo 2', sans-serif;
-            background-color: #2c3e50;
+            background-color: var(--bg-color);
             color: #ecf0f1;
             display: flex;
             flex-direction: column;
@@ -78,7 +78,7 @@
             width: 24px;
             height: 24px;
             border-radius: 50%;
-            background: #3498db;
+            background: #3090D0;
             cursor: pointer;
             border: 3px solid #ecf0f1;
         }
@@ -86,14 +86,14 @@
             width: 20px;
             height: 20px;
             border-radius: 50%;
-            background: #3498db;
+            background: #3090D0;
             cursor: pointer;
             border: 3px solid #ecf0f1;
         }
 
         .settings-option:has(input:disabled) label,
         .settings-option:has(input:disabled) span {
-            color: #7f8c8d;
+            color: #809090;
             cursor: not-allowed;
         }
         input[type="range"]:disabled {
@@ -101,21 +101,21 @@
             cursor: not-allowed;
         }
         input[type="range"]:disabled::-webkit-slider-thumb {
-            background: #7f8c8d;
+            background: #809090;
             cursor: not-allowed;
         }
         input[type="range"]:disabled::-moz-range-thumb {
-            background: #7f8c8d;
+            background: #809090;
             cursor: not-allowed;
         }
 
         input[type="checkbox"]:disabled {
             background: #4a6075;
-            border-color: #7f8c8d;
+            border-color: #809090;
             cursor: not-allowed;
         }
         input[type="checkbox"]:disabled::before {
-            box-shadow: inset 1em 1em #7f8c8d;
+            box-shadow: inset 1em 1em #809090;
         }
 
         h1.text-4xl {
@@ -157,7 +157,7 @@
     color: #2ecc71; 
 }
 .status-offline {
-    color: #e74c3c; /* Bright Red */
+    color: #E04030; /* Bright Red */
 }
 
 #topLeftControlsContainer {
@@ -219,7 +219,7 @@
             align-items: center;
             width: 100%;
             padding: 12px 8px;
-            background-color: #2c3e50;
+            background-color: var(--bg-color);
             border-radius: 5px;
             margin-bottom: 12px;
             border: 1px solid #4a6075;
@@ -240,7 +240,7 @@
             color: currentColor;
             width: 1.6em;
             height: 1.6em;
-            border: 0.15em solid #7f8c8d;
+            border: 0.15em solid #809090;
             border-radius: 0.25em;
             transform: translateY(-0.075em);
             display: grid;
@@ -255,14 +255,14 @@
             height: 0.85em;
             transform: scale(0);
             transition: 120ms transform ease-in-out;
-            box-shadow: inset 1em 1em #f1c40f;
+            box-shadow: inset 1em 1em #FFC020;
             transform-origin: bottom left;
             clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
         }
 
         .settings-option input[type="checkbox"]:checked {
-            background-color: #3498db;
-            border-color: #2980b9;
+            background-color: #3090D0;
+            border-color: #2080B0;
         }
 
         .settings-option input[type="checkbox"]:checked::before {
@@ -282,7 +282,7 @@
             box-sizing: border-box;
         }
         canvas {
-            background-color: #34495e;
+            background-color: var(--panel-color);
             border-radius: 10px;
             display: block;
             cursor: default;
@@ -290,7 +290,7 @@
         }
 
         .ui-panel {
-            background-color: #34495e;
+            background-color: var(--panel-color);
             padding: 20px;
             border-radius: 10px;
             border: 2px solid #ecf0f1;
@@ -307,7 +307,7 @@
         #turnDisplay {
             font-size: 1.5em;
             margin-bottom: 0;
-            color: #f1c40f;
+            color: #FFC020;
             text-align: center;
         }
 
@@ -324,8 +324,8 @@
             padding-top: 15px;
         }
         .ui-panel .buttons-container button { /* End Turn specifics */
-             background-color: #e74c3c;
-             box-shadow: 0 3px #c0392b;
+             background-color: #E04030;
+             box-shadow: 0 3px #C03020;
              color: white;
              border: none;
              padding: 10px 15px;
@@ -339,7 +339,7 @@
              gap: 8px;
         }
         .ui-panel .buttons-container button:hover:not(:disabled) {
-            background-color: #c0392b;
+            background-color: #C03020;
         }
          .ui-panel .buttons-container button:active:not(:disabled) {
             box-shadow: none;
@@ -347,7 +347,7 @@
         }
 
         #settingsButton:hover:not(:disabled) {
-        background-color: #6c7a86;
+        background-color: #708080;
     }
 
         #generateMapButtonContainer {
@@ -364,14 +364,14 @@
             left: 20px;
             width: 60px;
             height: 60px;
-            background-color: #27ae60;
+            background-color: #27B060; 
             color: white;
             border: none;
             border-radius: 8px;
             font-family: 'Exo 2', sans-serif;
             cursor: pointer;
             transition: background-color 0.3s, box-shadow 0.3s, transform 0.1s;
-            box-shadow: 0 4px #1e8449;
+            box-shadow: 0 4px #208050; 
             display: flex;
             align-items: center;
             justify-content: center;
@@ -379,11 +379,11 @@
             z-index: 1001;
         }
         #downloadButton:hover:not(:disabled) {
-            background-color: #229954;
-            box-shadow: 0 4px #196f3d;
+            background-color: #208050; 
+            box-shadow: 0 4px #207040; 
         }
         #downloadButton:active:not(:disabled) {
-            box-shadow: 0 1px #196f3d;
+            box-shadow: 0 1px #207040; 
             transform: translateY(3px);
         }
         #downloadButton svg {
@@ -398,14 +398,14 @@
             left: 20px;
             width: 60px;
             height: 60px;
-            background-color: #8e44ad; 
+            background-color: #9040B0; 
             color: white;
             border: none;
             border-radius: 8px;
             font-family: 'Exo 2', sans-serif;
             cursor: pointer;
             transition: background-color 0.3s, box-shadow 0.3s, transform 0.1s;
-            box-shadow: 0 4px #732d91; 
+            box-shadow: 0 4px #703090;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -413,11 +413,11 @@
             z-index: 1002;
         }
         #tutorialButton:hover:not(:disabled) {
-            background-color: #732d91;
-            box-shadow: 0 4px #512066;
+            background-color: #703090; 
+            box-shadow: 0 4px #502070; 
         }
         #tutorialButton:active:not(:disabled) {
-            box-shadow: 0 1px #512066;
+            box-shadow: 0 1px #502070; 
             transform: translateY(3px);
         }
         #tutorialButton svg {
@@ -428,7 +428,7 @@
 
 
         .action-button {
-            background-color: #3498db;
+            background-color: #3090D0;
             color: white;
             border: none;
             padding: 10px 15px;
@@ -436,25 +436,25 @@
             font-family: 'Exo 2', sans-serif;
             cursor: pointer;
             transition: background-color 0.3s;
-            box-shadow: 0 3px #2980b9;
+            box-shadow: 0 3px #2080B0;
             margin-left: 5px;
             margin-right: 5px;
         }
     .action-button.selecting {
-        background-color: #e74c3c; /* Red base for cancel state */
-        box-shadow: 0 3px #c0392b;
+        background-color: #E04030; /* Red base for cancel state */
+        box-shadow: 0 3px #C03020;
     }
     .action-button.selecting:hover:not(:disabled) {
-        background-color: #c0392b; /* Dark red on hover */
+        background-color: #C03020; /* Dark red on hover */
     }
     .action-button:not(.selecting):hover:not(:disabled) {
-         background-color: #2980b9;
+         background-color: #2080B0;
     }
     .action-button:disabled {
-        background-color: #95a5a6;
+        background-color: #90A0A0;
         color: #bdc3c7;
         cursor: not-allowed;
-        box-shadow: 0 3px #7f8c8d;
+        box-shadow: 0 3px #809090;
     }
     .action-button:active:not(:disabled) {
          box-shadow: none;
@@ -463,12 +463,12 @@
 
     /* --- Corrected Cancel Button Rules --- */
     .action-button-cancel {
-        background-color: #e74c3c;
-        box-shadow: 0 3px #c0392b;
+        background-color: #E04030;
+        box-shadow: 0 3px #C03020;
     }
     /* By specifying both classes, this rule becomes more specific and will override the generic blue hover. */
     .action-button.action-button-cancel:hover:not(:disabled) {
-        background-color: #c0392b;
+        background-color: #C03020;
     }
         #generateMapButtonContainer .action-button {
             width: 160px; 
@@ -481,22 +481,22 @@
         }
 
         #saveGameButton {
-            background-color: #f39c12; 
-            box-shadow: 0 3px #d35400;
+            background-color: #F0A010; 
+            box-shadow: 0 3px #D05000;
         }
         #saveGameButton:hover:not(:disabled) {
-            background-color: #e67e22;
+            background-color: #E08020;
         }
         #saveGameButton:active:not(:disabled) {
             box-shadow: none;
             transform: translateY(3px);
         }
         #loadGameButton {
-            background-color: #5dade2; 
-            box-shadow: 0 3px #3498db;
+            background-color: #60B0E0; 
+            box-shadow: 0 3px #3090D0;
         }
         #loadGameButton:hover:not(:disabled) {
-            background-color: #3498db;
+            background-color: #3090D0;
         }
          #loadGameButton:active:not(:disabled) {
             box-shadow: none;
@@ -510,7 +510,7 @@
 
         .actions-panel {
             padding-top: 10px;
-            border-top: 1px solid #7f8c8d;
+            border-top: 1px solid #809090;
             display: flex;
             justify-content: center;
             gap: 10px;
@@ -520,13 +520,13 @@
         .actions-panel h3 {
             font-size: 1.em;
             margin-bottom: 10px;
-            color: #f1c40f;
+            color: #FFC020;
             width: 100%;
             text-align: center;
         }
         .message-box {
             position: fixed; top: 20px; left: 50%;
-            transform: translateX(-50%); background-color: #e74c3c;
+            transform: translateX(-50%); background-color: #E04030;
             color: white; padding: 15px 25px; border-radius: 8px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 1000;
             font-size: 1em; display: none;
@@ -571,7 +571,7 @@
         }
 
         .modal-content {
-            background-color: #34495e;
+            background-color: var(--panel-color);
             padding: 25px 30px;
             border-radius: 10px;
             border: 2px solid #ecf0f1;
@@ -601,18 +601,18 @@
             color: white;
         }
         .modal-button-ok {
-            background-color: #27ae60;
-            box-shadow: 0 3px #1e8449;
+            background-color: #20B060;
+            box-shadow: 0 3px #208040;
         }
         .modal-button-ok:hover {
-            background-color: #229954;
+            background-color: #209050;
         }
         .modal-button-cancel {
-            background-color: #e74c3c;
-            box-shadow: 0 3px #c0392b;
+            background-color: #E04030;
+            box-shadow: 0 3px #C03020;
         }
         .modal-button-cancel:hover {
-            background-color: #c0392b;
+            background-color: #C03020;
         }
 
 #loadOptionsContainer .action-button {
@@ -625,28 +625,28 @@
     margin: 0;
 }
 #loadFromAutosaveButton {
-    background-color: #3498db;
-    box-shadow: 0 3px #2980b9;
+    background-color: #3090D0;
+    box-shadow: 0 3px #2080B0;
 }
 #loadFromAutosaveButton:hover:not(:disabled) {
-    background-color: #2980b9;
+    background-color: #2080B0;
 }
 #loadFromFileButton {
-    background-color: #27ae60;
-    box-shadow: 0 3px #1e8449;
+    background-color: #20B060;
+    box-shadow: 0 3px #208040;
 }
 #loadFromFileButton:hover:not(:disabled) {
-    background-color: #229954;
+    background-color: #209050;
 }
 
 #newMapButton {
     width: 160px;
-    background-color: #f1c40f; 
-    box-shadow: 0 3px #d4ac0d;
+    background-color: #FFC020; 
+    box-shadow: 0 3px #D0B000;
 }
 
 #newMapButton:hover:not(:disabled) {
-    background-color: #d4ac0d;
+    background-color: #D0B000;
 }
 #newMapOptionsContainer {
     display: flex;
@@ -655,19 +655,19 @@
     width: 100%;
 }
 #generateMapFromModalButton {
-    background-color: #27ae60;
-    box-shadow: 0 3px #1e8449;
+    background-color: #20B060;
+    box-shadow: 0 3px #208040;
 }
 #generateMapFromModalButton:hover:not(:disabled) {
-    background-color: #229954;
+    background-color: #209050;
 }
 
 .action-button-cancel {
-    background-color: #e74c3c;
-    box-shadow: 0 3px #c0392b;
+    background-color: #E04030;
+    box-shadow: 0 3px #C03020;
 }
 .action-button-cancel:hover:not(:disabled) {
-    background-color: #c0392b;
+    background-color: #C03020;
 }
 
         /* Tutorial Modal Styles */
@@ -695,7 +695,7 @@
         }
 
         #tutorialModalContent {
-            background-color: #34495e;
+            background-color: var(--panel-color);
             padding: 20px 30px;
             border-radius: 10px;
             border: 2px solid #ecf0f1;
@@ -713,7 +713,7 @@
             font-size: 2em;
             text-align: center;
             margin-bottom: 15px;
-            color: #f1c40f;
+            color: #FFC020;
         }
         #tutorialModalContent p, #tutorialModalContent li {
             font-size: 0.95em;
@@ -721,7 +721,7 @@
             line-height: 1.6;
         }
         #tutorialModalContent strong {
-            color: #f1c40f;
+            color: #FFC020;
         }
         #tutorialModalContent ul {
             list-style-type: disc;
@@ -740,7 +740,7 @@
             line-height: 1;
         }
         .tutorial-modal-close-button:hover {
-            color: #f1c40f;
+            color: #FFC020;
         }
         .tutorial-section {
             margin-bottom: 15px;
@@ -759,10 +759,10 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            color: #1abc9c; 
+            color: #20C0A0; 
         }
         .tutorial-section-header:hover {
-            color: #16a085;
+            color: #10A080;
         }
         .tutorial-section-content {
             max-height: 0;
@@ -789,7 +789,7 @@
         .action-info-header {
             font-size: 1.1em;
             margin-bottom: 10px;
-            color: #f1c40f;
+            color: #FFC020;
             width: 100%;
             text-align: center;
             font-weight: bold;
@@ -833,10 +833,11 @@
             align-items: flex-start;
             gap: 10px;
             padding: 8px;
-            background-color: #2c3e50;
+            background-color: var(--bg-color);
             border-radius: 4px;
             margin-top: 5px;
             animation: fadeIn 0.3s ease-in-out;
+            transition: border-color 0.4s ease-in-out;
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -844,7 +845,7 @@
             border: 2px solid #5dade2; 
         }
         .log-entry.log-p2 {
-            border: 2px solid #e74c3c; 
+            border: 2px solid #E04030; 
         }
 
         .log-icon {
@@ -861,22 +862,22 @@
         }
         .log-message strong { font-weight: bold; }
         .p1-log { color: #5dade2 !important; } 
-        .p2-log { color: #e74c3c !important; }
-        .log-message .damage-text { color: #f1c40f; }
+        .p2-log { color: #E04030 !important; }
+        .log-message .damage-text { color: #FFC020; }
         .log-message .heal-text { color: #2ecc71; }
         .log-message .shield-text { color: #30C4C4; }
         .log-message .advantage-text { color: #2ecc71; }
-        .log-message .disadvantage-text { color: #e74c3c; }
-        .log-message .keyword-text { color: #f39c12; }
+        .log-message .disadvantage-text { color: #E04030; }
+        .log-message .keyword-text { color: #F0A010; }
 
         .respawn-queue-container {
-            border-top: 1px solid #7f8c8d;
+            border-top: 1px solid #809090;
             padding-top: 15px;
             margin-top: auto;
         }
         .respawn-queue-header {
             text-align: center;
-            color: #f1c40f;
+            color: #FFC020;
             margin-bottom: 10px;
             font-size: 1.1em;
         }
@@ -889,7 +890,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background-color: #2c3e50;
+            background-color: var(--bg-color);
             padding: 5px 10px;
             border-radius: 4px;
             font-size: 0.9em;
@@ -905,7 +906,7 @@
         }
         .respawn-timer {
             font-weight: bold;
-            color: #f1c40f;
+            color: #FFC020;
         }
 
         /* RESPAWN MODAL STYLES */
@@ -917,12 +918,12 @@
             transition: border-color 0.3s ease-in-out; 
         }
         #respawnModalContent.modal-p1 { border-color: #5dade2; }
-        #respawnModalContent.modal-p2 { border-color: #e74c3c; }
+        #respawnModalContent.modal-p2 { border-color: #E04030; }
 
         #respawnModalContent h3 {
             font-family: 'Geostar', cursive;
             font-size: 1.8em;
-            color: #f1c40f;
+            color: #FFC020;
             margin-bottom: 10px;
         }
         #respawnModalContent p {
@@ -936,7 +937,7 @@
             flex-wrap: wrap;
         }
         .respawn-button {
-            background-color: #27ae60; 
+            background-color: #20B060; 
             color: white;
             border: none;
             width: 70px;
@@ -946,7 +947,7 @@
             font-size: 1em;
             cursor: pointer;
             transition: background-color 0.3s, box-shadow 0.3s, transform 0.2s;
-            box-shadow: 0 4px #1e8449; 
+            box-shadow: 0 4px #208040; 
             display: flex;
             align-items: center;
             justify-content: center;
@@ -958,15 +959,15 @@
             fill: white;
         }
         .respawn-button:hover:not(:disabled) {
-            background-color: #229954;
+            background-color: #209050;
             transform: translateY(-2px);
         }
         .respawn-button:active:not(:disabled) {
             transform: translateY(2px);
-            box-shadow: 0 1px #1e8449;
+            box-shadow: 0 1px #208040;
         }
         .respawn-button:disabled {
-            background-color: #7f8c8d;
+            background-color: #809090;
             cursor: not-allowed;
             box-shadow: 0 4px #525a5b;
             opacity: 0.6;
@@ -984,6 +985,186 @@
 
     </style>
     <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.16 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.mb-6{margin-bottom:1.5rem}.text-center{text-align:center}.text-4xl{font-size:2.25rem;line-height:2.5rem}.font-bold{font-weight:700}.text-amber-400{--tw-text-opacity:1;color:rgb(251 191 36 / var(--tw-text-opacity, 1))}</style>
+        <style>
+        :root {
+            --p1-color-secondary: #60B0E0;
+            --p2-color-secondary: #F05040;
+            --bg-color: #304050;
+            --panel-color: #304860;
+        }
+        #turnDisplay.player1, .log-entry.log-p1, #respawnModalContent.modal-p1 {
+            border-color: var(--p1-color-secondary);
+        }
+        #turnDisplay.player2, .log-entry.log-p2, #respawnModalContent.modal-p2 {
+            border-color: var(--p2-color-secondary);
+        }
+        .p1-log, #p1Supply {
+            color: var(--p1-color-secondary) !important;
+        }
+        .p2-log, #p2Supply {
+            color: var(--p2-color-secondary) !important;
+        }
+
+        #p1Supply, #p2Supply {
+            transition: color 0.4s ease-in-out;
+        }
+        
+        .log-message strong {
+            transition: color 0.4s ease-in-out;
+        }
+
+        #turnDisplay {
+            transition: border-color 0.4s ease-in-out;
+        }
+        #gameCanvas {
+             outline-width: 4px;
+             outline-style: solid;
+             outline-offset: 2px;
+             transition: outline-color 0.4s ease-in-out;
+        }
+
+
+/* --- Color Picker Drawer Styles --- */
+#colorPickerDrawer {
+    position: fixed;
+    top: 50%;
+    right: -130px;
+    width: 130px;
+    transform: translateY(-50%);
+    background-color: var(--panel-color);
+    border: 2px solid #ecf0f1;
+    border-right: none;
+    border-radius: 15px 0 0 15px;
+    z-index: 2500;
+    box-shadow: -5px 0 15px rgba(0,0,0,0.3);
+    /* Explicitly define all transitions here */
+    transition-property: right, border-color;
+    transition-duration: 0.4s, 0.4s;
+    transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94), ease-in-out;
+}
+
+#colorPickerDrawer.drawer-open {
+    /* End position: drawer is flush with the right edge */
+    right: 0;
+}
+
+#drawerHandle {
+    position: absolute;
+    top: 50%;
+    left: -40px; /* Adjusted handle width */
+    transform: translateY(-50%);
+    width: 40px; /* Adjusted handle width */
+    height: 70px;
+    background-color: var(--panel-color);
+    border: 2px solid #ecf0f1;
+    border-right: none;
+    border-radius: 12px 0 0 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ecf0f1;
+    transition: border-color 0.4s ease-in-out;
+}
+
+#drawerHandle svg {
+    stroke: #ecf0f1;
+    transition: transform 0.3s ease-in-out, stroke 0.4s ease-in-out;
+}
+
+#colorPickerDrawer.drawer-open #drawerHandle svg {
+    transform: rotate(90deg);
+}
+
+#drawerContent {
+    padding: 20px;
+    height: 400px; /* Example height */
+    display: flex;
+    flex-direction: column;
+}
+
+#drawerTabs {
+    display: flex;
+    border-bottom: 2px solid #4a6075;
+    margin-bottom: 15px;
+}
+
+.drawer-tab-button {
+    flex-grow: 1;
+    padding: 10px;
+    background-color: transparent;
+    border: none;
+    color: #bdc3c7;
+    font-size: 1.1em;
+    font-family: 'Exo 2', sans-serif;
+    font-weight: bold;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: color 0.4s ease-in-out, border-color 0.4s ease-in-out;
+}
+
+.drawer-tab-button:hover {
+    color: #ecf0f1;
+}
+
+.drawer-tab-button.active.p1-tab {
+    color: var(--p1-color-secondary);
+    border-bottom-color: var(--p1-color-secondary);
+}
+.drawer-tab-button.active.p2-tab {
+    color: var(--p2-color-secondary);
+    border-bottom-color: var(--p2-color-secondary);
+}
+
+.drawer-tab-panel {
+    display: none; /* Hide all panels by default */
+}
+
+.drawer-tab-panel.active {
+    display: block; /* Show only the active panel */
+}
+
+.color-options-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center; /* Center the whole group vertically */
+    gap: 10px; 
+    padding-top: 15px;
+    padding-bottom: 15px;
+    width: 100%;
+    height: 100%; 
+}
+
+.color-option-circle {
+    width: 45px;  /* Increased size */
+    height: 45px; /* Increased size */
+    border-radius: 50%;
+    background-color: #4a6075; 
+    border: 3px solid #bdc3c7; /* A slightly thicker border */
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out, border-color 0.2s ease-in-out, background-color 0.4s ease-in-out; 
+}
+
+.color-option-circle:hover {
+    transform: scale(1.1);
+    border-color: #ecf0f1; /* Brighten border on hover */
+}
+
+.color-option-circle.active {
+    border-color: #FFC020;
+    transform: scale(1.15);
+}
+
+#changelogButton {
+    background-color: #20B060;
+    box-shadow: 0 3px #208040;
+}
+#changelogButton:hover:not(:disabled) {
+    background-color: #209050;
+}
+
+    </style>
 </head>
 <body>
 <h1 class="text-4xl font-bold mb-6 text-center text-amber-400">FortHex</h1>
@@ -1025,11 +1206,12 @@
     <div class="modal-content">
         <!-- Main Menu Content (Visible by default) -->
         <div id="mainMenuContent">
-            <h2 class="text-4xl" style="font-family: 'Geostar', cursive; color: #f1c40f; margin-bottom: 30px;">FortHex</h2>
+            <h2 class="text-4xl" style="font-family: 'Geostar', cursive; color: #FFC020; margin-bottom: 30px;">FortHex</h2>
             <div class="menu-options-container">
                 <button id="singleplayerButton" class="action-button" >Singleplayer (WIP)</button>
                 <button id="multiplayerButton" class="action-button">Multiplayer</button>
-                <button id="settingsButton" class="action-button" style="background-color: #8e9eab; box-shadow: 0 3px #6c7a86; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <button id="changelogButton" class="action-button">Changelog</button>
+                <button id="settingsButton" class="action-button" style="background-color: #90A0A0; box-shadow: 0 3px #708080; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -1041,17 +1223,17 @@
 
         <!-- Singleplayer Menu Content (Hidden by default) -->
         <div id="singleplayerMenuContent" style="display: none;">
-            <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #f1c40f; margin-bottom: 25px;">Choose Your Side</h3>
+            <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;">Choose Your Side</h3>
             <div class="menu-options-container">
-                <button id="playAsBlueButton" class="action-button" style="background-color: #5dade2; box-shadow: 0 3px #3498db;">Play as Blue (P1)</button>
-                <button id="playAsRedButton" class="action-button" style="background-color: #e74c3c; box-shadow: 0 3px #c0392b;">Play as Red (P2)</button>
+                <button id="playAsBlueButton" class="action-button" style="background-color: #5dade2; box-shadow: 0 3px #3090D0;">Play as Blue (P1)</button>
+                <button id="playAsRedButton" class="action-button" style="background-color: #E04030; box-shadow: 0 3px #C03020;">Play as Red (P2)</button>
             </div>
             <button id="backToMainMenuButtonSP" class="action-button action-button-cancel" style="margin-top: 25px;">Back</button>
         </div>
 
         <!-- Multiplayer Menu Content (Hidden by default) -->
         <div id="multiplayerMenuContent" style="display: none;">
-             <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #f1c40f; margin-bottom: 25px;">Multiplayer</h3>
+             <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;">Multiplayer</h3>
             <div class="menu-options-container">
                 <button id="localMultiplayerButton" class="action-button">Local</button>
                 <button id="onlineMultiplayerButton" class="action-button" disabled>Online (Coming Soon)</button>
@@ -1064,7 +1246,7 @@
 <!-- SETTINGS MODAL -->
 <div id="settingsModal" class="modal-overlay">
     <div class="modal-content">
-        <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #f1c40f; margin-bottom: 25px;">Settings</h3>
+        <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;">Settings</h3>
         <div id="settingsOptionsContainer">
             <div class="settings-option">
                 <label for="settingFancyVisuals">Fancy Visuals</label>
@@ -1096,13 +1278,55 @@
     </div>
 </div>
 
+<!-- COMPLETE CHANGELOG MODAL -->
+<div id="changelogModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 500px; text-align: left;">
+        <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px; text-align: center;">Changelog</h3>
+        <div id="changelogList" style="max-height: 50vh; overflow-y: auto; padding-right: 15px;">
+            <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B27: The Color Update</h4>
+            
+<ul style="list-style-type: disc; padding-left: 20px;">
+    <li style="margin-bottom: 15px;">
+        <strong style="color: #F0C020;">Feature: Team Color Customizer!</strong>
+        <ul style="list-style-type: circle; padding-left: 20px; margin-top: 5px;">
+            <li>A new slide-out drawer on the right allows you to change team colors at any time.</li>
+            <li>Choose from 5 distinct color themes for each player independently.</li>
+            <li>Your color choices are now saved to your browser and will be remembered for your next game!</li>
+        </ul>
+    </li>
+    <li style="margin-bottom: 15px;">
+        <strong style="color: #F0C020;">Feature: Changelog System</strong>
+        <ul style="list-style-type: circle; padding-left: 20px; margin-top: 5px;">
+            <li>Added a new 'Changelog' button to the main menu so you can see what's new in each update.</li>
+        </ul>
+    </li>
+    <li style="margin-bottom: 15px;">
+        <strong style="color: #F0C020;">Improvement: Complete Color System Overhaul</strong>
+        <ul style="list-style-type: circle; padding-left: 20px; margin-top: 5px;">
+            <li>All team and UI colors have been unified into a central system, making the game's theme consistent and easier to update.</li>
+            <li>All button colors across the UI have been updated to a new, quantized color palette for a more cohesive visual style.</li>
+        </ul>
+    </li>
+    <li style="margin-bottom: 15px;">
+        <strong style="color: #F0C020;">Improvement: Smooth Visual Transitions</strong>
+        <ul style="list-style-type: circle; padding-left: 20px; margin-top: 5px;">
+            <li>All UI elements, units, fortification outlines, and supply lines now transition their colors smoothly when a new theme is selected.</li>
+        </ul>
+    </li>
+</ul>
+
+        </div>
+        <button id="changelogBackButton" class="action-button action-button-cancel" style="margin-top: 30px; width: 100%;">Back</button>
+    </div>
+</div>
+
 <div id="gameLayoutContainer">
         <div id="leftPanel" class="ui-panel">
             <div>
-                <div id="globalTurnCounterDisplay" class="text-center" style="font-size: 1.5em; color: #f1c40f;">Turn: 1</div>
+                <div id="globalTurnCounterDisplay" class="text-center" style="font-size: 1.5em; color: #FFC020;">Turn: 1</div>
                 <div id="supplyPointsContainer" class="text-center" style="font-size: 0.9em; margin-top: 8px;">
-                    <span style="color:#5dade2;">P1 Supply: <span id="p1Supply">10</span></span> | 
-                    <span style="color:#e74c3c;">P2 Supply: <span id="p2Supply">10</span></span>
+                    <span>P1 Supply: <span id="p1Supply">10</span></span> | 
+                    <span>P2 Supply: <span id="p2Supply">10</span></span>
                 </div>
                 <hr style="width: 100%; border-color: #4a6075; margin-top: 10px;">
             </div>
@@ -1214,7 +1438,7 @@
 
 <div id="loadGameModal" class="modal-overlay" style="display: none;">
     <div class="modal-content">
-        <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #f1c40f; margin-bottom: 25px;">Load Game</h3>
+        <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;">Load Game</h3>
         <div id="loadOptionsContainer" style="display: flex; flex-direction: row; justify-content: center; gap: 20px;">
             <button id="loadFromAutosaveButton" class="action-button">Load Autosave</button>
             <button id="loadFromFileButton" class="action-button">Load Save File</button>
@@ -1229,7 +1453,7 @@
 <div id="newMapModal" class="modal-overlay" style="display: none;">
 <div class="modal-content">
 <button id="newMapModalCloseButton" class="tutorial-modal-close-button" title="Close">×</button>
-<h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #f1c40f; margin-bottom: 25px;">New Map</h3>
+<h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;">New Map</h3>
 <div id="newMapOptionsContainer">
 <button id="selectMapButton" class="action-button" disabled>Select Map (Coming Soon)</button>
 <button id="generateMapFromModalButton" class="action-button">Generate Map</button>
@@ -1387,7 +1611,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B26";
+        const BUILD_VERSION = "B27";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1420,6 +1644,7 @@
         const DRAG_SCALE_FACTOR = 1.2;  
         const DRAGGED_DISTANCE_THRESHOLD = 5; 
         const PULSE_DURATION_MS = 2000; 
+        const COLOR_TRANSITION_DURATION_MS = 400;
         const PATH_DRAW_ANIMATION_DURATION_MS = 750; 
         const PATH_DRAW_PAUSE_DURATION_MS = 500; 
         const PATH_DRAW_HOVER_DELAY_MS = 1000; 
@@ -1441,7 +1666,7 @@
         const MIN_PLAINS_TILES_SOFT = 12;
         const MIN_CENTRAL_PLAINS_SOFT = 3;
 
-        // NEW: Action State Constants
+        // Action State Constants
         const ACTION_STATES = {
             IDLE: 'idle',
             UNIT_SELECTED: 'unit_selected',
@@ -1449,6 +1674,36 @@
             SELECTING_UNFORTIFY_EDGE: 'selecting_unfortify_edge',
             SELECTING_BRIDGE_EDGE: 'selecting_bridge_edge',
             SELECTING_ATTACK_TARGET: 'selecting_attack_target',
+        };
+
+        // All available color themes
+        const COLOR_THEMES = [
+            { // Theme 1
+                player1: { primary: '#4060E0', secondary: '#60D0F0', accent: '#40B0FF' },
+                player2: { primary: '#E06040', secondary: '#FF7040', accent: '#FF8060' }
+            },
+            { // Theme 2
+                player1: { primary: '#4050D0', secondary: '#60C0E8', accent: '#50A0FF' },
+                player2: { primary: '#D05040', secondary: '#F86040', accent: '#FF7070' }
+            },
+            { // Theme 3 (Default)
+                player1: { primary: '#4040C0', secondary: '#60B0E0', accent: '#6090FF' },
+                player2: { primary: '#C04040', secondary: '#F05040', accent: '#FF6080' }
+            },
+            { // Theme 4
+                player1: { primary: '#4030B0', secondary: '#60A0D8', accent: '#7080FF' },
+                player2: { primary: '#B03040', secondary: '#E84040', accent: '#FF5090' }
+            },
+            { // Theme 5
+                player1: { primary: '#4020A0', secondary: '#6090D0', accent: '#8070FF' },
+                player2: { primary: '#A02040', secondary: '#E03040', accent: '#E03040' }
+            }
+        ];
+
+        //Team Color Definitions
+        const TEAM_COLORS = {
+            player1: { ...COLOR_THEMES[2].player1 },
+            player2: { ...COLOR_THEMES[2].player2 }
         };
 
         // Tile Definitions
@@ -1461,10 +1716,10 @@
 
         // Unit Definitions
         const UNIT_TYPES = {
-            MELEE:    { name: 'Melee',    hp: 12, baseMove: 4, attack: 3, color: '#4040C4', enemyColor: '#C44040', symbol: 'M', canBuildBridge: true,  canFortify: true,  fortificationBonus: 1, attackType: 'melee', defenseNegation: 0, canMoveAfterAttack: false, strengths: ['Archer'],   weaknesses: ['Horseman'] },
-            ARCHER:   { name: 'Archer',   hp: 10, baseMove: 3, attack: 3, color: '#4040C4', enemyColor: '#C44040', symbol: 'A', canBuildBridge: false, canFortify: true,  fortificationBonus: 1, attackType: 'ranged', defenseNegation: 0, canMoveAfterAttack: false, strengths: ['Pikeman'],  weaknesses: ['Melee'] },
-            PIKEMAN:  { name: 'Pikeman',  hp: 13, baseMove: 3, attack: 3, color: '#4040C4', enemyColor: '#C44040', symbol: 'P', canBuildBridge: false, canFortify: true,  fortificationBonus: 2, attackType: 'melee', defenseNegation: 1, canMoveAfterAttack: false, strengths: ['Horseman'], weaknesses: ['Archer'] },
-            HORSEMAN: { name: 'Horseman', hp: 11, baseMove: 5, attack: 3, color: '#4040C4', enemyColor: '#C44040', symbol: 'H', canBuildBridge: false, canFortify: false, fortificationBonus: 0, attackType: 'melee', defenseNegation: 0, canMoveAfterAttack: true,  strengths: ['Melee'],    weaknesses: ['Pikeman'] }
+            MELEE:    { name: 'Melee',    hp: 12, baseMove: 4, attack: 3, symbol: 'M', canBuildBridge: true,  canFortify: true,  fortificationBonus: 1, attackType: 'melee', defenseNegation: 0, canMoveAfterAttack: false, strengths: ['Archer'],   weaknesses: ['Horseman'] },
+            ARCHER:   { name: 'Archer',   hp: 10, baseMove: 3, attack: 3, symbol: 'A', canBuildBridge: false, canFortify: true,  fortificationBonus: 1, attackType: 'ranged', defenseNegation: 0, canMoveAfterAttack: false, strengths: ['Pikeman'],  weaknesses: ['Melee'] },
+            PIKEMAN:  { name: 'Pikeman',  hp: 13, baseMove: 3, attack: 3, symbol: 'P', canBuildBridge: false, canFortify: true,  fortificationBonus: 2, attackType: 'melee', defenseNegation: 1, canMoveAfterAttack: false, strengths: ['Horseman'], weaknesses: ['Archer'] },
+            HORSEMAN: { name: 'Horseman', hp: 11, baseMove: 5, attack: 3, symbol: 'H', canBuildBridge: false, canFortify: false, fortificationBonus: 0, attackType: 'melee', defenseNegation: 0, canMoveAfterAttack: true,  strengths: ['Melee'],    weaknesses: ['Pikeman'] }
         };
 
         const UNIT_SVGS = {
@@ -1551,6 +1806,8 @@
     let gameState = {
     gameMode: 'local', // 'local' or 'singleplayer'
     playerSide: null, // 1 or 2, for singleplayer mode
+    playerColorSelections: { player1: 2, player2: 2 },
+    colorTransition: { active: false, startTime: 0, from: {}, to: {} },
     tiles: new Map(),
     edges: new Map(),
     units: [],
@@ -1599,6 +1856,8 @@
     playerActionTaken: { player1: false, player2: false },
 };
 
+let currentDrawingColors = JSON.parse(JSON.stringify(TEAM_COLORS));
+
 let gameSettings = {
     animationsEnabled: true, //Enable/Disable All Animations
     fancyVisualsEnabled: true, //Enable/Disable New Tile Textures
@@ -1608,6 +1867,7 @@ let gameSettings = {
 };
 
 const SETTINGS_STORAGE_KEY = 'forthex_user_settings';
+const COLOR_PREF_STORAGE_KEY = 'forthex_color_preferences';
 
 function saveSettings() {
     try {
@@ -1632,9 +1892,58 @@ function loadSettings() {
     }
 }
 
+function saveColorPreferences() {
+    try {
+        const prefsString = JSON.stringify(gameState.playerColorSelections);
+        localStorage.setItem(COLOR_PREF_STORAGE_KEY, prefsString);
+    } catch (error) {
+        console.error("Could not save color preferences:", error);
+    }
+}
+
+function loadColorPreferences() {
+    try {
+        const savedPrefsString = localStorage.getItem(COLOR_PREF_STORAGE_KEY);
+        if (savedPrefsString) {
+            const loadedPrefs = JSON.parse(savedPrefsString);
+            // Update the game state with the loaded selections
+            gameState.playerColorSelections = Object.assign({}, gameState.playerColorSelections, loadedPrefs);
+
+            // CRITICAL: Update the main TEAM_COLORS object to reflect the loaded preferences
+            // This ensures the game starts with the correct colors.
+            TEAM_COLORS.player1 = { ...COLOR_THEMES[gameState.playerColorSelections.player1].player1 };
+            TEAM_COLORS.player2 = { ...COLOR_THEMES[gameState.playerColorSelections.player2].player2 };
+        }
+    } catch (error) {
+        console.error("Could not load color preferences:", error);
+    }
+}
+
         let currentConfirmAction = null;
 
         // --- Utility Functions ---
+
+        // Hex Color to RGBA
+        function hexToRgba(hex, alpha = 1) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        // Linearly interpolates between two hex colors
+        function lerpColor(colorA, colorB, amount) {
+            const ah = parseInt(colorA.replace(/#/g, ''), 16);
+            const ar = ah >> 16, ag = (ah >> 8) & 0xff, ab = ah & 0xff;
+            const bh = parseInt(colorB.replace(/#/g, ''), 16);
+            const br = bh >> 16, bg = (bh >> 8) & 0xff, bb = bh & 0xff;
+            const rr = ar + amount * (br - ar);
+            const rg = ag + amount * (bg - ag);
+            const rb = ab + amount * (bb - ab);
+            const newHex = ((1 << 24) + (Math.round(rr) << 16) + (Math.round(rg) << 8) + Math.round(rb)).toString(16).slice(1);
+            return `#${newHex}`;
+        }
+
         function axialToPixel(q, r) {
             const x = HEX_SIZE * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r) + canvas.width / 2;
             const y = HEX_SIZE * (3 / 2 * r) + canvas.height / 2;
@@ -2353,8 +2662,8 @@ if (tileLayoutMap) {
                 });
             };
 
-            drawBordersForPlayer(fortifiedTilesP1, UNIT_TYPES.MELEE.color);
-            drawBordersForPlayer(fortifiedTilesP2, UNIT_TYPES.MELEE.enemyColor);
+            drawBordersForPlayer(fortifiedTilesP1, currentDrawingColors.player1.primary);
+            drawBordersForPlayer(fortifiedTilesP2, currentDrawingColors.player2.primary);
         }
 
         function drawContestedEdgeIndicator() {
@@ -2514,7 +2823,7 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
                     if (!edge) return;
                     
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                    const teamColor = flag.player === 1 ? '#5dade2' : '#e74c3c';
+                    const teamColor = flag.player === 1 ? '#5dade2' : '#E04030';
                     const flagIconColor = '#ecf0f1'; 
                     const flagPoleColor = '#2c3e50';
                     const circleRadius = HEX_SIZE * 0.18;
@@ -2571,11 +2880,11 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
                     // Set line style based on status
                     let lineColor, lineWidth, isDashed;
                     if (isIntercepted) {
-                        lineColor = '#f39c12'; // Bright orange for broken supply
+                        lineColor = '#F0A010'; // Bright orange for broken supply
                         lineWidth = 4;
                         isDashed = true;
                     } else {
-                        lineColor = unit.player === 1 ? 'rgba(91, 148, 255, 0.8)' : 'rgba(255, 99, 132, 0.8)';
+                        lineColor = unit.player === 1 ? hexToRgba(currentDrawingColors.player1.accent, 0.8) : hexToRgba(currentDrawingColors.player2.accent, 0.8);
                         // Create a pulse effect for the line width
                         const pulse = (Math.sin(currentTime / 300) + 1) / 2; // Varies between 0 and 1
                         lineWidth = 2 + pulse * 3; // Varies between 2 and 5
@@ -2799,7 +3108,7 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
 
     ctx.beginPath();
             ctx.arc(x, y, radius, 0, 2 * Math.PI);
-            ctx.fillStyle = unit.player === 1 ? unit.type.color : unit.type.enemyColor;
+            ctx.fillStyle = unit.player === 1 ? currentDrawingColors.player1.primary : currentDrawingColors.player2.primary;
             ctx.fill();
             
             const healthBarVisualThickness = radius * 0.3;
@@ -3291,8 +3600,8 @@ function drawVisualEffects() {
 
                 // The gradient should fade from opaque at the base to transparent at the tip.
                 const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
-                gradient.addColorStop(0, baseColor.replace(')', `, ${globalOpacity})`).replace('rgb', 'rgba'));
-                gradient.addColorStop(1, baseColor.replace(')', `, 0)`).replace('rgb', 'rgba'));
+                gradient.addColorStop(0, hexToRgba(baseColor, globalOpacity));
+                gradient.addColorStop(1, hexToRgba(baseColor, 0));
 
                 ctx.strokeStyle = gradient;
 
@@ -3398,7 +3707,7 @@ function drawAnimations() {
                         const len = Math.sqrt(dx*dx + dy*dy) || 1;
                         const tailX = projectileX - (dx/len) * 15; const tailY = projectileY - (dy/len) * 15;
                         ctx.lineTo(tailX, tailY);
-                        ctx.strokeStyle = '#95a5a6'; ctx.lineWidth = 3; ctx.stroke();
+                        ctx.strokeStyle = '#90A0A0'; ctx.lineWidth = 3; ctx.stroke();
                     });
                 }
             }
@@ -3536,6 +3845,27 @@ function drawAnimations() {
 
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // --- NEW: Handle smooth color transition for canvas elements ---
+            if (gameState.colorTransition.active) {
+                const elapsedTime = Date.now() - gameState.colorTransition.startTime;
+                const progress = Math.min(elapsedTime / COLOR_TRANSITION_DURATION_MS, 1);
+
+                // Animate each player's primary AND accent colors independently
+                currentDrawingColors.player1.primary = lerpColor(gameState.colorTransition.from.player1.primary, gameState.colorTransition.to.player1.primary, progress);
+                currentDrawingColors.player2.primary = lerpColor(gameState.colorTransition.from.player2.primary, gameState.colorTransition.to.player2.primary, progress);
+                currentDrawingColors.player1.accent = lerpColor(gameState.colorTransition.from.player1.accent, gameState.colorTransition.to.player1.accent, progress);
+                currentDrawingColors.player2.accent = lerpColor(gameState.colorTransition.from.player2.accent, gameState.colorTransition.to.player2.accent, progress);
+
+                if (progress >= 1) {
+                    gameState.colorTransition.active = false;
+                }
+            } else {
+                // Ensure drawing colors are synced if no transition is active
+                currentDrawingColors.player1.primary = TEAM_COLORS.player1.primary;
+                currentDrawingColors.player2.primary = TEAM_COLORS.player2.primary;
+                currentDrawingColors.player1.accent = TEAM_COLORS.player1.accent;
+                currentDrawingColors.player2.accent = TEAM_COLORS.player2.accent;
+            }
             gameState.tiles.forEach(tile => drawHexFill(tile.q, tile.r, tile.type));
             drawHexEdgesAndBoundaries();
             drawFortificationOutlines();
@@ -3582,6 +3912,14 @@ drawVisualEffects();
             requestAnimationFrame(gameLoop);
         }
 
+            // Function to set CSS Variables from the TEAM_COLORS object
+            function updateCssVariables() {
+                const root = document.documentElement;
+                root.style.setProperty('--p1-color-secondary', TEAM_COLORS.player1.secondary);
+                root.style.setProperty('--p2-color-secondary', TEAM_COLORS.player2.secondary);
+            }
+
+
         // --- UI Update Functions ---
         function updateTurnDisplay() {
             if (ui.turnDisplay) {
@@ -3590,18 +3928,12 @@ drawVisualEffects();
                 console.error('[UI Update] CRITICAL: ui.turnDisplay element is null or undefined!');
             }
 
-            // NEW: Update canvas outline color based on the current player
-            // Using the established UI colors for players
-            const player1Color = '#5dade2';
-            const player2Color = '#e74c3c';
-
+            // Update canvas outline color based on the current player
             if (gameState.currentPlayer === 1) {
-                canvas.style.outline = `4px solid ${player1Color}`;
+                canvas.style.outlineColor = TEAM_COLORS.player1.secondary;
             } else {
-                canvas.style.outline = `4px solid ${player2Color}`;
+                canvas.style.outlineColor = TEAM_COLORS.player2.secondary;
             }
-            // Add a small offset to make the outline look better
-            canvas.style.outlineOffset = '2px';
         }
 
         function updateGlobalTurnDisplay() {
@@ -5970,7 +6302,7 @@ function triggerConfetti() {
     if (!container) return;
 
     const confettiCount = 150;
-    const colors = ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71', '#ecf0f1'];
+    const colors = ['#FFC020', '#E04030', '#3090D0', '#2ecc71', '#ecf0f1'];
 
     for (let i = 0; i < confettiCount; i++) {
         const confettiPiece = document.createElement('div');
@@ -6575,6 +6907,9 @@ function loadAutoSave() {
         
         // Overwrite the entire game state
         gameState = loadedState;
+        
+        // Re-link all the data structures
+        rehydrateGameState();
 
         // Perform a full re-initialization from the loaded state
         fullGameRedraw();
@@ -6587,85 +6922,64 @@ function loadAutoSave() {
     }
 }
 
-function fullGameRedraw() {
-    // This function re-initializes the game's UI and state from the `gameState` object.
-    // It's like initializeGrid, but without generating a new map layout.
+        function rehydrateGameState() {
+            // Converts loaded data from simple arrays back into live objects/maps
+            gameState.tiles = new Map(gameState.tiles);
+            gameState.edges = new Map(gameState.edges);
+            gameState.currentReachableMoves = gameState.currentReachableMoves ? new Map(gameState.currentReachableMoves) : new Map();
 
-    // Reset UI elements and states that aren't saved
-    canvas.width = (2 * gameState.gridRadius + 1.5) * (HEX_SIZE * Math.sqrt(3));
-    canvas.height = (2 * gameState.gridRadius + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;
-    document.querySelectorAll('.ui-panel').forEach(panel => { panel.style.minHeight = canvas.height + 'px'; });
-
-    // --- DATA HYDRATION AND RE-LINKING ---
-
-    // Step 1: Convert arrays from the save file back into Map instances.
-    gameState.tiles = new Map(gameState.tiles);
-    gameState.edges = new Map(gameState.edges);
-    if (gameState.currentReachableMoves) {
-         gameState.currentReachableMoves = new Map(gameState.currentReachableMoves);
-    } else {
-         gameState.currentReachableMoves = new Map();
-    }
-
-    // Step 2: Re-link tile types. This is the critical fix.
-    // We iterate through every loaded tile and point its 'type' back to the original constant object.
-    for (const tile of gameState.tiles.values()) {
-        if (tile.type && tile.type.name) {
-            const typeName = tile.type.name.toUpperCase();
-            tile.type = TILE_TYPES[typeName];
-        }
-    }
-
-    // Step 3: Re-link unit types. This fixes unit-specific logic.
-    for (const unit of gameState.units) {
-        if (unit.type && unit.type.name) {
-            const typeName = unit.type.name.toUpperCase();
-            unit.type = UNIT_TYPES[typeName];
-        }
-    }
-
-    // Step 4: Re-populate edge unit arrays to restore object references.
-    // First, clear all unit arrays on all edges.
-    for (const edge of gameState.edges.values()) {
-        edge.units = [];
-    }
-    // Then, iterate the master unit list and place real unit references back onto the edges.
-    for (const unit of gameState.units) {
-        if (unit.positionType === 'edge') {
-            const edge = gameState.edges.get(unit.position);
-            if (edge) {
-                edge.units.push(unit);
+            for (const tile of gameState.tiles.values()) {
+                if (tile.type && tile.type.name) {
+                    tile.type = TILE_TYPES[tile.type.name.toUpperCase()];
+                }
+            }
+            for (const unit of gameState.units) {
+                if (unit.type && unit.type.name) {
+                    unit.type = UNIT_TYPES[unit.type.name.toUpperCase()];
+                }
+            }
+            for (const edge of gameState.edges.values()) {
+                edge.units = [];
+            }
+            for (const unit of gameState.units) {
+                if (unit.positionType === 'edge') {
+                    const edge = gameState.edges.get(unit.position);
+                    if (edge) edge.units.push(unit);
+                }
             }
         }
-    }
-   
-    // Reset any non-persistent state properties
-    gameState.isDragging = false;
-    gameState.draggingUnit = null;
-    gameState.hoveredUnitId = null;
-    gameState.selectedUnit = null; // Deselect any unit upon loading
-    resetActionSelectionStates();
 
-    // Update all UI panels with loaded data
-    updateTurnDisplay();
-    updateGlobalTurnDisplay();
-    updateSupplyPointsDisplay();
-    updateRespawnQueueDisplay();
-    updateActionLogDisplay();
-    updateSelectedUnitInfoPanel(); // This will correctly show no selection
+        function fullGameRedraw() {
+            // This function re-initializes the game's UI and re-renders the canvas from the current gameState.
+            canvas.width = (2 * gameState.gridRadius + 1.5) * (HEX_SIZE * Math.sqrt(3));
+            canvas.height = (2 * gameState.gridRadius + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;
+            document.querySelectorAll('.ui-panel').forEach(panel => { panel.style.minHeight = canvas.height + 'px'; });
 
-    if (gameState.gameOver) {
-        ui.endTurnButton.disabled = true;
-        ui.actionsPanel.style.display = 'none';
-        // Find who won from the log or a new state variable if needed
-        ui.victoryMessage.textContent = "Game Over (Loaded)"; // Placeholder text
-        ui.victoryMessage.style.display = 'block';
-    } else {
-        ui.victoryMessage.style.display = 'none';
-        ui.endTurnButton.disabled = false;
-    }
-    requestAnimationFrame(gameLoop);
-}
+            // Reset any non-persistent state properties that might affect drawing
+            gameState.isDragging = false;
+            gameState.draggingUnit = null;
+            gameState.hoveredUnitId = null;
+
+            // Update all UI panels with current data
+            updateTurnDisplay();
+            updateGlobalTurnDisplay();
+            updateSupplyPointsDisplay();
+            updateRespawnQueueDisplay();
+            updateActionLogDisplay();
+            updateSelectedUnitInfoPanel();
+
+            if (gameState.gameOver) {
+                ui.endTurnButton.disabled = true;
+                ui.actionsPanel.style.display = 'none';
+                ui.victoryMessage.textContent = "Game Over (Loaded)";
+                ui.victoryMessage.style.display = 'block';
+            } else {
+                ui.victoryMessage.style.display = 'none';
+                ui.endTurnButton.disabled = false;
+            }
+            // A single call to gameLoop will trigger a full redraw of the canvas
+            requestAnimationFrame(gameLoop);
+        }
 
 // ========================================================================
 // --- NEW IMPROVED MAP GENERATOR (V3 - Corrected) ---
@@ -7063,6 +7377,8 @@ function isCoordInRadius(key, radius) {
             document.getElementById('buildVersionDisplay').textContent = `FortHex Build ${BUILD_VERSION}`;
             
             loadSettings(); // Load settings from localStorage into the gameSettings object
+            loadColorPreferences(); // ADD THIS LINE to load color preferences
+
 
             // Sync UI checkboxes to match the loaded settings
             document.getElementById('settingAnimations').checked = gameSettings.animationsEnabled;
@@ -7089,93 +7405,74 @@ function isCoordInRadius(key, radius) {
             // Set initial state on load
             updateConnectionStatus();
 
+            // --- Main Menu System Listeners ---
+            document.getElementById('gameIconLink').addEventListener('click', (event) => {
+                event.preventDefault(); 
+                document.getElementById('customConfirmMessage').textContent = 'Are you sure you want to restart? Any unsaved progress will be lost.';
+                currentConfirmAction = () => {
+                    location.reload();
+                };
+                if (ui.customConfirmModal) {
+                    ui.customConfirmModal.style.display = 'flex';
+                    setTimeout(() => ui.customConfirmModal.classList.add('modal-visible'), 10);
+                }
+            });
 
+            document.getElementById('gameMenuTrigger').addEventListener('click', () => {
+                const modal = document.getElementById('gameMenuModal');
+                document.getElementById('mainMenuContent').style.display = 'block';
+                document.getElementById('singleplayerMenuContent').style.display = 'none';
+                document.getElementById('multiplayerMenuContent').style.display = 'none';
+                modal.style.display = 'flex';
+                setTimeout(() => modal.classList.add('modal-visible'), 10);
+            });
 
-// --- NEW: Main Menu System Listeners ---
+            const mainMenuContent = document.getElementById('mainMenuContent');
+            const spMenuContent = document.getElementById('singleplayerMenuContent');
+            const mpMenuContent = document.getElementById('multiplayerMenuContent');
 
-// The top-left ICON listener (simple refresh with custom modal)
-document.getElementById('gameIconLink').addEventListener('click', (event) => {
-    event.preventDefault(); // Prevent default link behavior
+            document.getElementById('singleplayerButton').addEventListener('click', () => {
+                mainMenuContent.style.display = 'none';
+                spMenuContent.style.display = 'block';
+            });
 
-    // Set the message and the action for the modal
-    document.getElementById('customConfirmMessage').textContent = 'Are you sure you want to restart? Any unsaved progress will be lost.';
-    currentConfirmAction = () => {
-        location.reload();
-    };
+            document.getElementById('multiplayerButton').addEventListener('click', () => {
+                mainMenuContent.style.display = 'none';
+                mpMenuContent.style.display = 'block';
+            });
 
-    if (ui.customConfirmModal) {
-        ui.customConfirmModal.style.display = 'flex';
-        setTimeout(() => ui.customConfirmModal.classList.add('modal-visible'), 10);
-    }
-});
+            document.getElementById('playAsBlueButton').addEventListener('click', () => startSingleplayerGame(1));
+            document.getElementById('playAsRedButton').addEventListener('click', () => startSingleplayerGame(2));
 
-// The top-left MENU TEXT listener (shows the unified modal)
-document.getElementById('gameMenuTrigger').addEventListener('click', () => {
-    const modal = document.getElementById('gameMenuModal');
-    // Reset to show main menu content first
-    document.getElementById('mainMenuContent').style.display = 'block';
-    document.getElementById('singleplayerMenuContent').style.display = 'none';
-    document.getElementById('multiplayerMenuContent').style.display = 'none';
-    modal.style.display = 'flex';
-    setTimeout(() => modal.classList.add('modal-visible'), 10);
-});
+            document.getElementById('localMultiplayerButton').addEventListener('click', () => location.reload());
 
-// --- Unified Menu Button Listeners ---
-const mainMenuContent = document.getElementById('mainMenuContent');
-const spMenuContent = document.getElementById('singleplayerMenuContent');
-const mpMenuContent = document.getElementById('multiplayerMenuContent');
+            document.getElementById('backToMainMenuButtonSP').addEventListener('click', () => {
+                spMenuContent.style.display = 'none';
+                mainMenuContent.style.display = 'block';
+            });
+            document.getElementById('backToMainMenuButtonMP').addEventListener('click', () => {
+                mpMenuContent.style.display = 'none';
+                mainMenuContent.style.display = 'block';
+            });
 
-// Main Menu -> Singleplayer
-document.getElementById('singleplayerButton').addEventListener('click', () => {
-    mainMenuContent.style.display = 'none';
-    spMenuContent.style.display = 'block';
-});
+            document.getElementById('gameMenuModal').addEventListener('click', (e) => {
+                if (e.target.id === 'gameMenuModal') {
+                    const modal = e.target;
+                    modal.classList.remove('modal-visible');
+                    setTimeout(() => modal.style.display = 'none', 300);
+                }
+            });
 
-// Main Menu -> Multiplayer
-document.getElementById('multiplayerButton').addEventListener('click', () => {
-    mainMenuContent.style.display = 'none';
-    mpMenuContent.style.display = 'block';
-});
-
-// Singleplayer -> Play
-document.getElementById('playAsBlueButton').addEventListener('click', () => startSingleplayerGame(1));
-document.getElementById('playAsRedButton').addEventListener('click', () => startSingleplayerGame(2));
-
-// Multiplayer -> Play Local
-document.getElementById('localMultiplayerButton').addEventListener('click', () => location.reload());
-
-// Back buttons
-document.getElementById('backToMainMenuButtonSP').addEventListener('click', () => {
-    spMenuContent.style.display = 'none';
-    mainMenuContent.style.display = 'block';
-});
-document.getElementById('backToMainMenuButtonMP').addEventListener('click', () => {
-    mpMenuContent.style.display = 'none';
-    mainMenuContent.style.display = 'block';
-});
-
-// Add click-outside-to-close for the unified modal
-document.getElementById('gameMenuModal').addEventListener('click', (e) => {
-    if (e.target.id === 'gameMenuModal') {
-        const modal = e.target;
-        modal.classList.remove('modal-visible');
-        setTimeout(() => modal.style.display = 'none', 300);
-    }
-});
-
-            // --- NEW: Settings Modal Listeners ---
             const settingsButton = document.getElementById('settingsButton');
             const settingsModal = document.getElementById('settingsModal');
             const settingsBackButton = document.getElementById('settingsBackButton');
             const gameMenuModal = document.getElementById('gameMenuModal');
 
             settingsButton.addEventListener('click', () => {
-                // Hide the main menu modal
                 if (gameMenuModal) {
                     gameMenuModal.classList.remove('modal-visible');
                     setTimeout(() => { gameMenuModal.style.display = 'none'; }, 300);
                 }
-                // Show the settings modal after a short delay
                 if (settingsModal) {
                     setTimeout(() => {
                         settingsModal.style.display = 'flex';
@@ -7185,12 +7482,10 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
             });
 
             settingsBackButton.addEventListener('click', () => {
-                // Hide the settings modal
                 if (settingsModal) {
                     settingsModal.classList.remove('modal-visible');
                     setTimeout(() => { settingsModal.style.display = 'none'; }, 300);
                 }
-                // Show the main menu modal again
                 if (gameMenuModal) {
                      setTimeout(() => {
                         gameMenuModal.style.display = 'flex';
@@ -7199,20 +7494,52 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
                 }
             });
 
-            // Add click-outside-to-close for the settings modal
             settingsModal.addEventListener('click', (e) => {
                 if (e.target.id === 'settingsModal') {
-                    // This now closes the settings modal directly without going back to the menu.
                     const modal = e.target;
                     modal.classList.remove('modal-visible');
                     setTimeout(() => modal.style.display = 'none', 300);
                 }
             });
 
-            // --- Settings Initialization and Event Listeners ---
-            const gameWrapper = document.getElementById('gameWrapper');
+            // --- Changelog Modal Listeners ---
+            const changelogButton = document.getElementById('changelogButton');
+            const changelogModal = document.getElementById('changelogModal');
+            const changelogBackButton = document.getElementById('changelogBackButton');
 
-            // Find all settings UI elements
+            changelogButton.addEventListener('click', () => {
+                if (gameMenuModal) {
+                    gameMenuModal.classList.remove('modal-visible');
+                    setTimeout(() => { gameMenuModal.style.display = 'none'; }, 300);
+                }
+                if (changelogModal) {
+                    setTimeout(() => {
+                        changelogModal.style.display = 'flex';
+                        setTimeout(() => changelogModal.classList.add('modal-visible'), 10);
+                    }, 350);
+                }
+            });
+
+            changelogBackButton.addEventListener('click', () => {
+                if (changelogModal) {
+                    changelogModal.classList.remove('modal-visible');
+                    setTimeout(() => { changelogModal.style.display = 'none'; }, 300);
+                }
+                if (gameMenuModal) {
+                     setTimeout(() => {
+                        gameMenuModal.style.display = 'flex';
+                        setTimeout(() => gameMenuModal.classList.add('modal-visible'), 10);
+                    }, 350);
+                }
+            });
+
+            changelogModal.addEventListener('click', (e) => {
+                if (e.target.id === 'changelogModal') {
+                    changelogBackButton.click(); // Programmatically click the back button
+                }
+            });
+
+            const gameWrapper = document.getElementById('gameWrapper');
             const animationsCheckbox = document.getElementById('settingAnimations');
             const passTurnCheckbox = document.getElementById('settingPassTurnConfirmation');
             const fancyVisualsCheckbox = document.getElementById('settingFancyVisuals');
@@ -7220,24 +7547,20 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
             const uiScaleSlider = document.getElementById('settingUiScale');
             const uiScaleValueLabel = document.getElementById('uiScaleValueLabel');
 
-            // Function to apply the current scale setting to the UI
             function applyUiScale() {
                 uiScaleSlider.value = gameSettings.uiScale;
                 uiScaleValueLabel.textContent = `${Math.round(gameSettings.uiScale * 100)}%`;
                 gameWrapper.style.transform = `scale(${gameSettings.uiScale})`;
             }
 
-            // --- Apply settings on initial game load ---
-            loadSettings(); // Load all settings from localStorage first
+            loadSettings(); 
 
-            // Sync the UI to match the loaded settings
             animationsCheckbox.checked = gameSettings.animationsEnabled;
             passTurnCheckbox.checked = gameSettings.passTurnConfirmationEnabled;
             fancyVisualsCheckbox.checked = gameSettings.fancyVisualsEnabled;
             tooltipsCheckbox.checked = gameSettings.tooltipsEnabled;
-            applyUiScale(); // Apply the loaded scale value to the slider and the game wrapper
+            applyUiScale(); 
 
-            // --- Add event listeners to save settings when they change ---
             animationsCheckbox.addEventListener('change', (e) => {
                 gameSettings.animationsEnabled = e.target.checked;
                 saveSettings();
@@ -7261,71 +7584,69 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
             uiScaleSlider.addEventListener('input', (e) => {
                 const scaleValue = parseFloat(e.target.value);
                 gameSettings.uiScale = scaleValue;
-                applyUiScale(); // Update the transform and label
-                saveSettings(); // Save the new scale value
+                applyUiScale(); 
+                saveSettings(); 
             });
 
-                    // --- NEW: Confirmation Modal "Click Outside" Listener ---
-        const customConfirmModalOverlay = document.getElementById('customConfirmModal');
-        customConfirmModalOverlay.addEventListener('click', (event) => {
-            if (event.target === customConfirmModalOverlay) {
-                if (ui.customConfirmModal) {
-                    ui.customConfirmModal.classList.remove('modal-visible');
-                    setTimeout(() => ui.customConfirmModal.style.display = 'none', 300);
-                    currentConfirmAction = null; // Also cancel the pending action
+            const customConfirmModalOverlay = document.getElementById('customConfirmModal');
+            customConfirmModalOverlay.addEventListener('click', (event) => {
+                if (event.target === customConfirmModalOverlay) {
+                    if (ui.customConfirmModal) {
+                        ui.customConfirmModal.classList.remove('modal-visible');
+                        setTimeout(() => ui.customConfirmModal.style.display = 'none', 300);
+                        currentConfirmAction = null; 
+                    }
                 }
-            }
-        });
+            });
 
-        // --- NEW: Load Game Modal Listeners ---
-        const loadGameModalOverlay = document.getElementById('loadGameModal');
-        loadGameModalOverlay.addEventListener('click', (event) => {
-            // If the click is on the overlay itself (the background), close the modal.
-            if (event.target === loadGameModalOverlay) {
-                hideLoadGameModal();
-            }
-        });
-
-        document.getElementById('loadFromAutosaveButton').addEventListener('click', () => {
-        if (localStorage.getItem('forthexSaveGame')) {
-            loadAutoSave();
-            hideLoadGameModal();
-        } else {
-            showInstruction("No autosave found.", 2000);
-        }
-    });
-
-    document.getElementById('loadFromFileButton').addEventListener('click', () => {
-        // Trigger the hidden file input
-        document.getElementById('fileLoaderInput').click();
-    });
-
-    document.getElementById('fileLoaderInput').addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        if (!file) {
-            return; // User cancelled the dialog
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const loadedState = JSON.parse(e.target.result);
-                if (loadedState.saveVersion !== BUILD_VERSION) {
-                    showInstruction("Save file is from an incompatible version.", 3000);
-                    return;
+            const loadGameModalOverlay = document.getElementById('loadGameModal');
+            loadGameModalOverlay.addEventListener('click', (event) => {
+                if (event.target === loadGameModalOverlay) {
+                    hideLoadGameModal();
                 }
-                gameState = loadedState;
-                fullGameRedraw();
-                hideLoadGameModal();
-                showInstruction("Game loaded from file!", 2000);
-            } catch (error) {
-                console.error("Failed to load from file:", error);
-                showInstruction("Error: Invalid or corrupted save file.", 3000);
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = null; // Reset the input so the same file can be loaded again
-    });
+            });
+
+            document.getElementById('loadFromAutosaveButton').addEventListener('click', () => {
+                if (localStorage.getItem('forthexSaveGame')) {
+                    loadAutoSave();
+                    hideLoadGameModal();
+                } else {
+                    showInstruction("No autosave found.", 2000);
+                }
+            });
+
+            document.getElementById('loadFromFileButton').addEventListener('click', () => {
+                document.getElementById('fileLoaderInput').click();
+            });
+
+            document.getElementById('fileLoaderInput').addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) {
+                    return; 
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const loadedState = JSON.parse(e.target.result);
+                        if (loadedState.saveVersion !== BUILD_VERSION) {
+                            showInstruction("Save file is from an incompatible version.", 3000);
+                            return;
+                        }
+                        gameState = loadedState;
+                        rehydrateGameState(); // Re-link data
+                        fullGameRedraw();
+                        hideLoadGameModal();
+                        showInstruction("Game loaded from file!", 2000);
+                    } catch (error) {
+                        console.error("Failed to load from file:", error);
+                        showInstruction("Error: Invalid or corrupted save file.", 3000);
+                    }
+                };
+                reader.readAsText(file);
+                event.target.value = null; 
+            });
+
             const respawnChoicesDiv = document.getElementById('respawnChoices');
             if (respawnChoicesDiv) {
                 respawnChoicesDiv.addEventListener('click', (event) => {
@@ -7337,21 +7658,16 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
                         if (unitType) {
                             const spawnSuccess = spawnUnit(gameState.currentPlayer, unitType);
 
-                                                        if (spawnSuccess) {
+                            if (spawnSuccess) {
                                 const queueKey = `player${gameState.currentPlayer}`;
-                                gameState.respawnQueue[queueKey].shift(); // Remove the unit that was just spawned
-
-                                updateRespawnQueueDisplay(); // Update the list UI immediately
-
-                                // Check if another unit is ready to be spawned for the same player
+                                gameState.respawnQueue[queueKey].shift(); 
+                                updateRespawnQueueDisplay(); 
                                 const queue = gameState.respawnQueue[queueKey];
                                 const nextInQueue = queue.length > 0 ? queue[0] : null;
 
                                 if (nextInQueue && nextInQueue.turnsRemaining <= 0) {
-                                    // There's another one ready. Re-show the modal for the next choice.
                                     showRespawnModal(gameState.currentPlayer);
                                 } else {
-                                    // No more units are ready, so hide the modal.
                                     hideRespawnModal();
                                 }
                             } else {
@@ -7362,15 +7678,178 @@ document.getElementById('gameMenuModal').addEventListener('click', (e) => {
                     }
                 });
             }
+
             gameState.gridRadius = GRID_RADIUS; 
-            initializeGrid(); 
+            initializeGrid();
+            // This is the important call to our new function
+            updateCssVariables(); 
+            populateColorPickers();
             gameLoop();
             showInstruction("Project Hexblade Loaded. Player 1's Turn.", 3000);
-        };
+
+            // --- Color Picker Drawer Logic ---
+            const colorPickerDrawer = document.getElementById('colorPickerDrawer');
+            const drawerHandle = document.getElementById('drawerHandle');
+            const drawerTabs = document.getElementById('drawerTabs');
+            const tabButtons = document.querySelectorAll('.drawer-tab-button');
+            const drawerIcon = drawerHandle.querySelector('svg');
+            const tabContent = document.getElementById('drawerTabContent');
+
+            // This function now only CREATES the 5 circles once.
+            function populateColorPickers() {
+                const container = document.getElementById('color-options');
+                if (!container) return;
+
+                container.innerHTML = ''; // Clear any existing circles
+
+                for (let i = 0; i < COLOR_THEMES.length; i++) {
+                    const circle = document.createElement('div');
+                    circle.className = 'color-option-circle';
+                    circle.dataset.themeIndex = i;
+                    // Player dataset is now set dynamically when tabs are switched
+                    container.appendChild(circle);
+                }
+
+                // Set the initial colors and active state to Player 1's palette
+                updateColorPickerCircles('player1');
+            }
+
+            // This function UPDATES the colors and active state of the 5 circles
+            function updateColorPickerCircles(playerKey) {
+                const container = document.getElementById('color-options');
+                if (!container) return;
+                const circles = container.querySelectorAll('.color-option-circle');
+                const activeThemeIndex = gameState.playerColorSelections[playerKey];
+
+                circles.forEach((circle, index) => {
+                    const theme = COLOR_THEMES[index];
+                    circle.style.backgroundColor = theme[playerKey].primary;
+                    circle.dataset.player = playerKey.slice(-1); // Set player to '1' or '2'
+                    
+                    // Update which circle is highlighted as active
+                    circle.classList.toggle('active', index === activeThemeIndex);
+                });
+            }
+
+            // Helper function to update the drawer's border/icon colors based on the active tab
+            function updateDrawerColors() {
+                const activeTab = document.querySelector('.drawer-tab-button.active');
+                if (!activeTab) return;
+
+                const activePlayerKey = activeTab.dataset.tab === 'p1' ? 'player1' : 'player2';
+                
+                if (colorPickerDrawer.classList.contains('drawer-open')) {
+                    colorPickerDrawer.style.borderColor = TEAM_COLORS[activePlayerKey].primary;
+                    drawerHandle.style.borderColor = TEAM_COLORS[activePlayerKey].primary;
+                    drawerIcon.style.stroke = TEAM_COLORS[activePlayerKey].accent;
+                } else {
+                    colorPickerDrawer.style.borderColor = '#ecf0f1';
+                    drawerHandle.style.borderColor = '#ecf0f1';
+                    drawerIcon.style.stroke = '#ecf0f1';
+                }
+            }
+
+            // Event handler for clicking a color circle
+            function handleColorSelection(event) {
+                const circle = event.target.closest('.color-option-circle');
+                if (!circle) return;
+
+                const player = circle.dataset.player; // '1' or '2'
+                const themeIndex = parseInt(circle.dataset.themeIndex, 10);
+                const playerKey = `player${player}`;
+                const otherPlayerKey = player === '1' ? 'player2' : 'player1';
+
+                // --- Start the transition ---
+                gameState.colorTransition.active = true;
+                gameState.colorTransition.startTime = Date.now();
+                
+                // Store the 'from' and 'to' color objects for BOTH players
+                gameState.colorTransition.from.player1 = { ...TEAM_COLORS.player1 };
+                gameState.colorTransition.from.player2 = { ...TEAM_COLORS.player2 };
+                gameState.colorTransition.to[playerKey] = { ...COLOR_THEMES[themeIndex][playerKey] };
+                gameState.colorTransition.to[otherPlayerKey] = { ...TEAM_COLORS[otherPlayerKey] }; // The other player's color doesn't change
+
+                // 1. Update the live TEAM_COLORS object for ONLY the selected player
+                TEAM_COLORS[playerKey] = { ...COLOR_THEMES[themeIndex][playerKey] };
+                gameState.playerColorSelections[playerKey] = themeIndex; // Remember this selection
+
+                // 2. Update the active circle visuals
+                const container = circle.parentElement;
+                container.querySelectorAll('.color-option-circle').forEach(c => c.classList.remove('active'));
+                circle.classList.add('active');
+
+                // 3. Update all DOM UI elements instantly
+                updateCssVariables();
+                updateTurnDisplay();
+                updateDrawerColors();
+                saveColorPreferences(); 
+            }
+
+            // Open/Close the drawer
+            drawerHandle.addEventListener('click', () => {
+                colorPickerDrawer.classList.toggle('drawer-open');
+                updateDrawerColors();
+            });
+
+            // Switch between P1 and P2 tabs
+            drawerTabs.addEventListener('click', (e) => {
+                const clickedButton = e.target.closest('.drawer-tab-button');
+                if (!clickedButton) return;
+                
+                const targetTabId = clickedButton.dataset.tab;
+                const playerKey = targetTabId === 'p1' ? 'player1' : 'player2';
+
+                // Update button active state
+                tabButtons.forEach(button => {
+                    button.classList.toggle('active', button.dataset.tab === targetTabId);
+                });
+
+                // This is the fix: Update the circle colors and then the drawer border
+                updateColorPickerCircles(playerKey);
+                updateDrawerColors();
+            });
+
+            // Attach the click listener for selecting a color
+            if (tabContent) {
+                tabContent.addEventListener('click', handleColorSelection);
+            }
+
+            // Close drawer if clicking outside
+            document.addEventListener('click', (e) => {
+                if (colorPickerDrawer.classList.contains('drawer-open') && !colorPickerDrawer.contains(e.target)) {
+                    colorPickerDrawer.classList.remove('drawer-open');
+                    updateDrawerColors(); // Reset colors when closing
+                }
+            });
+
+            // Prevent outside-click from firing on the handle itself
+            drawerHandle.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            // --- End of Color Picker Drawer Logic ---
+        }
     </script>
           
 <div id="buildVersionDisplay"></div>
 <div id="confettiContainer"></div>
 
+<div id="colorPickerDrawer">
+    <div id="drawerHandle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0L12 2.69z"></path>
+        </svg>
+    </div>
+    <div id="drawerContent">
+        <div id="drawerTabs">
+            <button class="drawer-tab-button active p1-tab" data-tab="p1">P1</button>
+            <button class="drawer-tab-button p2-tab" data-tab="p2">P2</button>
+        </div>
+        <div id="drawerTabContent">
+            <div id="color-options" class="color-options-container">
+                <!-- All 5 circles generated by JS -->
+            </div>
+        </div>
+    </div>
+</div>
 
 </body></html>
