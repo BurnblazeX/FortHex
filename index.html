@@ -2823,7 +2823,7 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
                     if (!edge) return;
                     
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                    const teamColor = flag.player === 1 ? '#5dade2' : '#E04030';
+                    const teamColor = currentDrawingColors[`player${flag.player}`].secondary;
                     const flagIconColor = '#ecf0f1'; 
                     const flagPoleColor = '#2c3e50';
                     const circleRadius = HEX_SIZE * 0.18;
@@ -3122,7 +3122,7 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
 
             if (unit.isCarryingFlag) {
                 const enemyPlayer = unit.player === 1 ? 2 : 1;
-                mainBorderColor = enemyPlayer === 1 ? UNIT_TYPES.MELEE.color : UNIT_TYPES.MELEE.enemyColor;
+                mainBorderColor = currentDrawingColors[`player${enemyPlayer}`].primary;
             } else if (gameState.selectedUnit && gameState.selectedUnit.id === unit.id) {
                 mainBorderColor = '#FFD700';
             } else if (gameState.hoveredUnitId === unit.id && unit.player === gameState.currentPlayer) {
@@ -3845,14 +3845,16 @@ function drawAnimations() {
 
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // --- NEW: Handle smooth color transition for canvas elements ---
+            // --- Handle smooth color transition for canvas elements ---
             if (gameState.colorTransition.active) {
                 const elapsedTime = Date.now() - gameState.colorTransition.startTime;
                 const progress = Math.min(elapsedTime / COLOR_TRANSITION_DURATION_MS, 1);
 
-                // Animate each player's primary AND accent colors independently
+                // Animate each player's primary, SECONDARY, AND accent colors independently
                 currentDrawingColors.player1.primary = lerpColor(gameState.colorTransition.from.player1.primary, gameState.colorTransition.to.player1.primary, progress);
                 currentDrawingColors.player2.primary = lerpColor(gameState.colorTransition.from.player2.primary, gameState.colorTransition.to.player2.primary, progress);
+                currentDrawingColors.player1.secondary = lerpColor(gameState.colorTransition.from.player1.secondary, gameState.colorTransition.to.player1.secondary, progress); 
+                currentDrawingColors.player2.secondary = lerpColor(gameState.colorTransition.from.player2.secondary, gameState.colorTransition.to.player2.secondary, progress); 
                 currentDrawingColors.player1.accent = lerpColor(gameState.colorTransition.from.player1.accent, gameState.colorTransition.to.player1.accent, progress);
                 currentDrawingColors.player2.accent = lerpColor(gameState.colorTransition.from.player2.accent, gameState.colorTransition.to.player2.accent, progress);
 
@@ -3863,6 +3865,8 @@ function drawAnimations() {
                 // Ensure drawing colors are synced if no transition is active
                 currentDrawingColors.player1.primary = TEAM_COLORS.player1.primary;
                 currentDrawingColors.player2.primary = TEAM_COLORS.player2.primary;
+                currentDrawingColors.player1.secondary = TEAM_COLORS.player1.secondary;
+                currentDrawingColors.player2.secondary = TEAM_COLORS.player2.secondary;
                 currentDrawingColors.player1.accent = TEAM_COLORS.player1.accent;
                 currentDrawingColors.player2.accent = TEAM_COLORS.player2.accent;
             }
