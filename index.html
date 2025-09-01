@@ -1611,7 +1611,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B27/2";
+        const BUILD_VERSION = "B27//3";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -3578,7 +3578,7 @@ function drawVisualEffects() {
             // Overall effect opacity (fades out the whole effect over time).
             const globalOpacity = 1.0 - progress;
 
-            const baseColor = effect.player === 1 ? `rgb(91, 148, 255)` : `rgb(231, 76, 60)`;
+            const baseColor = effect.player === 1 ? currentDrawingColors.player1.accent : currentDrawingColors.player2.accent;
             
             ctx.lineWidth = 4;
             ctx.lineCap = 'round';
@@ -4168,18 +4168,22 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
 
             gameState.unitCounts[`player${destroyedPlayer}`][unitToDestroy.type.name]--;
 
-            if (unitToDestroy.isCarryingFlag) {
-                const flag = Object.values(gameState.flags).find(f => f.carrierId === unitToDestroy.id);
-                if (flag) {
-                    flag.status = 'at_base';
-                    flag.carrierId = null;
-                    unitToDestroy.isCarryingFlag = false; 
-                    logAction(`The P${flag.player} flag has been returned to base!`, activePlayer);
-                    recalculateSupplyLinesForPlayer(flag.player);
-                }
-            }
-            
-            const queueKey = `player${destroyedPlayer}`;
+    if (unitToDestroy.isCarryingFlag) {
+        const flag = Object.values(gameState.flags).find(f => f.carrierId === unitToDestroy.id);
+        if (flag) {
+            flag.status = 'at_base';
+            flag.carrierId = null;
+            unitToDestroy.isCarryingFlag = false;
+            logAction(`The P${flag.player} flag has been returned to base!`, activePlayer);
+
+            // Restore supply points and recalculate the entire network
+            updateSupplyPointsBasedOnFlagStatus(flag.player); // This restores points to 10
+            recalculatePlayerSupplyNetwork(flag.player);      // This recalculates lines and deducts costs
+        }
+    }
+
+    const queueKey = `player${destroyedPlayer}`;
+
             gameState.respawnQueue[queueKey].push({
                 unitType: unitToDestroy.type,
                 turnsRemaining: RESPAWN_TURN_TIMER
@@ -4411,6 +4415,20 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
         function recalculatePlayerSupplyNetwork(playerNum) {
             const playerSupplyKey = `player${playerNum}`;
             const maxSupply = 10;
+
+            // Guard clause to prevent supply calculation if flag is stolen
+            const playerFlag = gameState.flags[`p${playerNum}_flag`];
+            if (playerFlag && playerFlag.status === 'carried') {
+                // If the flag is stolen, no unit can be in supply.
+                // Nullify all supply lines but DO NOT change supply points.
+                gameState.units.forEach(unit => {
+                    if (unit.player === playerNum) {
+                        unit.supplyLine = null;
+                    }
+                });
+                // The player's supply points should remain at 0.
+                return; // Exit the function immediately.
+            }
 
             // Reset all non-base supply lines for the player to start fresh
             gameState.units.forEach(unit => {
@@ -5301,6 +5319,20 @@ function completeBuildBridge(targetEdgeKey) {
             }
         }
 
+        function updateSupplyPointsBasedOnFlagStatus(playerNum) {
+            const playerFlag = gameState.flags[`p${playerNum}_flag`];
+            const playerSupplyKey = `player${playerNum}`;
+
+            if (playerFlag && playerFlag.status === 'carried') {
+                // Flag is stolen, set supply to 0.
+                gameState.supplyPoints[playerSupplyKey] = 0;
+            } else {
+                // Flag is at base, restore to max.
+                gameState.supplyPoints[playerSupplyKey] = 10;
+            }
+            updateSupplyPointsDisplay();
+        }
+
 function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     if (!attackingUnit || !targetUnitInfo || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) {
         showInstruction("Cannot complete attack.", 2000); 
@@ -5624,6 +5656,9 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
         logAction(`P${unitToMove.player} ${unitToMove.type.name} has picked up the flag!`, gameState.currentPlayer);
         updateAllHealingStatus();
         severSupplyLinesForPlayer(enemyFlag.player);
+
+        // Set supply points to 0 for the player whose flag was stolen
+        updateSupplyPointsBasedOnFlagStatus(enemyFlag.player);
 
         // --- CREATE THE STARBURST EFFECT ---
         const unitPos = getUnitScreenPosition(unitToMove);
