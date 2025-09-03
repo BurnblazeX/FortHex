@@ -46,7 +46,7 @@
         body {
             font-family: 'Exo 2', sans-serif;
             background-color: var(--bg-color);
-            color: #ecf0f1;
+            color: #F0F0F0;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -79,7 +79,7 @@
             border-radius: 50%;
             background: #3090D0;
             cursor: pointer;
-            border: 3px solid #ecf0f1;
+            border: 3px solid #F0F0F0;
         }
         input[type="range"]::-moz-range-thumb {
             width: 20px;
@@ -87,7 +87,7 @@
             border-radius: 50%;
             background: #3090D0;
             cursor: pointer;
-            border: 3px solid #ecf0f1;
+            border: 3px solid #F0F0F0;
         }
 
         .settings-option:has(input:disabled) label,
@@ -170,7 +170,7 @@
 }
 #gameMenuTrigger {
     background-color: #34495e;
-    border: 2px solid #ecf0f1;
+    border: 2px solid #F0F0F0;
     border-radius: 8px;
     padding: 6px 15px;
     cursor: pointer;
@@ -226,7 +226,7 @@
 
         .settings-option label {
             font-size: 1.1em;
-            color: #ecf0f1;
+            color: #F0F0F0;
             cursor: pointer;
         }
 
@@ -290,7 +290,7 @@
             background-color: var(--panel-color);
             padding: 20px;
             border-radius: 10px;
-            border: 2px solid #ecf0f1;
+            border: 2px solid #F0F0F0;
             box-shadow: 0 0 10px rgba(0,0,0,0.3);
             display: flex;
             flex-direction: column;
@@ -313,11 +313,12 @@
             font-size: 0.9em;
         }
 
-        .buttons-container { /* This container is for End Turn Button */
+        .buttons-container { /* This is the PARENT container for bottom buttons */
             display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: auto; /* Pushes End Turn to bottom of right panel */
+            flex-direction: column; /* Stack buttons vertically */
+            align-items: center;
+            gap: 0; /* Gaps are handled by margins now */
+            margin-top: auto; /* Pushes the whole block to the bottom */
             padding-top: 15px;
         }
         .ui-panel .buttons-container button { /* End Turn specifics */
@@ -500,14 +501,21 @@
             transform: translateY(3px);
         }
 
+        #saveGameButton:disabled,
+        #loadGameButton:disabled,
+        #newMapButton:disabled {
+            background-color: #90A0A0;
+            color: #bdc3c7;
+            cursor: not-allowed;
+            box-shadow: 0 3px #809090;
+        }
+
         .unit-info-container {
             width: 100%;
         }
         .unit-info-container p { font-size: 1em; margin: 4px 0; }
 
         .actions-panel {
-            padding-top: 10px;
-            border-top: 1px solid #809090;
             display: flex;
             justify-content: center;
             gap: 10px;
@@ -516,7 +524,6 @@
         }
         .actions-panel h3 {
             font-size: 1.em;
-            margin-bottom: 10px;
             color: #FFC020;
             width: 100%;
             text-align: center;
@@ -571,12 +578,12 @@
             background-color: var(--panel-color);
             padding: 25px 30px;
             border-radius: 10px;
-            border: 2px solid #ecf0f1;
+            border: 2px solid #F0F0F0;
             box-shadow: 0 5px 20px rgba(0,0,0,0.4);
             text-align: center;
             width: 90%;
             max-width: 400px;
-            color: #ecf0f1;
+            color: #F0F0F0;
             position: relative;
         }
         .modal-content p {
@@ -741,9 +748,9 @@
             background-color: var(--panel-color);
             padding: 20px 30px;
             border-radius: 10px;
-            border: 2px solid #ecf0f1;
+            border: 2px solid #F0F0F0;
             box-shadow: 0 5px 20px rgba(0,0,0,0.4);
-            color: #ecf0f1;
+            color: #F0F0F0;
             width: 90%;
             max-width: 700px; 
             max-height: 80vh; 
@@ -777,7 +784,7 @@
             right: 15px;
             background: none;
             border: none;
-            color: #ecf0f1;
+            color: #F0F0F0;
             font-size: 2em;
             cursor: pointer;
             line-height: 1;
@@ -1020,7 +1027,7 @@
             bottom: 10px;
             right: 15px;
             font-size: 0.8em;
-            color: #ecf0f1;
+            color: #F0F0F0;
             opacity: 0.6;
             z-index: 1000;
             pointer-events: none; /* Prevents it from blocking clicks on anything underneath */
@@ -1075,7 +1082,7 @@
     width: 130px;
     transform: translateY(-50%);
     background-color: var(--panel-color);
-    border: 2px solid #ecf0f1;
+    border: 2px solid #F0F0F0;
     border-right: none;
     border-radius: 15px 0 0 15px;
     z-index: 2500;
@@ -1099,19 +1106,19 @@
     width: 40px; /* Adjusted handle width */
     height: 70px;
     background-color: var(--panel-color);
-    border: 2px solid #ecf0f1;
+    border: 2px solid #F0F0F0;
     border-right: none;
     border-radius: 12px 0 0 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #ecf0f1;
+    color: #F0F0F0;
     transition: border-color 0.4s ease-in-out;
 }
 
 #drawerHandle svg {
-    stroke: #ecf0f1;
+    stroke: #F0F0F0;
     transition: transform 0.3s ease-in-out, stroke 0.4s ease-in-out;
 }
 
@@ -1147,7 +1154,7 @@
 }
 
 .drawer-tab-button:hover {
-    color: #ecf0f1;
+    color: #F0F0F0;
 }
 
 .drawer-tab-button.active.p1-tab {
@@ -1191,7 +1198,7 @@
 
 .color-option-circle:hover {
     transform: scale(1.1);
-    border-color: #ecf0f1; /* Brighten border on hover */
+    border-color: #F0F0F0; /* Brighten border on hover */
 }
 
 .color-option-circle.active {
@@ -1337,7 +1344,37 @@
         <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px; text-align: center;">Changelog</h3>
         <div id="changelogList" style="max-height: 50vh; overflow-y: auto; padding-right: 15px;">
 
-        <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28: The Editor Update</h4>
+            <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 1</h4>
+            <ul style="list-style-type: none; padding-left: 0;">
+                <!-- Features -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Map Maker "Test Map" Feature:</strong> Added a button to the editor to instantly test custom maps in a sandboxed gameplay session. The editor state is saved and perfectly restored upon exiting the test.</li>
+                    </ul>
+                </li>
+                <!-- Improvements -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Supply Lines Over Bridges:</strong> Supply lines can now correctly pathfind across built bridges.</li>
+                        <li><strong>Editor UI Polish:</strong> Added a white canvas border, dividers to panels, and improved spacing and layout for a cleaner, more professional look.</li>
+                        <li><strong>Visuals:</strong> Adjusted rendering order to ensure units and animations always appear correctly on top of bridges. Updated the UI theme to a brighter white.</li>
+                    </ul>
+                </li>
+                <!-- Fixes -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li>Fixed a critical bug where returning to Local Multiplayer from Singleplayer would not reset the game state correctly.</li>
+                        <li><strong>Map Maker Fixes:</strong> Resolved bugs preventing unit placement on beaches, allowing enemy units on the same edge, and incorrect visual selection in the unit palette.</li>
+                        <li>Added validation to the "Test Map" feature to require units for both players before starting a test.</li>
+                    </ul>
+                </li>
+            </ul>
+            <hr style="border-color: #4a6075; margin: 20px 0;">
+
+            <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28: The Editor Update</h4>
             <ul style="list-style-type: none; padding-left: 0;">
                 <!-- Features -->
                 <li style="margin-bottom: 15px;">
@@ -1431,14 +1468,20 @@
 
         <div id="rightPanel" class="ui-panel" style="min-height: 805px;">
             <h2 id="turnDisplay">Player 1's Turn</h2>
+            <hr id="gameplayDivider" style="width: 100%; border-color: #4a6075; margin-top: 15px; margin-bottom: 15px;">
             <div id="actionsPanel" class="actions-panel" style="display: none;">
                 <h3>Actions</h3>
                 <button id="fortifyUnfortifyButton" class="action-button">Fortify</button>
                 <button id="buildBridgeButton" class="action-button">Build Bridge</button>
                 <button id="attackButton" class="action-button">Attack</button>
             </div>
-            <div class="buttons-container">
-                <button id="endTurnButton">End Turn</button>
+            <div id="bottomButtonsParent" class="buttons-container">
+                <div id="testButtonContainer" style="display: none; width: 100%;">
+                    <button id="testStopButton" class="action-button" style="width: 100%; margin: 0 0 15px 0;"></button>
+                </div>
+                <div id="endTurnButtonContainer" style="width: 100%;">
+                    <button id="endTurnButton" style="width: 100%; margin: 0;">End Turn</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1539,7 +1582,7 @@
     <div id="tutorialModalOverlay" style="display: none;"> <!-- Will be controlled by JS -->
         <div id="tutorialModalContent">
             <button id="tutorialCloseButton" class="tutorial-modal-close-button" title="Close Tutorial">×</button>
-            <h2>FortHex: Complete Tutorial</h2>
+            <h2>FortHex: Guide</h2>
             <p>Welcome to FortHex! This is a turn-based strategy game of wits, warfare, and area control. This guide will teach you everything you need to know to claim victory.</p>
 
             <div class="tutorial-section">
@@ -1685,7 +1728,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B28";
+        const BUILD_VERSION = "B28//1";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1937,6 +1980,7 @@
     debugAttackRangeHighlights: [],
     visualEffects: [],
     playerActionTaken: { player1: false, player2: false },
+    isTestingMap: false,
 };
 
 let currentDrawingColors = JSON.parse(JSON.stringify(TEAM_COLORS));
@@ -2004,6 +2048,7 @@ function loadColorPreferences() {
 }
 
         let currentConfirmAction = null;
+        let mapMakerStateBackup = null;
 
         // --- Utility Functions ---
 
@@ -2204,12 +2249,15 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
             const edge = gameState.edges.get(edgeKey);
             if (!edge) return false;
 
+            if (edge.bridge) {
+                return true;
+            }
+
             const tile1 = gameState.tiles.get(getTileKey(edge.q1, edge.r1));
             const tile2 = gameState.tiles.get(getTileKey(edge.q2, edge.r2));
 
             if (!tile1 || !tile2) return false;
 
-            // An edge is a road if it's NOT between two water tiles.
             return !(tile1.type === TILE_TYPES.WATER && tile2.type === TILE_TYPES.WATER);
         }
 
@@ -2930,7 +2978,7 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
                     
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     const teamColor = currentDrawingColors[`player${flag.player}`].secondary;
-                    const flagIconColor = '#ecf0f1'; 
+                    const flagIconColor = '#F0F0F0'; 
                     const flagPoleColor = '#2c3e50';
                     const circleRadius = HEX_SIZE * 0.18;
                     const flagSize = circleRadius * 1.2; 
@@ -3997,14 +4045,18 @@ function drawAnimations() {
 
             // --- Handle Canvas Outline Color ---
             // This is the single source of truth for the canvas border color.
-            // It reads directly from TEAM_COLORS to ensure its transition
-            // starts immediately when the theme changes, just like the other UI elements.
-            if (gameState.mapMakerMode || gameState.gameOver) {
+            if (gameState.mapMakerMode) {
+                // In Map Maker mode, set a neutral white border for framing.
+                canvas.style.outlineColor = '#F0F0F0';
+            } else if (gameState.gameOver) {
+                // When the game is over, hide the border.
                 canvas.style.outlineColor = 'transparent';
             } else {
+                // During normal gameplay, use the current player's color.
+                // It reads directly from TEAM_COLORS for immediate UI response.
                 canvas.style.outlineColor = gameState.currentPlayer === 1
-                    ? TEAM_COLORS.player1.secondary // Use TEAM_COLORS directly
-                    : TEAM_COLORS.player2.secondary; // Use TEAM_COLORS directly
+                    ? TEAM_COLORS.player1.secondary
+                    : TEAM_COLORS.player2.secondary;
             }
 
             gameState.tiles.forEach(tile => drawHexFill(tile.q, tile.r, tile.type));
@@ -4013,7 +4065,7 @@ function drawAnimations() {
             drawContestedEdgeIndicator();
             drawPulsatingBridgeHighlights();
             drawFlags();
-            
+            drawBridges();
             drawSupplyLines();
             
             drawDebugAttackRangeHighlights() 
@@ -4040,7 +4092,6 @@ function drawAnimations() {
             
 drawDebugPath();
 drawAnimations();
-drawBridges();
 drawMovementHighlights();
 drawUnits(); // Draws stationary units
 drawVisualEffects();
@@ -6595,7 +6646,7 @@ function triggerConfetti() {
     if (!container) return;
 
     const confettiCount = 150;
-    const colors = ['#FFC020', '#E04030', '#3090D0', '#2ecc71', '#ecf0f1'];
+    const colors = ['#FFC020', '#E04030', '#3090D0', '#2ecc71', '#F0F0F0'];
 
     for (let i = 0; i < confettiCount; i++) {
         const confettiPiece = document.createElement('div');
@@ -7182,6 +7233,12 @@ function autoSaveGame(isSilent = false) {
         showInstruction("Cannot save while dragging a unit.", 2000);
         return;
     }
+
+    if (gameState.isDragging) {
+        showInstruction("Cannot save while dragging a unit.", 2000);
+        return;
+    }
+
     try {
         // Create a temporary, serializable version of the game state
         const serializableState = { ...gameState };
@@ -7857,6 +7914,80 @@ function isCoordInRadius(key, radius) {
             }
         }
 
+function startMapTest() {
+    const p1Units = gameState.units.filter(u => u.player === 1).length;
+    const p2Units = gameState.units.filter(u => u.player === 2).length;
+
+    if (p1Units === 0 || p2Units === 0) {
+        showInstruction("Map must contain at least one unit for each player to start a test.", 3000);
+        return; 
+    }
+
+    console.log("Starting map test...");
+    // 1. Save the current editor state
+    mapMakerStateBackup = createMapDataObject();
+    gameState.isTestingMap = true;
+
+    // 2. Transition the UI from editor to game
+    exitMapMakerMode(); // Cleans up editor UI
+
+    // 3. Initialize a new game with the backed-up map data
+    const tileMap = new Map(mapMakerStateBackup.tiles);
+    const units = mapMakerStateBackup.units.map(u => ({ ...u, typeName: u.typeName.toUpperCase() }));
+    initializeGrid(tileMap, units);
+    gameState.baseCampPositions = mapMakerStateBackup.baseCampPositions;
+    gameState.flags.p1_flag.homePosition = mapMakerStateBackup.baseCampPositions.player1;
+    gameState.flags.p2_flag.homePosition = mapMakerStateBackup.baseCampPositions.player2;
+
+
+    // 4. Configure the UI for test mode
+    const testButtonContainer = document.getElementById('testButtonContainer');
+    const testStopButton = document.getElementById('testStopButton');
+    if (testButtonContainer && testStopButton) {
+        testButtonContainer.style.display = 'block'; // Keep this from our previous layout fix
+        testStopButton.textContent = 'Stop Test';
+        testStopButton.className = 'action-button'; // Set the base class
+
+        testStopButton.style.backgroundColor = '#3090D0'; 
+        testStopButton.style.boxShadow = '0 3px #2080B0';
+
+        // Re-assign the click listener to the stop function
+        testStopButton.onclick = stopMapTest; 
+    }
+    updateMainButtonsForTestMode(true); // Disable Save/Load
+    showInstruction("Test mode started. Play the map.", 3000);
+}
+
+function stopMapTest() {
+    console.log("Stopping map test...");
+    gameState.isTestingMap = false;
+
+    ui.victoryMessage.style.display = 'none';
+
+    // 1. Re-enter map maker mode to restore the editor UI
+    enterMapMakerMode();
+    
+    // 2. Restore the backed-up map state
+    if (mapMakerStateBackup) {
+        loadMapFromDataObject(mapMakerStateBackup);
+        mapMakerStateBackup = null; // Clear the backup
+    }
+
+    // 3. Re-enable main buttons and show instruction
+    updateMainButtonsForTestMode(false); // Re-enable Save/Load
+    showInstruction("Returned to Map Maker.", 2000);
+}
+
+function updateMainButtonsForTestMode(isTesting) {
+    const saveBtn = document.getElementById('saveGameButton');
+    const loadBtn = document.getElementById('loadGameButton');
+    const newMapBtn = document.getElementById('newMapButton');
+    
+    saveBtn.disabled = isTesting;
+    loadBtn.disabled = isTesting;
+    newMapBtn.disabled = isTesting;
+}
+
 // --- MAP MAKER FUNCTIONS ---
 
 function enterMapMakerMode() {
@@ -7883,6 +8014,18 @@ function enterMapMakerMode() {
     buildMapMakerPalette();
     buildMapMakerControls();
     
+    // --- Configure the Test Map button for the editor ---
+    const testButtonContainer = document.getElementById('testButtonContainer');
+    const testStopButton = document.getElementById('testStopButton');
+    if (testButtonContainer && testStopButton) {
+        testButtonContainer.style.display = 'flex';
+        testStopButton.textContent = 'Test Map';
+        testStopButton.className = 'action-button'; // Make it default blue
+        testStopButton.style.backgroundColor = '#20B060'; // Green color
+        testStopButton.style.boxShadow = '0 3px #208040';
+        testStopButton.onclick = startMapTest; // Set the click action
+    }
+
     // Ensure the end turn button's container is visible and styled correctly for Map Maker
     const endTurnButtonContainer = document.querySelector('#rightPanel .buttons-container');
     if (endTurnButtonContainer) {
@@ -7909,9 +8052,15 @@ function exitMapMakerMode() {
     console.log("Exiting Map Maker mode.");
     gameState.mapMakerMode = false;
     
+    // --- Hide the Test Map button container on general exit ---
+    const testButtonContainer = document.getElementById('testButtonContainer');
+    if (testButtonContainer) testButtonContainer.style.display = 'none';
+
     // --- Restore UI Elements ---
     // Restore the right panel
     document.getElementById('turnDisplay').style.display = 'block';
+    const gameplayDivider = document.getElementById('gameplayDivider');
+    if (gameplayDivider) gameplayDivider.style.display = 'block';
     document.getElementById('actionsPanel').style.display = 'flex';
     const endTurnButtonContainer = document.querySelector('#rightPanel .buttons-container');
     if (endTurnButtonContainer) {
@@ -7947,9 +8096,11 @@ function exitMapMakerMode() {
 function hideGameplayUI() {
     // Hide the right panel's turn display and action buttons
     document.getElementById('turnDisplay').style.display = 'none';
+    const gameplayDivider = document.getElementById('gameplayDivider');
+    if (gameplayDivider) gameplayDivider.style.display = 'none';
     document.getElementById('actionsPanel').style.display = 'none';
 
-    // Hide the left panel's normal content to make room for the palette
+    // The buttons-container should remain visible in map maker mode, so we remove the 'display: none' here.
     const leftPanel = document.getElementById('leftPanel');
     leftPanel.querySelectorAll(':scope > div:not(#mapMakerPaletteContainer)').forEach(el => {
         el.style.display = 'none';
@@ -7970,13 +8121,17 @@ function buildMapMakerPalette() {
     const title = document.createElement('h3');
     title.textContent = 'Palette';
     title.className = 'text-center';
-    title.style.cssText = "font-size: 1.5em; color: #FFC020; margin-bottom: 20px;";
+    title.style.cssText = "font-size: 1.5em; color: #FFC020; margin-bottom: 15px;"; // Reduced margin
     paletteContainer.appendChild(title);
+
+    const divider = document.createElement('hr');
+    divider.style.cssText = "width: 100%; border-color: #4a6075; margin-bottom: 20px; margin-top: 0;";
+    paletteContainer.appendChild(divider);
 
     // --- Tiles Section (Unchanged from previous correct version) ---
     const tilesTitle = document.createElement('h4');
     tilesTitle.textContent = 'Tiles';
-    tilesTitle.style.cssText = "text-align: center; color: #ecf0f1; margin-bottom: 10px;";
+    tilesTitle.style.cssText = "text-align: center; color: #F0F0F0; margin-bottom: 10px;";
     paletteContainer.appendChild(tilesTitle);
     const tilePalette = document.createElement('div');
     tilePalette.style.cssText = "display: flex; flex-direction: column; align-items: center; gap: 12px;";
@@ -8009,7 +8164,7 @@ function buildMapMakerPalette() {
     }
     Object.entries(TILE_TYPES).forEach(([key, tileType]) => {
         const tileOptionContainer = document.createElement('div');
-        tileOptionContainer.style.cssText = `display: flex; align-items: center; gap: 15px; cursor: pointer; width: 90%; padding: 5px; border: 2px solid transparent; border-radius: 8px; transition: all 0.2s;`;
+        tileOptionContainer.style.cssText = `display: flex; align-items: center; gap: 15px; cursor: pointer; width: 90%; padding: 5px; border: 2px solid #4a6075; border-radius: 8px; transition: all 0.2s;`;
         const hexCanvas = document.createElement('canvas');
         hexCanvas.width = PALETTE_HEX_SIZE * 2;
         hexCanvas.height = PALETTE_HEX_SIZE * 2;
@@ -8022,8 +8177,7 @@ function buildMapMakerPalette() {
         if (key === 'PLAINS') { tileOptionContainer.style.borderColor = '#FFC020'; }
         tileOptionContainer.addEventListener('click', () => {
             gameState.mapMakerBrush = { type: 'tile', value: TILE_TYPES[key], player: null };
-            tilePalette.querySelectorAll('div[style*="cursor: pointer"]').forEach(el => { el.style.borderColor = 'transparent'; });
-            // We now deselect units by removing the 'selected' class.
+            tilePalette.querySelectorAll('div[style*="cursor: pointer"]').forEach(el => { el.style.borderColor = '#4a6075'; });
             document.getElementById('unitPalette')?.querySelectorAll('.unit-option').forEach(el => { el.classList.remove('selected'); });
             tileOptionContainer.style.borderColor = '#FFC020';
         });
@@ -8033,7 +8187,7 @@ function buildMapMakerPalette() {
     // --- Units Section (Rearchitected with Local Animation) ---
     const unitsTitle = document.createElement('h4');
     unitsTitle.textContent = 'Units';
-    unitsTitle.style.cssText = "text-align: center; color: #ecf0f1; margin-top: 30px; margin-bottom: 15px;";
+    unitsTitle.style.cssText = "text-align: center; color: #F0F0F0; margin-top: 30px; margin-bottom: 15px;";
     paletteContainer.appendChild(unitsTitle);
 
     const unitPaletteTabs = document.createElement('div');
@@ -8161,6 +8315,15 @@ function buildMapMakerPalette() {
     const handleTabClick = (newPlayer) => {
         if (selectedPlayer === newPlayer) return;
 
+        // 1. Visually deselect by removing the highlight class.
+        unitPalette.querySelectorAll('.unit-option.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+        // 2. Logically deselect by resetting the brush to a neutral default.
+        if (gameState.mapMakerBrush.type === 'unit') {
+            gameState.mapMakerBrush = { type: 'tile', value: TILE_TYPES.PLAINS, player: null };
+        }
+
         // --- TRIGGER THE LOCAL PALETTE-ONLY ANIMATION ---
         const fromPlayerKey = `player${selectedPlayer}`;
         const toPlayerKey = `player${newPlayer}`;
@@ -8199,10 +8362,14 @@ function buildMapMakerControls() {
 
     // --- Title ---
     const title = document.createElement('h3');
-    title.textContent = 'Settings';
+    title.textContent = 'Options';
     title.className = 'text-center';
-    title.style.cssText = "font-size: 1.5em; color: #FFC020; margin-bottom: 20px;";
+    title.style.cssText = "font-size: 1.5em; color: #FFC020; margin-bottom: 15px;"; // Reduced margin
     controlsContainer.appendChild(title);
+
+    const divider = document.createElement('hr');
+    divider.style.cssText = "width: 100%; border-color: #4a6075; margin-bottom: 20px; margin-top: 0;";
+    controlsContainer.appendChild(divider);
 
     // --- Base Camp Slider Section ---
     const sliderContainer = document.createElement('div');
@@ -8432,10 +8599,16 @@ function applyMapMakerBrush(x, y) {
         const tile2 = gameState.tiles.get(getTileKey(h2.q, h2.r));
 
         // Validation
-        if (!tile1 || !tile2 || tile1.type === TILE_TYPES.WATER || tile2.type === TILE_TYPES.WATER) {
+        if (!tile1 || !tile2 || (tile1.type === TILE_TYPES.WATER && tile2.type === TILE_TYPES.WATER)) {
             showInstruction("Cannot place units on water edges.", 1500);
             return;
         }
+
+        if (edge.units.length > 0 && edge.units[0].player !== brush.player) {
+            showInstruction("Cannot place on an edge occupied by the enemy.", 2000);
+            return;
+        }
+
         if (edge.units.length >= 2) {
             showInstruction("This edge is full.", 1500);
             return;
@@ -8635,6 +8808,9 @@ function applyMapMakerBrush(x, y) {
                 // Then, hide the menu modal.
                 hideAllModals();
                 
+                gameState.gameMode = 'local';
+                gameState.playerSide = null;
+
                 // Finally, initialize the new game grid.
                 initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3); 
                 
@@ -8988,9 +9164,9 @@ function applyMapMakerBrush(x, y) {
                     drawerHandle.style.borderColor = TEAM_COLORS[activePlayerKey].primary;
                     drawerIcon.style.stroke = TEAM_COLORS[activePlayerKey].accent;
                 } else {
-                    colorPickerDrawer.style.borderColor = '#ecf0f1';
-                    drawerHandle.style.borderColor = '#ecf0f1';
-                    drawerIcon.style.stroke = '#ecf0f1';
+                    colorPickerDrawer.style.borderColor = '#F0F0F0';
+                    drawerHandle.style.borderColor = '#F0F0F0';
+                    drawerIcon.style.stroke = '#F0F0F0';
                 }
             }
 
