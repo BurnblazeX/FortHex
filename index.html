@@ -299,6 +299,7 @@
             box-sizing: border-box;
             min-height: 595px;
             justify-content: flex-start;
+            position: relative;
         }
 
         #turnDisplay {
@@ -846,22 +847,56 @@
         }
         
          #actionInfoContainer {
-            flex-grow: 1;
             display: flex;
             flex-direction: column;
             overflow: hidden;
             min-height: 0;
         }
+
+        #actionLogWrapper {
+            position: relative;
+            height: 400px; 
+        }
+
+        #actionLogWrapper::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: linear-gradient(to bottom, rgba(48, 72, 96, 0), var(--panel-color) 75%);
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        #actionLogWrapper::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: linear-gradient(to top, rgba(48, 72, 96, 0), var(--panel-color) 75%);
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        #actionLogWrapper.is-scrolled::before {
+            opacity: 1; 
+        }
         
         #actionLogContent {
-            flex-grow: 1;
             overflow-y: auto;
-            padding-right: 10px; 
+            padding-right: 10px;
+            padding-bottom: 150px; 
             margin-right: -10px; 
-            min-height: 120px;
             display: flex;
             flex-direction: column; 
             justify-content: flex-start;
+            height: 100%;
         }
 
         #actionLogContent::-webkit-scrollbar {
@@ -923,7 +958,11 @@
         .respawn-queue-container {
             border-top: 1px solid #809090;
             padding-top: 15px;
-            margin-top: auto;
+            position: absolute;
+            bottom: 20px;       
+            left: 20px;        
+            right: 20px;        
+            background-color: var(--panel-color); 
         }
         .respawn-queue-header {
             text-align: center;
@@ -1344,6 +1383,36 @@
         <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px; text-align: center;">Changelog</h3>
         <div id="changelogList" style="max-height: 50vh; overflow-y: auto; padding-right: 15px;">
 
+            <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 2</h4>
+            <ul style="list-style-type: none; padding-left: 0;">
+                <!-- Features -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Map Maker Fill Tool:</strong> Added a new "Fill" (paint bucket) tool to the Options panel, allowing for rapid painting of large, contiguous areas of terrain.</li>
+                    </ul>
+                </li>
+                <!-- Improvements -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Left Panel Layout Overhaul:</strong> The left UI panel no longer stretches. The Action Log is now a fixed-height, scrollable area, and the Reinforcements list is correctly anchored to the bottom.</li>
+                        <li><strong>Action Log Polish:</strong> Added dynamic fade-out effects to the top and bottom of the Action Log to clearly indicate scrollable content.</li>
+                        <li><strong>Action Log Functionality:</strong> Increased the log's capacity from 10 to 25 entries and inverted the display order to show the most recent actions at the top.</li>
+                        <li><strong>Map Maker Palette:</strong> Slightly reduced the size of unit icons in the palette for a cleaner look and better panel spacing.</li>
+                        <li><strong>Visual Consistency:</strong> Adjusted the color of Water tiles to be consistent between the 'Fancy' and 'Simple' rendering modes.</li>
+                    </ul>
+                </li>
+                <!-- Fixes -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li>Fixed a critical bug in the Map Maker where placing a Mountain or Water tile would incorrectly remove units from adjacent valid edges (like beaches).</li>
+                    </ul>
+                </li>
+            </ul>
+            <hr style="border-color: #4a6075; margin: 20px 0;">
+
             <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 1</h4>
             <ul style="list-style-type: none; padding-left: 0;">
                 <!-- Features -->
@@ -1451,12 +1520,12 @@
                     <p><strong>Status:</strong> <span id="unitStatus"></span></p>
                 </div>
             </div>
-             <!-- ACTION INFO PANEL STRUCTURE -->
             <div id="actionInfoContainer" class="unit-info-container" style="display: block;">
                 <h3 class="action-info-header">Action Log</h3>
-                <div id="actionLogContent"></div>
+                <div id="actionLogWrapper">
+                    <div id="actionLogContent"></div>
+                </div>
             </div>
-            <!-- END OF STRUCTURE -->
             <!-- UNIFIED Respawn Queue Display -->
             <div id="reinforcementsContainer" class="respawn-queue-container" style="display: none;">
                 <h4 class="respawn-queue-header">Reinforcements</h4>
@@ -1728,7 +1797,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B28//1";
+        const BUILD_VERSION = "B28//2";
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1981,6 +2050,7 @@
     visualEffects: [],
     playerActionTaken: { player1: false, player2: false },
     isTestingMap: false,
+    fillToolActive: false,
 };
 
 let currentDrawingColors = JSON.parse(JSON.stringify(TEAM_COLORS));
@@ -2624,7 +2694,7 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
                         fallbackColor = '#208020';
                         break;
                     case TILE_TYPES.WATER:
-                        fallbackColor = '#80E0E0';
+                        fallbackColor = '#80C0E0';
                         break;
                     case TILE_TYPES.PLAINS:
                         fallbackColor = '#90E090';
@@ -4349,7 +4419,7 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
         function logAction(message, player, duration = 3000) {
             showInstruction(message, duration);
             gameState.actionLog.push({ message: message, player: player });
-            if (gameState.actionLog.length > 10) {
+            if (gameState.actionLog.length > 25) {
                 gameState.actionLog.shift();
             }
             updateActionLogDisplay();
@@ -5527,8 +5597,9 @@ function completeBuildBridge(targetEdgeKey) {
 
             ui.actionLogContent.innerHTML = '';
             
-            // REMOVED: The reversal of the log array. We now loop through it directly.
-            for (const logObject of gameState.actionLog) {
+            for (let i = gameState.actionLog.length - 1; i >= 0; i--) {
+                const logObject = gameState.actionLog[i];
+
                 const originalMessage = logObject.message;
                 const activePlayer = logObject.player;
 
@@ -6103,6 +6174,17 @@ function handleActionTargetSelectionClick(x, y) {
 
         // --- REFACTORED GENERIC EVENT HANDLERS ---
         function handleInteractionStart(x, y, isTouchEvent = false) {
+
+            if (gameState.fillToolActive) {
+                if (gameState.mapMakerBrush.type !== 'tile') {
+                    showInstruction("Please select a tile type to fill with.", 2000);
+                    return;
+                }
+                const coords = pixelToAxial(x, y);
+                performFloodFill(coords.q, coords.r);
+                return; // Stop further processing
+            }
+
             if (gameState.mapMakerMode) {
                 gameState.isDragging = true;
                 gameState.mapMakerLastPaintedHexKey = null; // Reset for new drag
@@ -7978,6 +8060,45 @@ function stopMapTest() {
     showInstruction("Returned to Map Maker.", 2000);
 }
 
+function performFloodFill(startQ, startR) {
+    const startKey = getTileKey(startQ, startR);
+    const startTile = gameState.tiles.get(startKey);
+    if (!startTile) return;
+
+    const targetType = startTile.type;
+    const replacementType = gameState.mapMakerBrush.value;
+
+    if (targetType === replacementType) {
+        return; // No work to do
+    }
+    
+    const queue = [startKey];
+    const visited = new Set([startKey]);
+
+    while (queue.length > 0) {
+        const currentKey = queue.shift();
+        const currentTile = gameState.tiles.get(currentKey);
+
+        // Change the tile type
+        currentTile.type = replacementType;
+
+        const { q, r } = currentTile;
+        const neighbors = getNeighbors(q, r);
+
+        for (const neighborCoord of neighbors) {
+            const neighborKey = getTileKey(neighborCoord.q, neighborCoord.r);
+            const neighborTile = gameState.tiles.get(neighborKey);
+
+            if (neighborTile && !visited.has(neighborKey) && neighborTile.type === targetType) {
+                visited.add(neighborKey);
+                queue.push(neighborKey);
+            }
+        }
+    }
+    autoSaveMap(); // Save the result of the fill
+}
+
+
 function updateMainButtonsForTestMode(isTesting) {
     const saveBtn = document.getElementById('saveGameButton');
     const loadBtn = document.getElementById('loadGameButton');
@@ -8051,6 +8172,7 @@ function exitMapMakerMode() {
 
     console.log("Exiting Map Maker mode.");
     gameState.mapMakerMode = false;
+    gameState.fillToolActive = false;
     
     // --- Hide the Test Map button container on general exit ---
     const testButtonContainer = document.getElementById('testButtonContainer');
@@ -8155,7 +8277,7 @@ function buildMapMakerPalette() {
         switch (tileType) {
             case TILE_TYPES.MOUNTAIN: fillColor = '#808080'; break;
             case TILE_TYPES.FOREST: fillColor = '#208020'; break;
-            case TILE_TYPES.WATER: fillColor = '#80E0E0'; break;
+            case TILE_TYPES.WATER: fillColor = '#80C0E0'; break;
             case TILE_TYPES.PLAINS: fillColor = '#90E090'; break;
             default: fillColor = tileType.color;
         }
@@ -8223,7 +8345,7 @@ function buildMapMakerPalette() {
 
     const buildUnitOptions = () => {
         unitPalette.innerHTML = '';
-        const PALETTE_UNIT_RADIUS = UNIT_DRAW_SIZE_ON_EDGE * 2;
+        const PALETTE_UNIT_RADIUS = UNIT_DRAW_SIZE_ON_EDGE * 1.8;   
         Object.entries(UNIT_TYPES).forEach(([key, unitType]) => {
             const unitOptionContainer = document.createElement('div');
             unitOptionContainer.className = 'unit-option';
@@ -8272,7 +8394,7 @@ function buildMapMakerPalette() {
         }
 
         // Redraw unit canvases
-        const PALETTE_UNIT_RADIUS = UNIT_DRAW_SIZE_ON_EDGE * 2;
+        const PALETTE_UNIT_RADIUS = UNIT_DRAW_SIZE_ON_EDGE * 1.8;
         const playerKey = `player${selectedPlayer}`;
         
         // If we are not animating, use the color from the main game's animated `currentDrawingColors`.
@@ -8406,7 +8528,36 @@ function buildMapMakerControls() {
     sliderContainer.appendChild(sliderLabel);
     sliderContainer.appendChild(slider);
     controlsContainer.appendChild(sliderContainer);
+
+    // --- Fill Tool Button ---
+    // Create a dedicated container to handle the centering
+    const fillButtonContainer = document.createElement('div');
+    fillButtonContainer.style.cssText = "display: flex; justify-content: center; width: 100%; margin-top: 20px;";
+
+    const fillButton = document.createElement('button');
+    fillButton.id = 'fillToolButton';
+    fillButton.className = 'action-button';
+    // Give the button a standard width and remove conflicting margins
+    fillButton.style.width = '160px';
+    fillButton.style.margin = '0'; 
+    fillButton.textContent = 'Fill';
+
+    fillButton.addEventListener('click', () => {
+        gameState.fillToolActive = !gameState.fillToolActive; // Toggle the state
+        if (gameState.fillToolActive) {
+            fillButton.textContent = 'Cancel Fill';
+            fillButton.classList.add('selecting'); // Turns the button red
+        } else {
+            fillButton.textContent = 'Fill';
+            fillButton.classList.remove('selecting');
+        }
+    });
+
+    // Add the button to its centering container, then add the container to the panel
+    fillButtonContainer.appendChild(fillButton);
+    controlsContainer.appendChild(fillButtonContainer);
 }
+
 
 function eraseAt(x, y) {
     const hexCoords = pixelToAxial(x, y);
@@ -8576,15 +8727,26 @@ function applyMapMakerBrush(x, y) {
         const tile = gameState.tiles.get(hexKey);
         if (tile) {
             tile.type = brush.value;
-            // If painting water or mountain, remove any units on adjacent edges
-            if (brush.value === TILE_TYPES.WATER || brush.value === TILE_TYPES.MOUNTAIN) {
+
+            // Only trigger this logic if the brush is WATER.
+            if (brush.value === TILE_TYPES.WATER) {
+                // Iterate over the edges of the tile that was just painted.
                 getEdgesOfTile(tile.q, tile.r).forEach(edgeKey => {
                     const edge = gameState.edges.get(edgeKey);
+                    // If there are units on an adjacent edge...
                     if (edge && edge.units.length > 0) {
-                        edge.units.forEach(unitToRemove => {
-                            gameState.units = gameState.units.filter(u => u.id !== unitToRemove.id);
-                        });
-                        edge.units = []; // Clear the local array
+                        // Find the other tile connected to this edge.
+                        const otherTileQ = (edge.q1 === tile.q && edge.r1 === tile.r) ? edge.q2 : edge.q1;
+                        const otherTileR = (edge.r1 === tile.r && edge.q1 === tile.q) ? edge.r2 : edge.r1;
+                        const otherTile = gameState.tiles.get(getTileKey(otherTileQ, otherTileR));
+
+                        // ONLY remove units if the other tile is ALSO water, creating an invalid edge.
+                        if (otherTile && otherTile.type === TILE_TYPES.WATER) {
+                            edge.units.forEach(unitToRemove => {
+                                gameState.units = gameState.units.filter(u => u.id !== unitToRemove.id);
+                            });
+                            edge.units = []; // Clear the local edge's unit array.
+                        }
                     }
                 });
             }
@@ -9247,6 +9409,20 @@ function applyMapMakerBrush(x, y) {
             drawerHandle.addEventListener('click', (e) => {
                 e.stopPropagation();
             });
+
+            // --- Scroll Fade Logic for Action Log ---
+            const actionLogContent = document.getElementById('actionLogContent');
+            const actionLogWrapper = document.getElementById('actionLogWrapper');
+            if(actionLogContent && actionLogWrapper) {
+                actionLogContent.addEventListener('scroll', () => {
+                    if (actionLogContent.scrollTop > 0) {
+                        actionLogWrapper.classList.add('is-scrolled');
+                    } else {
+                        actionLogWrapper.classList.remove('is-scrolled');
+                    }
+                });
+            }
+
             // --- End of Color Picker Drawer Logic ---
         }
     </script>
