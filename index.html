@@ -8060,10 +8060,30 @@ function stopMapTest() {
     showInstruction("Returned to Map Maker.", 2000);
 }
 
+function getMapMakerBaseCampTileKeys() {
+    const baseCampTileKeys = new Set();
+    const p1Coords = parseEdgeKey(gameState.baseCampPositions.player1);
+    const p2Coords = parseEdgeKey(gameState.baseCampPositions.player2);
+
+    if (p1Coords[0] && !isNaN(p1Coords[0].q)) baseCampTileKeys.add(getTileKey(p1Coords[0].q, p1Coords[0].r));
+    if (p1Coords[1] && !isNaN(p1Coords[1].q)) baseCampTileKeys.add(getTileKey(p1Coords[1].q, p1Coords[1].r));
+    if (p2Coords[0] && !isNaN(p2Coords[0].q)) baseCampTileKeys.add(getTileKey(p2Coords[0].q, p2Coords[0].r));
+    if (p2Coords[1] && !isNaN(p2Coords[1].q)) baseCampTileKeys.add(getTileKey(p2Coords[1].q, p2Coords[1].r));
+    
+    return baseCampTileKeys;
+}
+
 function performFloodFill(startQ, startR) {
+    const baseCampTileKeys = getMapMakerBaseCampTileKeys();
     const startKey = getTileKey(startQ, startR);
     const startTile = gameState.tiles.get(startKey);
     if (!startTile) return;
+
+    // Prevent starting a fill ON a base camp tile 
+    if (baseCampTileKeys.has(startKey)) {
+        showInstruction("Cannot change the terrain of a base camp tile.", 2000);
+        return;
+    }
 
     const targetType = startTile.type;
     const replacementType = gameState.mapMakerBrush.value;
@@ -8078,6 +8098,11 @@ function performFloodFill(startQ, startR) {
     while (queue.length > 0) {
         const currentKey = queue.shift();
         const currentTile = gameState.tiles.get(currentKey);
+
+        // Prevent the fill from SPREADING to a base camp tile
+        if (baseCampTileKeys.has(currentKey)) {
+            continue; // Skip this tile and move to the next in the queue
+        }
 
         // Change the tile type
         currentTile.type = replacementType;
@@ -8706,16 +8731,7 @@ function applyMapMakerBrush(x, y) {
     const brush = gameState.mapMakerBrush;
 
     if (brush.type === 'tile') {
-        // --- Check if the target tile is a base camp tile ---
-        const baseCampTileKeys = new Set();
-        const p1Coords = parseEdgeKey(gameState.baseCampPositions.player1);
-        const p2Coords = parseEdgeKey(gameState.baseCampPositions.player2);
-        
-        // Add all four base camp tile keys to a Set for a fast lookup
-        baseCampTileKeys.add(getTileKey(p1Coords[0].q, p1Coords[0].r));
-        baseCampTileKeys.add(getTileKey(p1Coords[1].q, p1Coords[1].r));
-        baseCampTileKeys.add(getTileKey(p2Coords[0].q, p2Coords[0].r));
-        baseCampTileKeys.add(getTileKey(p2Coords[1].q, p2Coords[1].r));
+        const baseCampTileKeys = getMapMakerBaseCampTileKeys();
 
         if (baseCampTileKeys.has(hexKey)) {
             // If the tile is a base camp, show a message and do not allow painting.
