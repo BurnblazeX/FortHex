@@ -1609,7 +1609,11 @@
 
     <script>
         // --- Game Configuration & Constants ---
+<<<<<<< Updated upstream
         const BUILD_VERSION = "B28";
+=======
+        const BUILD_VERSION = "indev B29";
+>>>>>>> Stashed changes
         const HEX_SIZE = 70; 
         const GRID_RADIUS = 3; 
 
@@ -1626,7 +1630,7 @@
         const FORTIFICATION_DAMAGE = 1; 
         const BRIDGE_MAX_HP = 5;        
         const PROJECTILE_SPEED_PIXELS_PER_MS = 0.8;
-        const UNIT_ON_EDGE_OFFSET = HEX_SIZE * 0.2; 
+        const UNIT_ON_EDGE_OFFSET = HEX_SIZE * 0.3; 
         const ATTACK_COST = 1;          
         const FORTIFY_UNFORTIFY_COST = 1; 
         const BUILD_BRIDGE_COST = 1;    
@@ -2135,6 +2139,28 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
 
             // A road cannot be on an edge connected to a water tile.
             return tile1.type !== TILE_TYPES.WATER && tile2.type !== TILE_TYPES.WATER;
+        }
+
+        function isEdgePlaceable(edgeKey) {
+            const edge = gameState.edges.get(edgeKey);
+            if (!edge) return false;
+
+            // Cannot place on a player's home base/flag edge
+            if (edgeKey === gameState.baseCampPositions.player1 || edgeKey === gameState.baseCampPositions.player2) {
+                return false;
+            }
+
+            // cannot place on a water-water edge 
+            const tile1 = gameState.tiles.get(getTileKey(edge.q1, edge.r1));
+            const tile2 = gameState.tiles.get(getTileKey(edge.q2, edge.r2));
+            if (!tile1 || !tile2) return false; // Should not happen on a valid map
+
+            if (tile1.type === TILE_TYPES.WATER && tile2.type === TILE_TYPES.WATER) {
+                return false;
+            }
+
+            // If no rules failed, the edge is placeable.
+            return true;
         }
 
         // --- LOS Helper Functions ---
@@ -4011,13 +4037,14 @@ drawVisualEffects();
                     ui.fortifyUnfortifyButton.style.display = 'inline-block';
                     const isSelectingFortify = currentActionState === ACTION_STATES.SELECTING_FORTIFY_TILE;
                     const isSelectingUnfortify = currentActionState === ACTION_STATES.SELECTING_UNFORTIFY_EDGE;
+                    const canAffordFortify = selectedUnit.currentMove >= FORTIFY_UNFORTIFY_COST;
                     
                     let fortifyDisabledCondition = false;
                     if (selectedUnit.isFortified) { // Unfortify logic
                         if (!isSelectingUnfortify) {
                            fortifyDisabledCondition = getPotentialUnfortifyTargets(selectedUnit).length === 0;
                         }
-                        updateActionButtonState(ui.fortifyUnfortifyButton, "Unfortify", "Cancel Unfortify", isSelectingUnfortify, canPerformMajorAction, fortifyDisabledCondition);
+                        updateActionButtonState(ui.fortifyUnfortifyButton, "Unfortify", "Cancel Unfortify", isSelectingUnfortify, canPerformMajorAction && canAffordFortify, fortifyDisabledCondition);
                     } else { // Fortify logic
                         if (!isSelectingFortify) {
                             const edgeCoords = parseEdgeKey(selectedUnit.position);
@@ -4031,7 +4058,7 @@ drawVisualEffects();
                                 fortifyDisabledCondition = true;
                             }
                         }
-                        updateActionButtonState(ui.fortifyUnfortifyButton, "Fortify", "Cancel Fortify", isSelectingFortify, canPerformMajorAction, fortifyDisabledCondition);
+                        updateActionButtonState(ui.fortifyUnfortifyButton, "Fortify", "Cancel Fortify", isSelectingFortify, canPerformMajorAction && canAffordFortify, fortifyDisabledCondition);
                     }
                 } else {
                     ui.fortifyUnfortifyButton.style.display = 'none';
@@ -4207,7 +4234,8 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
             const queueKey = `player${destroyedPlayer}`;
             gameState.respawnQueue[queueKey].push({
                 unitType: unitToDestroy.type,
-                turnsRemaining: RESPAWN_TURN_TIMER
+                turnsRemaining: RESPAWN_TURN_TIMER,
+                timerHalved: false
             });
             updateRespawnQueueDisplay();
 
@@ -4638,7 +4666,7 @@ function completeFortify(unitToFortify, targetTileKeyToFortify) {
             if (currentEdge) currentEdge.units = currentEdge.units.filter(u => u.id !== unitToFortify.id);
             unitToFortify.isFortified = true; unitToFortify.fortifiedTileKey = targetTileKeyToFortify;
             unitToFortify.positionType = 'center'; unitToFortify.position = targetTileKeyToFortify;
-            unitToFortify.currentMove = 0; unitToFortify.hasPerformedMajorAction = true;
+            unitToFortify.currentMove -= FORTIFY_UNFORTIFY_COST; unitToFortify.hasPerformedMajorAction = true;
             targetTileObject.fortifiedByPlayer = fortifyingPlayer;
             logAction(`${unitToFortify.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
 
@@ -4766,7 +4794,7 @@ function completeUnfortify(unitToUnfortify, targetEdgeKey) {
             unitToUnfortify.fortifiedTileKey = null;
             unitToUnfortify.positionType = 'edge'; 
             unitToUnfortify.position = targetEdgeKey;
-            unitToUnfortify.currentMove = 0; 
+            unitToUnfortify.currentMove = FORTIFY_UNFORTIFY_COST; 
             unitToUnfortify.hasPerformedMajorAction = true;
             targetEdge.units.push(unitToUnfortify);
             logAction(`${unitToUnfortify.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, unfortifyingPlayer, 2500);
@@ -5651,6 +5679,22 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
         updateAllHealingStatus();
         severSupplyLinesForPlayer(enemyFlag.player);
 
+<<<<<<< Updated upstream
+=======
+        // Halve respawn timers for the player whose flag was just stolen
+        const victimPlayerQueue = gameState.respawnQueue[`player${enemyFlag.player}`];
+        victimPlayerQueue.forEach(item => {
+            if (!item.timerHalved) { // Only halve it once
+                item.turnsRemaining = Math.ceil(item.turnsRemaining / 2);
+                item.timerHalved = true;
+            }
+        });
+        updateRespawnQueueDisplay(); // Immediately show the updated timers
+
+        // Set supply points to 0 for the player whose flag was stolen
+        updateSupplyPointsBasedOnFlagStatus(enemyFlag.player);
+
+>>>>>>> Stashed changes
         // --- CREATE THE STARBURST EFFECT ---
         const unitPos = getUnitScreenPosition(unitToMove);
         if (unitPos) {
@@ -8183,6 +8227,7 @@ function applyMapMakerBrush(x, y) {
         const { key: closestEdgeKey } = findClosestEdgeToPoint(x, y);
         if (!closestEdgeKey) return;
 
+<<<<<<< Updated upstream
         const edge = gameState.edges.get(closestEdgeKey);
         const [h1, h2] = parseEdgeKey(closestEdgeKey);
         const tile1 = gameState.tiles.get(getTileKey(h1.q, h1.r));
@@ -8193,6 +8238,21 @@ function applyMapMakerBrush(x, y) {
             showInstruction("Cannot place units on water edges.", 1500);
             return;
         }
+=======
+        // Centralized Validation
+        if (!isEdgePlaceable(closestEdgeKey)) {
+            showInstruction("Cannot place a unit on this edge.", 1500);
+            return;
+        }
+
+        const edge = gameState.edges.get(closestEdgeKey);
+
+        if (edge.units.length > 0 && edge.units[0].player !== brush.player) {
+            showInstruction("Cannot place on an edge occupied by the enemy.", 2000);
+            return;
+        }
+
+>>>>>>> Stashed changes
         if (edge.units.length >= 2) {
             showInstruction("This edge is full.", 1500);
             return;
@@ -8822,7 +8882,7 @@ function applyMapMakerBrush(x, y) {
         }
     </script>
           
-<div id="buildVersionDisplay">FortHex Build B28</div>
+<div id="buildVersionDisplay">FortHex Build B29</div>
 <div id="confettiContainer"></div>
 
 <div id="colorPickerDrawer">
