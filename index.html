@@ -1867,8 +1867,8 @@
         const PATH_DRAW_HOVER_DELAY_MS = 1000; 
 
         // Arcade Mode Constants
-        const ARCADE_TURN_TIME_SEC = 45;
-        const ARCADE_MAX_TURNS = 15;
+        const ARCADE_TURN_TIME_SEC = 30;
+        const ARCADE_MAX_TURNS = 10;
         const ARCADE_UNIT_CAP = 2;
 
         // Map Generation Constants (Updated for Radius 3)
@@ -1970,6 +1970,7 @@
 
         const PRESET_MAP_1 = {
             name: "River Fork",
+            radius: 3,
             tiles: new Map([
                 ['-3,0', TILE_TYPES.FOREST], ['-3,1', TILE_TYPES.FOREST], ['-3,2', TILE_TYPES.MOUNTAIN], ['-3,3', TILE_TYPES.WATER],
                 ['-2,-1', TILE_TYPES.PLAINS], ['-2,0', TILE_TYPES.PLAINS], ['-2,1', TILE_TYPES.FOREST], ['-2,2', TILE_TYPES.WATER], ['-2,3', TILE_TYPES.MOUNTAIN],
@@ -1986,6 +1987,23 @@
                 { player: 2, typeName: 'HORSEMAN', position: '0,-3_0,-2' }, { player: 2, typeName: 'PIKEMAN', position: '-3,0_-2,0' }
             ],
             baseCampPositions: { player1: '1,2_2,1', player2: '-2,-1_-1,-2' }
+        };
+
+        const PRESET_MAP_2 = {
+            name: "Alpha Grounds",
+            radius: 2,
+            tiles: new Map([
+                ['-2,0', TILE_TYPES.WATER], ['-2,1', TILE_TYPES.FOREST], ['-2,2', TILE_TYPES.MOUNTAIN],
+                ['-1,-1', TILE_TYPES.WATER], ['-1,0', TILE_TYPES.PLAINS], ['-1,1', TILE_TYPES.FOREST], ['-1,2', TILE_TYPES.WATER],
+                ['0,-2', TILE_TYPES.WATER], ['0,-1', TILE_TYPES.PLAINS], ['0,0', TILE_TYPES.PLAINS], ['0,1', TILE_TYPES.PLAINS], ['0,2', TILE_TYPES.FOREST],
+                ['1,-2', TILE_TYPES.FOREST], ['1,-1', TILE_TYPES.FOREST], ['1,0', TILE_TYPES.PLAINS], ['1,1', TILE_TYPES.FOREST],
+                ['2,-2', TILE_TYPES.MOUNTAIN], ['2,-1', TILE_TYPES.WATER], ['2,0', TILE_TYPES.FOREST]
+            ]),
+            units: [
+                { player: 1, typeName: 'MELEE', position: '0,-1_1,-1' }, { player: 1, typeName: 'ARCHER', position: '-1,0_0,-1' },
+                { player: 2, typeName: 'MELEE', position: '-1,1_0,1' }, { player: 2, typeName: 'ARCHER', position: '0,1_1,0' }
+            ],
+            baseCampPositions: { player1: null, player2: null }
         };
 
         const DEFAULT_MAP_LAYOUT_RADIUS_3 = new Map([
@@ -2480,156 +2498,213 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
 
         // --- Initialization ---
 function initializeGrid(tileLayoutMap = null, customUnits = null) {
-            if (!tileLayoutMap && !customUnits) {
-                gameState.baseCampPositions = JSON.parse(JSON.stringify(DEFAULT_FLAG_HOME_POSITIONS));
-            }
-            
-            canvas.width = CANVAS_WIDTH_NORMAL;
-            canvas.height = CANVAS_HEIGHT_NORMAL;
-            document.querySelectorAll('.ui-panel').forEach(panel => { panel.style.minHeight = canvas.height + 'px'; });
+    if (!tileLayoutMap && !customUnits) {
+        gameState.baseCampPositions = JSON.parse(JSON.stringify(DEFAULT_FLAG_HOME_POSITIONS));
+    }
 
-            gameState.tiles.clear(); gameState.edges.clear(); gameState.units = [];
-            gameState.gameOver = false; ui.victoryMessage.style.display = 'none';
-            ui.endTurnButton.disabled = false;
-            gameState.selectedUnit = null; 
-            gameState.hoveredUnitId = null; 
-            gameState.currentPlayer = 1;
-            gameState.globalTurnNumber = 1; 
-            updateGlobalTurnDisplay();
-            gameState.isDragging = false; 
-            gameState.draggingUnit = null; 
-            gameState.currentReachableMoves.clear();
-            resetActionSelectionStates();
-            gameState.actionLog = [];
-            gameState.respawnQueue = { player1: [], player2: [] };
-            updateActionLogDisplay();
-            updateRespawnQueueDisplay();
-            
-            // --- ARCADE INIT ---
-            gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
-            // FIX: Start with 'none' so Turn 1 allows free movement
-            gameState.swapState = 'none'; 
-            gameState.unitToSwap = null;
-            gameState.arcadeTotalTurns = 0;
-            
-            ui.endTurnButton.classList.remove('arcade-timer-active');
-            ui.endTurnButton.style.background = '';
-            ui.endTurnButton.textContent = "End Turn";
+    canvas.width = CANVAS_WIDTH_NORMAL;
+    canvas.height = CANVAS_HEIGHT_NORMAL;
+    document.querySelectorAll('.ui-panel').forEach(panel => {
+        panel.style.minHeight = canvas.height + 'px';
+    });
 
-            if (gameState.gameMode === 'arcade') {
-                gameState.supplyPoints = { player1: 0, player2: 0 };
-                document.getElementById('supplyPointsContainer').style.display = 'block'; 
-                ui.endTurnButton.classList.add('arcade-timer-active');
-                // FIX: Do not force swap instructions on Turn 1
-                // gameState.swapState is 'none', so normal play happens.
-            } else {
-                gameState.supplyPoints = { player1: 10, player2: 10 };
-                document.getElementById('supplyPointsContainer').style.display = 'block';
-            }
-            updateSupplyPointsDisplay(); 
+    gameState.tiles.clear();
+    gameState.edges.clear();
+    gameState.units = [];
+    gameState.gameOver = false;
+    ui.victoryMessage.style.display = 'none';
+    ui.endTurnButton.disabled = false;
+    gameState.selectedUnit = null;
+    gameState.hoveredUnitId = null;
+    gameState.currentPlayer = 1;
+    gameState.globalTurnNumber = 1;
+    updateGlobalTurnDisplay();
+    gameState.isDragging = false;
+    gameState.draggingUnit = null;
+    gameState.currentReachableMoves.clear();
+    resetActionSelectionStates();
+    gameState.actionLog = [];
+    gameState.respawnQueue = {
+        player1: [],
+        player2: []
+    };
+    updateActionLogDisplay();
+    updateRespawnQueueDisplay();
 
-            // Load Tiles (Standard Logic)
-            if (tileLayoutMap) {
-                const firstTileValue = tileLayoutMap.values().next().value;
-                if (firstTileValue && firstTileValue.type && firstTileValue.type.name) {
-                    tileLayoutMap.forEach((savedTileObject, key) => {
-                        const [q, r] = key.split(',').map(Number);
-                        const rehydratedType = TILE_TYPES[savedTileObject.type.name.toUpperCase()];
-                        gameState.tiles.set(key, { q, r, type: rehydratedType, fortifiedByPlayer: null });
-                    });
-                } else {
-                    tileLayoutMap.forEach((tileObject, key) => {
-                        const [q, r] = key.split(',').map(Number);
-                        gameState.tiles.set(key, { q, r, type: tileObject, fortifiedByPlayer: null });
-                    });
-                }
-            } else {
-                DEFAULT_MAP_LAYOUT_RADIUS_3.forEach((type, key) => {
-                    const [q, r] = key.split(',').map(Number);
-                    gameState.tiles.set(key, { q, r, type, fortifiedByPlayer: null });
-                });
-            }
+    // --- ARCADE INIT ---
+    gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
+    gameState.swapState = 'none';
+    gameState.unitToSwap = null;
+    gameState.arcadeTotalTurns = 0;
 
-            // Generate Edges (Standard Logic)
-            gameState.tiles.forEach(tile => {
-                const {q, r} = tile;
-                getNeighbors(q, r).forEach(n_coord => {
-                     if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
-                        const edgeKey = getEdgeKey(q, r, n_coord.q, n_coord.r);
-                        if (!gameState.edges.has(edgeKey)) {
-                             gameState.edges.set(edgeKey, {
-                                q1: q, r1: r, q2: n_coord.q, r2: n_coord.r,
-                                units: [], bridge: false, bridgeHp: null, isPathway: true
-                            });
-                        }
-                    }
+    ui.endTurnButton.classList.remove('arcade-timer-active');
+    ui.endTurnButton.style.background = '';
+    ui.endTurnButton.textContent = "End Turn";
+
+    if (gameState.gameMode === 'arcade') {
+        gameState.supplyPoints = {
+            player1: 0,
+            player2: 0
+        };
+        document.getElementById('supplyPointsContainer').style.display = 'block';
+        ui.endTurnButton.classList.add('arcade-timer-active');
+    } else {
+        gameState.supplyPoints = {
+            player1: 10,
+            player2: 10
+        };
+        document.getElementById('supplyPointsContainer').style.display = 'block';
+    }
+
+    // Load Tiles (Standard Logic)
+    if (tileLayoutMap) {
+        const firstTileValue = tileLayoutMap.values().next().value;
+        if (firstTileValue && firstTileValue.type && firstTileValue.type.name) {
+            tileLayoutMap.forEach((savedTileObject, key) => {
+                const [q, r] = key.split(',').map(Number);
+                const rehydratedType = TILE_TYPES[savedTileObject.type.name.toUpperCase()];
+                gameState.tiles.set(key, {
+                    q,
+                    r,
+                    type: rehydratedType,
+                    fortifiedByPlayer: null
                 });
             });
-
-            // --- FIX: Unit Placement Logic ---
-            if (customUnits) {
-                customUnits.forEach(unitInfo => {
-                    const newUnit = createUnit(unitInfo.player, UNIT_TYPES[unitInfo.typeName], unitInfo.position);
-                    gameState.units.push(newUnit);
+        } else {
+            tileLayoutMap.forEach((tileObject, key) => {
+                const [q, r] = key.split(',').map(Number);
+                gameState.tiles.set(key, {
+                    q,
+                    r,
+                    type: tileObject,
+                    fortifiedByPlayer: null
                 });
-            } else if (tileLayoutMap && tileLayoutMap !== DEFAULT_MAP_LAYOUT_RADIUS_3) {
-                const limit = gameState.gameMode === 'arcade' ? ARCADE_UNIT_CAP : MAX_UNITS_PER_PLAYER;
-                placeUnitsOnNewGeneratedMap(limit);
-            } else { 
-                // Default map fallback
-                if (gameState.gameMode === 'arcade') {
-                    // FIX: Only 2 units for Arcade (Melee & Archer)
-                    gameState.units.push(createUnit(1, UNIT_TYPES.MELEE,    getEdgeKey(1, -2, 0, -2)));
-                    gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER,   getEdgeKey(-2, 0, -1, -1)));
-                    
-                    gameState.units.push(createUnit(2, UNIT_TYPES.MELEE,    getEdgeKey(-1, 2, 0, 2)));
-                    gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER,   getEdgeKey(1, 1, 2, 0)));
-                } else {
-                    // Standard Mode: 4 units
-                    gameState.units.push(createUnit(1, UNIT_TYPES.MELEE,    getEdgeKey(1, -2, 0, -2)));
-                    gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER,   getEdgeKey(-2, 0, -1, -1)));
-                    gameState.units.push(createUnit(1, UNIT_TYPES.PIKEMAN,  getEdgeKey(-1, -1, 0, -2)));
-                    gameState.units.push(createUnit(1, UNIT_TYPES.HORSEMAN, getEdgeKey(-2, 0, -2, 1)));
-                    
-                    gameState.units.push(createUnit(2, UNIT_TYPES.MELEE,    getEdgeKey(-1, 2, 0, 2)));
-                    gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER,   getEdgeKey(1, 1, 2, 0)));
-                    gameState.units.push(createUnit(2, UNIT_TYPES.PIKEMAN,  getEdgeKey(0, 2, 1, 1)));
-                    gameState.units.push(createUnit(2, UNIT_TYPES.HORSEMAN, getEdgeKey(2, 0, 2, -1)));
-                }
-            }
-
-            // Link units to edges
-            gameState.units.forEach(unit => {
-                const edge = gameState.edges.get(unit.position);
-                if (edge) edge.units.push(unit);
-                else console.error("Failed to place unit on an edge:", unit.position, unit);
-            });                                                   
-
-            gameState.units.forEach(unit => {
-                unit.currentMove = unit.type.baseMove; unit.hasPerformedMajorAction = false;
             });
-
-            gameState.unitCounts = {
-                player1: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 },
-                player2: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 }
-            };
-            gameState.units.forEach(u => {
-                gameState.unitCounts[`player${u.player}`][u.type.name]++;
-            });
-
-            if (gameState.gameMode !== 'arcade') {
-                gameState.flags = {
-                    'p1_flag': { id: 'p1_flag', player: 1, homePosition: gameState.baseCampPositions.player1, status: 'at_base', carrierId: null },
-                    'p2_flag': { id: 'p2_flag', player: 2, homePosition: gameState.baseCampPositions.player2, status: 'at_base', carrierId: null }
-                };
-            } else {
-                gameState.flags = null;
-            }
-
-            updateTurnDisplay(); 
-            updateSelectedUnitInfoPanel(); 
-            checkVictoryCondition();
         }
+    } else {
+        DEFAULT_MAP_LAYOUT_RADIUS_3.forEach((type, key) => {
+            const [q, r] = key.split(',').map(Number);
+            gameState.tiles.set(key, {
+                q,
+                r,
+                type,
+                fortifiedByPlayer: null
+            });
+        });
+    }
+
+    // Generate Edges (Standard Logic)
+    gameState.tiles.forEach(tile => {
+        const {
+            q,
+            r
+        } = tile;
+        getNeighbors(q, r).forEach(n_coord => {
+            if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
+                const edgeKey = getEdgeKey(q, r, n_coord.q, n_coord.r);
+                if (!gameState.edges.has(edgeKey)) {
+                    gameState.edges.set(edgeKey, {
+                        q1: q,
+                        r1: r,
+                        q2: n_coord.q,
+                        r2: n_coord.r,
+                        units: [],
+                        bridge: false,
+                        bridgeHp: null,
+                        isPathway: true
+                    });
+                }
+            }
+        });
+    });
+
+    // --- Unit Placement Logic ---
+    if (customUnits) {
+        customUnits.forEach(unitInfo => {
+            const newUnit = createUnit(unitInfo.player, UNIT_TYPES[unitInfo.typeName], unitInfo.position);
+            gameState.units.push(newUnit);
+        });
+    } else if (tileLayoutMap && tileLayoutMap !== DEFAULT_MAP_LAYOUT_RADIUS_3) {
+        const limit = gameState.gameMode === 'arcade' ? ARCADE_UNIT_CAP : MAX_UNITS_PER_PLAYER;
+        placeUnitsOnNewGeneratedMap(limit);
+    } else {
+        // Default map fallback
+        if (gameState.gameMode === 'arcade') {
+            gameState.units.push(createUnit(1, UNIT_TYPES.MELEE, getEdgeKey(1, -2, 0, -2)));
+            gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER, getEdgeKey(-2, 0, -1, -1)));
+
+            gameState.units.push(createUnit(2, UNIT_TYPES.MELEE, getEdgeKey(-1, 2, 0, 2)));
+            gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER, getEdgeKey(1, 1, 2, 0)));
+        } else {
+            // Standard Mode: 4 units
+            gameState.units.push(createUnit(1, UNIT_TYPES.MELEE, getEdgeKey(1, -2, 0, -2)));
+            gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER, getEdgeKey(-2, 0, -1, -1)));
+            gameState.units.push(createUnit(1, UNIT_TYPES.PIKEMAN, getEdgeKey(-1, -1, 0, -2)));
+            gameState.units.push(createUnit(1, UNIT_TYPES.HORSEMAN, getEdgeKey(-2, 0, -2, 1)));
+
+            gameState.units.push(createUnit(2, UNIT_TYPES.MELEE, getEdgeKey(-1, 2, 0, 2)));
+            gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER, getEdgeKey(1, 1, 2, 0)));
+            gameState.units.push(createUnit(2, UNIT_TYPES.PIKEMAN, getEdgeKey(0, 2, 1, 1)));
+            gameState.units.push(createUnit(2, UNIT_TYPES.HORSEMAN, getEdgeKey(2, 0, 2, -1)));
+        }
+    }
+
+    // Link units to edges
+    gameState.units.forEach(unit => {
+        const edge = gameState.edges.get(unit.position);
+        if (edge) edge.units.push(unit);
+        else console.error("Failed to place unit on an edge:", unit.position, unit);
+    });
+
+    gameState.units.forEach(unit => {
+        unit.currentMove = unit.type.baseMove;
+        unit.hasPerformedMajorAction = false;
+    });
+
+    gameState.unitCounts = {
+        player1: {
+            Melee: 0,
+            Archer: 0,
+            Pikeman: 0,
+            Horseman: 0
+        },
+        player2: {
+            Melee: 0,
+            Archer: 0,
+            Pikeman: 0,
+            Horseman: 0
+        }
+    };
+    gameState.units.forEach(u => {
+        gameState.unitCounts[`player${u.player}`][u.type.name]++;
+    });
+
+    if (gameState.gameMode !== 'arcade') {
+        gameState.flags = {
+            'p1_flag': {
+                id: 'p1_flag',
+                player: 1,
+                homePosition: gameState.baseCampPositions.player1,
+                status: 'at_base',
+                carrierId: null
+            },
+            'p2_flag': {
+                id: 'p2_flag',
+                player: 2,
+                homePosition: gameState.baseCampPositions.player2,
+                status: 'at_base',
+                carrierId: null
+            }
+        };
+    } else {
+        gameState.flags = null;
+    }
+
+    updateTurnDisplay();
+    updateSelectedUnitInfoPanel();
+    checkVictoryCondition();
+    updateSupplyPointsDisplay();
+}
 
         function createUnit(player, type, edgeKey) {
             const unitId = `unit_${player}_${type.name.toLowerCase()}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -2922,7 +2997,6 @@ function drawHexEdgesAndBoundaries() {
 
 
         function drawFortificationOutlines() {
-            if (gameState.gameMode === 'arcade') return;
             const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
             const fortifiedTilesP1 = new Set();
             const fortifiedTilesP2 = new Set();
@@ -4211,14 +4285,13 @@ function drawAnimations() {
     gameState.activeAnimations = stillAnimating;
 }
 
-function gameLoop() {
+        function gameLoop() {
             // --- ARCADE LOGIC ---
             if (gameState.gameMode === 'arcade' && !gameState.gameOver && !gameState.mapMakerMode) {
                 
                 // 1. Timer Logic
-                // Reduce timer if swap is done OR if waiting for swap selection (force speed)
                 if (gameState.activeAnimations.length === 0) { 
-                    gameState.arcadeTurnTimer -= 1/60; // Approx based on RAF
+                    gameState.arcadeTurnTimer -= 1/60; 
                     if (gameState.arcadeTurnTimer <= 0) {
                         gameState.arcadeTurnTimer = 0;
                         if (gameState.swapState !== 'complete') {
@@ -4229,35 +4302,21 @@ function gameLoop() {
                     }
                 }
 
-                // 2. End Turn Button Visualization (Loading Bar)
+                // 2. End Turn Button Visualization
                 const pct = Math.max(0, (gameState.arcadeTurnTimer / ARCADE_TURN_TIME_SEC) * 100);
-                const btnColor = '#E04030'; // Standard Red
-                const progressColor = '#2ecc71'; // Green bar
-                
-                // Update gradient: Green from left to right, shrinking
-                ui.endTurnButton.style.background = `linear-gradient(to right, ${progressColor} ${pct}%, ${btnColor} ${pct}%)`;
+                const activeColor = '#E04030'; 
+                const emptyColor = '#C03020';
+                ui.endTurnButton.style.background = `linear-gradient(to right, ${activeColor} ${pct}%, ${emptyColor} ${pct}%)`;
                 ui.endTurnButton.textContent = `End Turn (${Math.ceil(gameState.arcadeTurnTimer)}s)`;
-
-                // 3. Canvas Border Pulsing (During Swap Phase)
-                if (gameState.swapState === 'selecting_unit') {
-                    const time = Date.now();
-                    const playerColor = TEAM_COLORS[`player${gameState.currentPlayer}`].secondary;
-                    const alertColor = '#FFC020'; // Yellow
-                    const pulse = (Math.sin(time / 200) + 1) / 2; 
-                    canvas.style.outlineColor = lerpColor(playerColor, alertColor, pulse);
-                } else {
-                    // Reset to standard player color
-                    canvas.style.outlineColor = TEAM_COLORS[`player${gameState.currentPlayer}`].secondary;
-                }
             }
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // --- Handle smooth color transition for canvas elements ---
+            
+            // --- Handle smooth color transition ---
             if (gameState.colorTransition.active) {
                 const elapsedTime = Date.now() - gameState.colorTransition.startTime;
                 const progress = Math.min(elapsedTime / COLOR_TRANSITION_DURATION_MS, 1);
 
-                // Animate each player's primary, SECONDARY, AND accent colors independently
                 currentDrawingColors.player1.primary = lerpColor(gameState.colorTransition.from.player1.primary, gameState.colorTransition.to.player1.primary, progress);
                 currentDrawingColors.player2.primary = lerpColor(gameState.colorTransition.from.player2.primary, gameState.colorTransition.to.player2.primary, progress);
                 currentDrawingColors.player1.secondary = lerpColor(gameState.colorTransition.from.player1.secondary, gameState.colorTransition.to.player1.secondary, progress); 
@@ -4269,7 +4328,6 @@ function gameLoop() {
                     gameState.colorTransition.active = false;
                 }
             } else {
-                // Ensure drawing colors are synced if no transition is active
                 currentDrawingColors.player1.primary = TEAM_COLORS.player1.primary;
                 currentDrawingColors.player2.primary = TEAM_COLORS.player2.primary;
                 currentDrawingColors.player1.secondary = TEAM_COLORS.player1.secondary;
@@ -4278,25 +4336,33 @@ function gameLoop() {
                 currentDrawingColors.player2.accent = TEAM_COLORS.player2.accent;
             }
 
-            // --- Handle Canvas Outline Color ---
-            // This is the single source of truth for the canvas border color.
+            // --- Handle Canvas Outline Color (Visuals) ---
             if (gameState.mapMakerMode) {
-                // In Map Maker mode, set a neutral white border for framing.
                 canvas.style.outlineColor = '#F0F0F0';
+                canvas.style.transition = 'outline-color 0.4s ease-in-out';
             } else if (gameState.gameOver) {
-                // When the game is over, hide the border.
                 canvas.style.outlineColor = 'transparent';
+                canvas.style.transition = 'outline-color 0.4s ease-in-out';
+            } else if (gameState.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
+                // --- ARCADE SWAP PULSE ---
+                // FIX: Disable CSS transition so JS animation works instantly
+                canvas.style.transition = 'none'; 
+                
+                const time = Date.now();
+                const playerColor = TEAM_COLORS[`player${gameState.currentPlayer}`].secondary;
+                const alertColor = '#FFC020'; // Explicit Yellow requested
+                
+                // Oscillate between 0 and 1 every ~1.2 seconds
+                const pulse = (Math.sin(time / 200) + 1) / 2; 
+                
+                canvas.style.outlineColor = lerpColor(playerColor, alertColor, pulse);
             } else {
-                // During normal gameplay, use the current player's color.
-                // It reads directly from TEAM_COLORS for immediate UI response.
+                // Standard Player Turn Color
+                canvas.style.transition = 'outline-color 0.4s ease-in-out'; // Re-enable smoothing
                 canvas.style.outlineColor = gameState.currentPlayer === 1
                     ? TEAM_COLORS.player1.secondary
                     : TEAM_COLORS.player2.secondary;
             }
-
-            // --- REMOVED: Global translate. offsets are handled in axialToPixel ---
-            // ctx.save(); 
-            // ctx.translate(gameState.renderOffset.x, gameState.renderOffset.y); 
 
             gameState.tiles.forEach(tile => drawHexFill(tile.q, tile.r, tile.type));
             drawHexEdgesAndBoundaries();
@@ -4341,8 +4407,6 @@ function gameLoop() {
                     : gameState.validArcherAttackTargets;
                  drawUnitAttackHighlightsOnly(currentAttackTargets); 
             }
-            
-            // ctx.restore(); // Removed matching restore
             
             requestAnimationFrame(gameLoop);
         }
@@ -4885,29 +4949,34 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
         }
 
         function recalculatePlayerSupplyNetwork(playerNum) {
+            if (gameState.gameMode === 'arcade') return;
+
             const playerSupplyKey = `player${playerNum}`;
             const maxSupply = 10;
 
             // Guard clause to prevent supply calculation if flag is stolen
             const playerFlag = gameState.flags[`p${playerNum}_flag`];
             if (playerFlag && playerFlag.status === 'carried') {
-                // If the flag is stolen, no unit can be in supply.
-                // Nullify all supply lines but DO NOT change supply points.
                 gameState.units.forEach(unit => {
                     if (unit.player === playerNum) {
                         unit.supplyLine = null;
                     }
                 });
-                // The player's supply points should remain at 0.
-                return; // Exit the function immediately.
+                return; 
             }
 
             // Reset all non-base supply lines for the player to start fresh
             gameState.units.forEach(unit => {
                 if (unit.player === playerNum && unit.isFortified) {
-                    const playerBaseTiles = [DEFAULT_FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], DEFAULT_FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
-                    if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                         unit.supplyLine = null;
+                    const baseEdgeKey = DEFAULT_FLAG_HOME_POSITIONS[playerSupplyKey];
+                    // Safety check for base edge
+                    if (baseEdgeKey) {
+                        const playerBaseTiles = [baseEdgeKey.split('_')[0], baseEdgeKey.split('_')[1]];
+                        if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                             unit.supplyLine = null;
+                        }
+                    } else {
+                        unit.supplyLine = null;
                     }
                 }
             });
@@ -4917,30 +4986,29 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
             const fortifiedUnits = gameState.units.filter(u => u.player === playerNum && u.isFortified);
 
             fortifiedUnits.forEach(unit => {
-                const playerBaseTiles = [DEFAULT_FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[0], DEFAULT_FLAG_HOME_POSITIONS[playerSupplyKey].split('_')[1]];
-                if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                    const pathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
-                    if (pathData) {
-                        potentialSupplies.push({
-                            unit: unit,
-                            cost: Math.round(pathData.cost), // Individual cost for sorting
-                            pathData: pathData
-                        });
+                const baseEdgeKey = DEFAULT_FLAG_HOME_POSITIONS[playerSupplyKey];
+                if (baseEdgeKey) {
+                    const playerBaseTiles = [baseEdgeKey.split('_')[0], baseEdgeKey.split('_')[1]];
+                    if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                        const pathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
+                        if (pathData) {
+                            potentialSupplies.push({
+                                unit: unit,
+                                cost: Math.round(pathData.cost), 
+                                pathData: pathData
+                            });
+                        }
                     }
                 }
             });
 
-            // Prioritize supplying the forts with the cheapest lines first to maximize efficiency
             potentialSupplies.sort((a, b) => a.cost - b.cost);
 
             let allUsedRoads = new Set();
             let networkSupplyCost = 0;
             
-            // Go through the prioritized list and establish supply lines if the network can afford it
             potentialSupplies.forEach(supply => {
                 const pathEdges = new Set(supply.pathData.path);
-                
-                // Calculate the cost of adding this fort's unique roads to the network
                 let incrementalCost = 0;
                 pathEdges.forEach(road => {
                     if (!allUsedRoads.has(road)) {
@@ -4949,19 +5017,14 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
                 });
 
                 if (networkSupplyCost + incrementalCost <= maxSupply) {
-                    // Fund this supply line
                     networkSupplyCost += incrementalCost;
                     supply.unit.supplyLine = supply.pathData;
-                    
-                    // Add the newly funded roads to the master set of used roads
                     pathEdges.forEach(road => allUsedRoads.add(road));
                 } else {
-                    // Can't afford it, so it remains unsupplied
                     supply.unit.supplyLine = null;
                 }
             });
 
-            // Update the player's remaining supply points based on the final network cost
             gameState.supplyPoints[playerSupplyKey] = maxSupply - Math.round(networkSupplyCost);
             updateSupplyPointsDisplay();
         }
@@ -5821,42 +5884,37 @@ function completeBuildBridge(targetEdgeKey) {
         }
 
 function updateSupplyPointsDisplay() {
-            const p1SupplyEl = document.getElementById('p1Supply');
-            const p2SupplyEl = document.getElementById('p2Supply');
-            
-            if (gameState.gameMode === 'arcade') {
-                const p1HP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
-                const p2HP = gameState.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
-                
-                if (p1SupplyEl) p1SupplyEl.textContent = `HP: ${p1HP}`;
-                if (p2SupplyEl) p2SupplyEl.textContent = `HP: ${p2HP}`;
-            } else {
-                if (p1SupplyEl) p1SupplyEl.textContent = gameState.supplyPoints.player1;
-                if (p2SupplyEl) p2SupplyEl.textContent = gameState.supplyPoints.player2;
-            }
-        }
+    const container = document.getElementById('supplyPointsContainer');
+    if (!container) return;
 
-        function updateSupplyPointsBasedOnFlagStatus(playerNum) {
-            const playerFlag = gameState.flags[`p${playerNum}_flag`];
-            const playerSupplyKey = `player${playerNum}`;
-
-            if (playerFlag && playerFlag.status === 'carried') {
-                // Flag is stolen, set supply to 0.
-                gameState.supplyPoints[playerSupplyKey] = 0;
-            } else {
-                // Flag is at base, restore to max.
-                gameState.supplyPoints[playerSupplyKey] = 10;
-            }
-            updateSupplyPointsDisplay();
-        }
+    // Rebuild the inner HTML to switch between "Supply" and "Health" labels
+    // while keeping the IDs (p1Supply, p2Supply) for the color system to target.
+    if (gameState.gameMode === 'arcade') {
+        // Calculate Total HP for Arcade Mode
+        const p1HP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
+        const p2HP = gameState.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
+        
+        container.innerHTML = `
+            <span>P1 Health: <span id="p1Supply">${p1HP}</span></span> | 
+            <span>P2 Health: <span id="p2Supply">${p2HP}</span></span>
+        `;
+    } else {
+        // Standard Mode uses Supply Points
+        container.innerHTML = `
+            <span>P1 Supply: <span id="p1Supply">${gameState.supplyPoints.player1}</span></span> | 
+            <span>P2 Supply: <span id="p2Supply">${gameState.supplyPoints.player2}</span></span>
+        `;
+    }
+}
 
 function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     if (!attackingUnit || !targetUnitInfo || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) {
-        showInstruction("Cannot complete attack.", 2000); 
-        resetActionSelectionStates(); 
-        updateSelectedUnitInfoPanel(); return;
+        showInstruction("Cannot complete attack.", 2000);
+        resetActionSelectionStates();
+        updateSelectedUnitInfoPanel();
+        return;
     }
-    
+
     let damageModifier = 0;
     let advantageMessage = "";
     let baseDamage = attackingUnit.type.attack;
@@ -5875,11 +5933,11 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     baseDamage += damageModifier;
 
     let fortifiedArcherMsg = "";
-    if (attackType === 'Archer' && attackingUnit.isFortified) { 
-        baseDamage += 1; 
+    if (attackType === 'Archer' && attackingUnit.isFortified) {
+        baseDamage += 1;
         fortifiedArcherMsg = `Fortified Archer +1 Attack.`;
     }
-    
+
     let attackStatus = 'normal';
     if (advantageMessage === "Advantage!") {
         attackStatus = 'advantage';
@@ -5891,7 +5949,7 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         attacker: attackingUnit,
         targetInfo: targetUnitInfo,
         startTime: Date.now(),
-        
+
         onComplete: async () => {
             gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
             attackingUnit.hasPerformedMajorAction = true;
@@ -5924,12 +5982,16 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                 const bridgeEdge = gameState.edges.get(targetUnitInfo.edgeKey);
                 if (bridgeEdge && bridgeEdge.bridge) {
                     bridgeEdge.bridgeHp -= baseDamage;
-                    triggerDamageVisual({ position: targetUnitInfo.edgeKey, isFortified: false }, 'normal');
+                    triggerDamageVisual({
+                        position: targetUnitInfo.edgeKey,
+                        isFortified: false
+                    }, 'normal');
                     logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} targets bridge for ${baseDamage}.<br>Bridge HP: ${bridgeEdge.bridgeHp}/${BRIDGE_MAX_HP}.`);
                     if (bridgeEdge.bridgeHp <= 0) {
                         logParts.push(`Bridge destroyed!`);
-                        bridgeEdge.bridge = false; bridgeEdge.bridgeHp = null;
-                        
+                        bridgeEdge.bridge = false;
+                        bridgeEdge.bridgeHp = null;
+
                         recalculatePlayerSupplyNetwork(1);
                         recalculatePlayerSupplyNetwork(2);
 
@@ -5960,13 +6022,12 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                         });
                     }
                 } else logParts.push("Target bridge missing.");
-            }
-            else if (targetUnitInfo.unit) {
-                const targetUnit = targetUnitInfo.unit; 
-                if (attackingUnit.player !== targetUnit.player) { 
+            } else if (targetUnitInfo.unit) {
+                const targetUnit = targetUnitInfo.unit;
+                if (attackingUnit.player !== targetUnit.player) {
                     targetUnit.lastAttackedByHostileOnTurn = gameState.globalTurnNumber;
                 }
-                let actualDamage = baseDamage; 
+                let actualDamage = baseDamage;
                 let defenseMessage = "";
                 let pierceMessage = "";
 
@@ -5990,7 +6051,7 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                 }
                 if (pierceMessage) logParts.push(pierceMessage);
                 if (defenseMessage) logParts.push(defenseMessage);
-                
+
                 triggerDamageVisual(targetUnit, attackStatus);
 
                 if (attackType === 'Archer' && targetUnitInfo.edgeKey && actualDamage > 0 && !targetUnit.isFortified) {
@@ -6011,12 +6072,12 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                         logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
                         if (targetUnit.hp <= 0) handleUnitDeath(targetUnit);
                     }
-                } else { 
+                } else {
                     targetUnit.hp -= actualDamage;
                     logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
                     if (targetUnit.hp <= 0) handleUnitDeath(targetUnit);
                 }
-                
+
                 if (targetUnit.type.name === 'Horseman' && attackingUnit.type.attackType === 'melee' && targetUnitInfo.edgeKey) {
                     const edgeOfHorseman = gameState.edges.get(targetUnitInfo.edgeKey);
                     const retaliatingArcher = edgeOfHorseman ? edgeOfHorseman.units.find(u => u.player === targetUnit.player && u.type.name === 'Archer') : null;
@@ -6030,30 +6091,33 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                 }
             }
             if (hitAndRunMessage) logParts.push(hitAndRunMessage);
-            
+
             logAction(logParts.join('<br>'), gameState.currentPlayer, 4500);
 
-            resetActionSelectionStates(); 
-            updateSelectedUnitInfoPanel(); 
+            // CRITICAL FIX: Update HP display after attack damage
+            updateSupplyPointsDisplay();
+
+            resetActionSelectionStates();
+            updateSelectedUnitInfoPanel();
             if (!gameState.gameOver) checkVictoryCondition();
         }
     };
-    
+
     if (gameSettings.animationsEnabled) {
         if (targetUnitInfo.isBridgeTarget) {
             // Simplified animation logic for bridge targets
             const bridgeEdge = gameState.edges.get(targetUnitInfo.edgeKey);
             if (bridgeEdge) {
                 const targetPos = getEdgeMidpoint(bridgeEdge.q1, bridgeEdge.r1, bridgeEdge.q2, bridgeEdge.r2);
-                
+
                 // Create a temporary "dummy" target unit at the bridge's location for the animation system
                 const dummyTarget = {
                     isFortified: false,
                     position: targetUnitInfo.edgeKey,
                     // A getUnitScreenPosition function that just returns the bridge center
-                    getScreenPosition: () => targetPos 
+                    getScreenPosition: () => targetPos
                 };
-                 // Override the getUnitScreenPosition function temporarily for the dummy object
+                // Override the getUnitScreenPosition function temporarily for the dummy object
                 const originalGetUnitScreenPosition = getUnitScreenPosition;
                 getUnitScreenPosition = (unit) => {
                     if (unit === dummyTarget) return unit.getScreenPosition();
@@ -6070,16 +6134,21 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                     const startPos = originalGetUnitScreenPosition(attackingUnit);
                     const maxDistance = pointDistance(startPos, targetPos);
                     const travelDuration = maxDistance / PROJECTILE_SPEED_PIXELS_PER_MS;
-                    
+
                     animation.type = 'attack_projectile';
                     animation.duration = 150 + 250 + travelDuration;
-                    animation.preShotDuration = { draw: 150, hold: 250 };
+                    animation.preShotDuration = {
+                        draw: 150,
+                        hold: 250
+                    };
                     animation.travelDuration = travelDuration;
                     gameState.activeAnimations.push(animation);
                 }
 
                 // Restore the original function after the animation is pushed
-                setTimeout(() => { getUnitScreenPosition = originalGetUnitScreenPosition; }, animation.duration + 50);
+                setTimeout(() => {
+                    getUnitScreenPosition = originalGetUnitScreenPosition;
+                }, animation.duration + 50);
 
             } else {
                 animation.onComplete();
@@ -6104,7 +6173,7 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
             } else {
                 targets.push(targetUnitInfo.unit);
             }
-            
+
             animation.targets = targets;
 
             const startPos = getUnitScreenPosition(attackingUnit);
@@ -6117,20 +6186,23 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                     }
                 });
             }
-            
+
             if (maxDistance > 0) {
                 const preShotDrawDuration = 150;
                 const preShotHoldDuration = 250;
                 const travelDuration = maxDistance / PROJECTILE_SPEED_PIXELS_PER_MS;
-                
+
                 animation.type = 'attack_projectile';
                 animation.duration = preShotDrawDuration + preShotHoldDuration + travelDuration;
-                animation.preShotDuration = { draw: preShotDrawDuration, hold: preShotHoldDuration };
+                animation.preShotDuration = {
+                    draw: preShotDrawDuration,
+                    hold: preShotHoldDuration
+                };
                 animation.travelDuration = travelDuration;
-                
+
                 gameState.activeAnimations.push(animation);
             } else {
-                 animation.onComplete();
+                animation.onComplete();
             }
         } else {
             animation.onComplete();
@@ -6139,10 +6211,10 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         // Animations are disabled, so execute the result immediately.
         animation.onComplete();
     }
-    
-    resetActionSelectionStates(); 
+
+    resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
-}                                                                    
+}
 
 function showSwapClassModal(unit) {
     const overlay = document.getElementById('respawnModalOverlay');
@@ -6155,8 +6227,13 @@ function showSwapClassModal(unit) {
 
     const buttons = content.querySelectorAll('.respawn-button');
     buttons.forEach(btn => {
-        const typeName = btn.dataset.unitType;
+        const typeName = btn.dataset.unitType; // e.g., "MELEE"
         const type = UNIT_TYPES[typeName];
+        
+        // --- FIX: Inject the SVG icon ---
+        btn.innerHTML = UNIT_SVGS[typeName];
+        // -------------------------------
+
         let isValid = true;
 
         if (type.name === unit.type.name) isValid = false;
@@ -6168,7 +6245,7 @@ function showSwapClassModal(unit) {
         btn.onclick = null;
 
         btn.onclick = (e) => {
-            e.stopPropagation(); // CRITICAL FIX
+            e.stopPropagation(); // Prevent bubbling
             performSwap(unit, type);
             hideRespawnModal();
             btn.onclick = null; 
@@ -6450,43 +6527,28 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
     gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
 
     // --- PRE-MOVE: ROBUST REMOVAL ---
-    // Instead of trusting unitToMove.position, we scan for the unit ID on ALL edges
-    // to ensure no ghost copies remain.
     if (unitToMove.positionType === 'edge') {
-        // Try the expected position first for performance
         const expectedEdge = gameState.edges.get(unitToMove.position);
         if (expectedEdge) {
             expectedEdge.units = expectedEdge.units.filter(u => u.id !== unitToMove.id);
         }
-        
-        // Failsafe: Check if the unit ID still exists on ANY edge and remove it.
-        // This fixes the duplication glitch if positions were desynced.
-        /* 
-           Note: Iterating all edges is slightly expensive but safe. 
-           Given the small map size, this is negligible.
-        */
-        /* 
-        gameState.edges.forEach(edge => {
-            if (edge.units.some(u => u.id === unitToMove.id)) {
-                edge.units = edge.units.filter(u => u.id !== unitToMove.id);
-            }
-        });
-        */
     }
 
     // --- UPDATE STATE: Place unit in new position ---
     const finalTargetEdgeData = gameState.edges.get(targetEdgeKey);
-    if (!finalTargetEdgeData) { console.error("Target edge for move not found:", targetEdgeKey); return; }
-    
+    if (!finalTargetEdgeData) {
+        console.error("Target edge for move not found:", targetEdgeKey);
+        return;
+    }
+
     unitToMove.position = targetEdgeKey;
     unitToMove.positionType = 'edge';
     unitToMove.currentMove -= costToMove;
-    
-    // Check to ensure we don't double add if something weird happened
+
     if (!finalTargetEdgeData.units.find(u => u.id === unitToMove.id)) {
         finalTargetEdgeData.units.push(unitToMove);
     }
-    
+
     clearDebugPath();
 
     // --- FLAG CAPTURE LOGIC ---
@@ -6508,40 +6570,42 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
                     item.timerHalved = true;
                 }
             });
-            updateRespawnQueueDisplay(); 
+            updateRespawnQueueDisplay();
             updateSupplyPointsBasedOnFlagStatus(enemyFlag.player);
 
             const unitPos = getUnitScreenPosition(unitToMove);
             if (unitPos) {
                 gameState.visualEffects.push({
                     type: 'flag_capture_burst',
-                    x: unitPos.x, y: unitPos.y,
-                    player: enemyFlag.player, 
+                    x: unitPos.x,
+                    y: unitPos.y,
+                    player: enemyFlag.player,
                     startTime: Date.now(),
-                    duration: 500 
+                    duration: 500
                 });
             }
         }
     }
-    
-    if (checkVictoryCondition()) return; 
+
+    if (checkVictoryCondition()) return;
 
     const unitDestroyedByZoC = applyFortificationDamageOnMove(unitToMove, targetEdgeKey);
-    
+
     if (!unitDestroyedByZoC && unitToMove.hp > 0) {
         logAction(`${unitToMove.type.name} moved. MP: ${Math.floor(unitToMove.currentMove)}`, gameState.currentPlayer);
         if (unitToMove.currentMove >= 1 && (!unitToMove.hasPerformedMajorAction || unitToMove.type.canMoveAfterAttack)) {
             if (gameState.gameMode !== 'singleplayer' || unitToMove.player === gameState.playerSide) {
-                 gameState.currentReachableMoves = getPossibleMoves(unitToMove);
+                gameState.currentReachableMoves = getPossibleMoves(unitToMove);
             }
         } else {
             gameState.currentReachableMoves.clear();
         }
     } else {
-         gameState.currentReachableMoves.clear();
+        gameState.currentReachableMoves.clear();
     }
 
     updateSelectedUnitInfoPanel();
+    updateSupplyPointsDisplay();
 }
 
 function handleMoveClick(x, y) {
@@ -6840,7 +6904,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 canvas.style.cursor = 'grabbing'; 
             }
         }
-        
+
         function handleInteractionMove(x, y) {
             if (gameState.mapMakerMode && gameState.isDragging) {
                 applyMapMakerBrush(x, y);
@@ -7128,14 +7192,20 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         }
 
         // --- Zone of Control Damage & Healing ---
-        function applyStartOfTurnZoCDamage() {
+function applyStartOfTurnZoCDamage() {
             const activePlayer = gameState.currentPlayer;
             const enemyPlayer = activePlayer === 1 ? 2 : 1;
             let unitsToDestroy = [];
 
-            // Get the active player's base camp tiles to apply damage to the enemy
+            // --- FIX: Safely handle Base Camp tiles (null in Arcade Mode) ---
             const activePlayerBaseEdgeKey = gameState.baseCampPositions[`player${activePlayer}`];
-            const activePlayerBaseTiles = [activePlayerBaseEdgeKey.split('_')[0], activePlayerBaseEdgeKey.split('_')[1]];
+            let activePlayerBaseTiles = [];
+            if (activePlayerBaseEdgeKey) {
+                activePlayerBaseTiles = [
+                    activePlayerBaseEdgeKey.split('_')[0],
+                    activePlayerBaseEdgeKey.split('_')[1]
+                ];
+            }
 
             gameState.units.forEach(unit => {
                 // We are checking for enemy units adjacent to the current player's forts/base
@@ -7169,6 +7239,8 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         }
 
         function updateAllHealingStatus() {
+            if (gameState.gameMode === 'arcade') return;
+
             // Check flag status for both players
             const p1FlagStolen = gameState.flags.p1_flag.status === 'carried';
             const p2FlagStolen = gameState.flags.p2_flag.status === 'carried';
@@ -7184,14 +7256,16 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                     unit.canHeal = false; // Unfortified units can't heal anyway
                 }
             });
-            // Let players know what happened
             if (p1FlagStolen) { logAction(`P1's flag is stolen! Healing is disabled.`, 2, 3000); }
             if (p2FlagStolen) { logAction(`P2's flag is stolen! Healing is disabled.`, 1, 3000); }
         }
 
 function applyStartOfTurnHealing() {
+    // In Arcade mode, there are no base camps, so units cannot heal.
+    if (gameState.gameMode === 'arcade') return;
+
     const playerFlag = gameState.flags[`p${gameState.currentPlayer}_flag`];
-    if (playerFlag.status === 'carried') {
+    if (playerFlag && playerFlag.status === 'carried') {
         return; // No healing for anyone if their flag is stolen.
     }
 
@@ -7203,14 +7277,20 @@ function applyStartOfTurnHealing() {
         const recentlyAttacked = gameState.globalTurnNumber < unit.lastAttackedByHostileOnTurn + 2;
         if (recentlyAttacked) {
             return;
-            }
+        }
             
-            let isSupplied = false;
-            const playerBaseTiles = [DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
-            
+        let isSupplied = false;
+        const playerBaseEdgeKey = DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`];
+        
+        // Ensure base positions exist before checking
+        if (playerBaseEdgeKey) {
+            const playerBaseTiles = [playerBaseEdgeKey.split('_')[0], playerBaseEdgeKey.split('_')[1]];
             if (playerBaseTiles.includes(unit.fortifiedTileKey)) {
                 isSupplied = true;
-        } else if (unit.supplyLine && unit.supplyLine.path) {
+            }
+        }
+
+        if (!isSupplied && unit.supplyLine && unit.supplyLine.path) {
             const isIntercepted = unit.supplyLine.path.some(edgeKey => {
                 const edge = gameState.edges.get(edgeKey);
                 return edge && edge.units.some(u => u.player !== unit.player);
@@ -7229,10 +7309,9 @@ function applyStartOfTurnHealing() {
             } else if (unit.hp === unit.maxHp + 1) {
                 logAction(`P${unit.player} ${unit.type.name} gained a shield!`, activePlayer, 2500);
                 
-                // --- TRIGGER SHIELD EFFECT ---
                 let targetX, targetY, targetRadius;
                 const tile = gameState.tiles.get(unit.position);
-                if (tile) { // The unit must be fortified to heal, so it will be on a tile
+                if (tile) { 
                     const center = axialToPixel(tile.q, tile.r);
                     targetX = center.x;
                     targetY = center.y;
@@ -7243,11 +7322,9 @@ function applyStartOfTurnHealing() {
                         x: targetX, y: targetY,
                         unitRadius: targetRadius,
                         startTime: Date.now(),
-                        duration: 600 // A slightly longer, more graceful duration
+                        duration: 600 
                     });
                 }
-                // --- END SHIELD EFFECT ---
-
             } else {
                  logAction(`P${unit.player} ${unit.type.name} healed 1 HP.`, activePlayer, 2500);
             }
@@ -7256,10 +7333,12 @@ function applyStartOfTurnHealing() {
 }
 
         function logSiegeStatus() {
+            if (gameState.gameMode === 'arcade' || !gameState.flags) return;
+
             const activePlayer = gameState.currentPlayer;
             const playerFlag = gameState.flags[`p${activePlayer}_flag`];
 
-            if (playerFlag.status === 'carried') {
+            if (playerFlag && playerFlag.status === 'carried') {
                 const existingLog = gameState.actionLog[gameState.actionLog.length - 1];
                 if (!existingLog || !existingLog.message.includes('Healing is disabled')) {
                     logAction(`P${activePlayer}'s flag is stolen! All healing is disabled.`, activePlayer);
@@ -7351,106 +7430,6 @@ function triggerConfetti() {
     }
 }
 
-// --- ARCADE GAMEMODE ---
-
-function updateArcadeTimerUI() {
-    const bar = document.getElementById('arcadeTimerBar');
-    const label = document.getElementById('arcadeTimerValue');
-    if (bar && label) {
-        const pct = Math.max(0, (gameState.arcadeTurnTimer / ARCADE_TURN_TIME_SEC) * 100);
-        bar.style.width = `${pct}%`;
-        label.textContent = `${Math.ceil(gameState.arcadeTurnTimer)}s`;
-        
-        // Color changes based on urgency
-        if (pct < 20) bar.style.backgroundColor = '#e74c3c'; // Red
-        else if (pct < 50) bar.style.backgroundColor = '#f39c12'; // Orange
-        else bar.style.backgroundColor = '#2ecc71'; // Green
-    }
-}
-
-function handleForcedSwap() {
-    if (gameState.hasSwappedThisTurn) {
-        proceedToEndTurn();
-        return;
-    }
-
-    // 1. Pick a random unit of current player
-    const myUnits = gameState.units.filter(u => u.player === gameState.currentPlayer);
-    if (myUnits.length === 0) {
-        proceedToEndTurn(); // Nothing to swap
-        return;
-    }
-    const victim = myUnits[Math.floor(Math.random() * myUnits.length)];
-
-    // 2. Pick a valid target type
-    const allTypes = Object.values(UNIT_TYPES);
-    const validTypes = allTypes.filter(type => {
-        if (type.name === victim.type.name) return false; // Not same type
-        if (victim.isFortified && type.name === 'Horseman') return false; // Invalid state
-        return true;
-    });
-    
-    if (validTypes.length === 0) {
-        proceedToEndTurn(); // Should be impossible unless only 1 unit type exists in game
-        return;
-    }
-    
-    const newType = validTypes[Math.floor(Math.random() * validTypes.length)];
-
-    // 3. Execute Swap
-    logAction(`Time Up! Forced Swap: ${victim.type.name} -> ${newType.name}`, gameState.currentPlayer);
-    performSwap(victim, newType);
-    
-    // 4. End Turn
-    proceedToEndTurn();
-}
-
-function performSwap(unit, newType) {
-    // Calculate new HP
-    const oldRatio = unit.hp / unit.maxHp;
-    let newHp = Math.floor(newType.hp * oldRatio);
-    if (newHp < 1) newHp = 1; // Clamp min
-
-    // Update Unit
-    unit.type = newType;
-    unit.maxHp = newType.hp;
-    unit.hp = newHp;
-    // Reset moves if needed, or keep them? Usually morphing might refresh move or keep it. 
-    // Let's keep 'currentMove' but cap it at new max if it exceeds?
-    // Simplest: Just don't touch currentMove, but ensure valid state.
-    
-    // Visual feedback
-    triggerDamageVisual(unit, 'normal'); // Re-use damage ring for morph effect
-    gameState.hasSwappedThisTurn = true;
-    
-    // Update UI
-    updateSelectedUnitInfoPanel();
-    
-    // If in Arcade, update score
-    updateSupplyPointsDisplay(); // This updates the Total HP score
-}
-
-function handleSwapButtonClick() {
-    const { selectedUnit } = gameState;
-    if (!selectedUnit || gameState.hasSwappedThisTurn) return;
-    
-    // Show the swap panel, hide the actions panel
-    document.getElementById('actionsPanel').style.display = 'none';
-    document.getElementById('swapSelectionPanel').style.display = 'flex';
-    
-    // Update button states based on validity
-    document.querySelectorAll('.swap-choice').forEach(btn => {
-        const typeName = btn.dataset.type;
-        const type = UNIT_TYPES[typeName];
-        let isValid = true;
-        
-        if (type.name === selectedUnit.type.name) isValid = false;
-        if (selectedUnit.isFortified && type.name === 'Horseman') isValid = false;
-        
-        btn.disabled = !isValid;
-        btn.style.opacity = isValid ? '1' : '0.5';
-    });
-}
 
 // ========================================================================
 // --- COMPLETE AI SYSTEM (VERSION 2.0) ---
@@ -7789,101 +7768,114 @@ function checkVictoryCondition() {
         ui.attackButton.addEventListener('click', handleAttackAction);
 
 function proceedToEndTurn() {
-            if (gameState.isDragging || gameState.gameOver) return;
-            
-            // --- ARCADE RESET ---
-            if (gameState.gameMode === 'arcade') {
-                // Only enforce swap requirement if we are past Turn 1
-                if (gameState.globalTurnNumber >= 2) {
-                    if (gameState.swapState === 'selecting_unit' || gameState.swapState === 'selecting_class') {
-                        showInstruction("You must swap a unit first!", 2000);
-                        return; 
-                    }
-                }
-                
-                if (gameState.currentPlayer === 2) {
-                    gameState.arcadeTotalTurns++;
-                    if (gameState.arcadeTotalTurns >= ARCADE_MAX_TURNS) {
-                        checkArcadeVictoryCondition();
-                        return;
-                    }
-                }
-            }
+    if (gameState.isDragging || gameState.gameOver) return;
     
-            const previousPlayer = gameState.currentPlayer;
-            gameState.playerActionTaken[`player${previousPlayer}`] = false;
-
-            gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
-            gameState.playerActionTaken[`player${gameState.currentPlayer}`] = false;
-
-            if (previousPlayer === 2 && gameState.currentPlayer === 1) { 
-                gameState.globalTurnNumber++;
-                updateGlobalTurnDisplay();
-            }
-            
-            gameState.selectedUnit = null; 
-            gameState.currentReachableMoves.clear();
-            gameState.hoveredUnitId = null; 
-            canvas.style.cursor = 'default';
-            resetActionSelectionStates();
-            
-            gameState.units.forEach(unit => {
-                if (unit.player === gameState.currentPlayer) {
-                    unit.hasPerformedMajorAction = false; 
-                    let baseMoveForTurn = unit.type.baseMove;
-                    if (unit.isCarryingFlag) { baseMoveForTurn -= 1; }
-                    unit.currentMove = Math.max(0, baseMoveForTurn); 
-                    
-                    if (unit.isFortified) {
-                        unit.turnsFortified++;
-                    } else {
-                        unit.turnsFortified = 0;
-                        if (unit.fortifyCooldown > 0) unit.fortifyCooldown = Math.max(0, unit.fortifyCooldown - 5);
-                    }
-
-                    const playerBaseTiles = [DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
-                    if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                        unit.turnsFortifiedAtBase++;
-                        if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
-                            logAction(`P${unit.player} ${unit.type.name} was destroyed for cowardice!`, gameState.currentPlayer);
-                            handleUnitDeath(unit, "cowardice");
-                        }
-                    }
-                }
-            });
-            
-            handleRespawnQueue();
-            applyStartOfTurnZoCDamage(); 
-            logSiegeStatus();
-            applyStartOfTurnHealing(); 
-            updateTurnDisplay();
-            updateSelectedUnitInfoPanel(); 
-            
-            if (gameState.gameMode === 'arcade') {
-                gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
-                // FIX: Only force swap if Global Turn >= 2
-                if (gameState.globalTurnNumber >= 2) {
-                    gameState.swapState = 'selecting_unit';
-                    showInstruction(`Player ${gameState.currentPlayer}'s Turn. SELECT UNIT TO SWAP.`, 4000);
-                } else {
-                    gameState.swapState = 'none';
-                    showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
-                }
-            } else {
-                showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
-            }
-            
-            logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
-            autoSaveGame(true);
-            checkVictoryCondition();
-
-            if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
-                ui.endTurnButton.disabled = true;
-                setTimeout(() => { executeAITurn(); }, 1500);
-            } else {
-                ui.endTurnButton.disabled = false;
+    // --- ARCADE PHASE CHECK (Block if swap is needed) ---
+    if (gameState.gameMode === 'arcade') {
+        // Only enforce swap requirement if we are past Turn 1
+        if (gameState.globalTurnNumber >= 2) {
+            if (gameState.swapState === 'selecting_unit' || gameState.swapState === 'selecting_class') {
+                showInstruction("You must swap a unit first!", 2000);
+                return; // STOP: Player tried to skip swap
             }
         }
+        
+        // Check Arcade Turn Limit Victory
+        if (gameState.currentPlayer === 2) { // End of round
+            gameState.arcadeTotalTurns++;
+            if (gameState.arcadeTotalTurns >= ARCADE_MAX_TURNS) {
+                checkArcadeVictoryCondition();
+                return;
+            }
+        }
+    }
+
+    // --- SWITCH PLAYER ---
+    const previousPlayer = gameState.currentPlayer;
+    gameState.playerActionTaken[`player${previousPlayer}`] = false;
+
+    gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+    gameState.playerActionTaken[`player${gameState.currentPlayer}`] = false;
+
+    if (previousPlayer === 2 && gameState.currentPlayer === 1) { 
+        gameState.globalTurnNumber++;
+        updateGlobalTurnDisplay();
+    }
+    
+    // --- RESET SELECTIONS & MOUSE ---
+    gameState.selectedUnit = null; 
+    gameState.currentReachableMoves.clear();
+    gameState.hoveredUnitId = null; 
+    canvas.style.cursor = 'default';
+    resetActionSelectionStates();
+    
+    // --- RESET UNITS FOR NEW TURN ---
+    gameState.units.forEach(unit => {
+        if (unit.player === gameState.currentPlayer) {
+            unit.hasPerformedMajorAction = false; 
+            let baseMoveForTurn = unit.type.baseMove;
+            if (unit.isCarryingFlag) { baseMoveForTurn -= 1; }
+            unit.currentMove = Math.max(0, baseMoveForTurn); 
+            
+            if (unit.isFortified) {
+                unit.turnsFortified++;
+            } else {
+                unit.turnsFortified = 0;
+                if (unit.fortifyCooldown > 0) unit.fortifyCooldown = Math.max(0, unit.fortifyCooldown - 5);
+            }
+
+            // Check Cowardice (Fortified at base too long)
+            const playerBaseTiles = [DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
+            if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                unit.turnsFortifiedAtBase++;
+                if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
+                    logAction(`P${unit.player} ${unit.type.name} was destroyed for cowardice!`, gameState.currentPlayer);
+                    handleUnitDeath(unit, "cowardice");
+                }
+            }
+        }
+    });
+    
+    handleRespawnQueue();
+    applyStartOfTurnZoCDamage(); 
+    logSiegeStatus();
+    applyStartOfTurnHealing(); 
+    updateTurnDisplay();
+    updateSelectedUnitInfoPanel(); 
+    
+    // CRITICAL FIX: Update HP display after turn start effects
+    updateSupplyPointsDisplay();
+    
+    // --- ARCADE TIMER RESET & STATE SETUP ---
+    if (gameState.gameMode === 'arcade') {
+        // 1. RESET THE TIMER
+        gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
+        gameState.hasSwappedThisTurn = false; // Reset swap flag
+
+        // 2. SET SWAP PHASE (Only for Turn 2+)
+        if (gameState.globalTurnNumber >= 2) {
+            gameState.swapState = 'selecting_unit';
+            showInstruction(`Player ${gameState.currentPlayer}'s Turn. SELECT UNIT TO SWAP.`, 4000);
+        } else {
+            gameState.swapState = 'none'; // Turn 1: No swap needed
+            showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
+        }
+    } else {
+        showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
+    }
+    
+    logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
+    autoSaveGame(true);
+    checkVictoryCondition();
+
+    // AI Handling (Singleplayer)
+    if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
+        ui.endTurnButton.disabled = true;
+        setTimeout(() => { executeAITurn(); }, 1500);
+    } else {
+        ui.endTurnButton.disabled = false;
+    }
+}
 
 ui.endTurnButton.addEventListener('click', () => {
     if (gameState.mapMakerMode) {
@@ -8280,30 +8272,37 @@ function showSelectMapView() {
         title.style.cssText = "font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;";
         
         const presetContainer = document.createElement('div');
-        presetContainer.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;";
+        presetContainer.style.cssText = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px;";
 
-        // --- Create Preset 1 ---
-        const preset1Wrapper = document.createElement('div');
-        preset1Wrapper.style.cssText = "cursor: pointer; border: 2px solid #4a6075; border-radius: 8px; padding: 5px; transition: border-color 0.2s; display: flex; flex-direction: column; align-items: center; gap: 5px;";
-        preset1Wrapper.onclick = () => {
-            hideAllModals();
-            loadPresetMap(PRESET_MAP_1);
+        const createPresetCard = (mapData) => {
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = "cursor: pointer; border: 2px solid #4a6075; border-radius: 8px; padding: 10px; transition: border-color 0.2s; display: flex; flex-direction: column; align-items: center; gap: 5px; background-color: var(--bg-color);";
+            wrapper.onclick = () => {
+                hideAllModals();
+                loadPresetMap(mapData);
+            };
+            wrapper.onmouseover = () => { wrapper.style.borderColor = '#FFC020'; };
+            wrapper.onmouseout = () => { wrapper.style.borderColor = '#4a6075'; };
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 140;
+            canvas.height = 120;
+            
+            const label = document.createElement('span');
+            label.textContent = mapData.name;
+            label.style.fontWeight = 'bold';
+            label.style.color = '#F0F0F0';
+            
+            wrapper.appendChild(canvas);
+            wrapper.appendChild(label);
+            
+            renderMapPreview(canvas, mapData);
+            
+            return wrapper;
         };
-        preset1Wrapper.onmouseover = () => { preset1Wrapper.style.borderColor = '#FFC020'; };
-        preset1Wrapper.onmouseout = () => { preset1Wrapper.style.borderColor = '#4a6075'; };
 
-        const preset1Canvas = document.createElement('canvas');
-        preset1Canvas.width = 120;
-        preset1Canvas.height = 110;
-        
-        const preset1Label = document.createElement('span');
-        preset1Label.textContent = PRESET_MAP_1.name;
-        preset1Label.style.fontWeight = 'bold';
-        
-        preset1Wrapper.appendChild(preset1Canvas);
-        preset1Wrapper.appendChild(preset1Label);
-        presetContainer.appendChild(preset1Wrapper);
-        // End of Preset 1 creation
+        presetContainer.appendChild(createPresetCard(PRESET_MAP_1));
+        presetContainer.appendChild(createPresetCard(PRESET_MAP_2));
 
         const buttonsContainer = document.createElement('div');
         buttonsContainer.className = 'modal-buttons';
@@ -8329,9 +8328,6 @@ function showSelectMapView() {
         selectMapView.appendChild(presetContainer);
         selectMapView.appendChild(buttonsContainer);
         modalContent.appendChild(selectMapView);
-
-        // --- Render the mini-map ---
-        renderMapPreview(preset1Canvas, PRESET_MAP_1);
     }
     selectMapView.style.display = 'block';
 }
@@ -8397,10 +8393,22 @@ function loadPresetMap(mapData) {
     exitMapMakerMode();
     hideAllModals();
 
+    // Resize grid logic to handle Arcade/Normal switching and correct scaling
+    // We always call this if a radius is defined to ensure the mode is set correctly
+    if (mapData.radius) {
+        resizeMapGrid(mapData.radius);
+    } else {
+        // Default to radius 3 if not specified in preset
+        resizeMapGrid(3);
+    }
+
     initializeGrid(mapData.tiles, mapData.units);
     gameState.baseCampPositions = mapData.baseCampPositions;
-    gameState.flags.p1_flag.homePosition = mapData.baseCampPositions.player1;
-    gameState.flags.p2_flag.homePosition = mapData.baseCampPositions.player2;
+    
+    if (gameState.flags && mapData.baseCampPositions.player1) {
+        gameState.flags.p1_flag.homePosition = mapData.baseCampPositions.player1;
+        gameState.flags.p2_flag.homePosition = mapData.baseCampPositions.player2;
+    }
 
     showInstruction(`Preset map '${mapData.name}' loaded. Player 1's turn.`, 4000);
 }
@@ -8473,11 +8481,11 @@ function loadAutoSave() {
         }
 
 function createMapDataObject() {
-    // A map object only contains the essential data for reconstruction.
     const mapData = {
         saveVersion: BUILD_VERSION,
+        radius: gameState.gridRadius, // ADDED THIS LINE
         tiles: Array.from(gameState.tiles.entries()),
-        units: gameState.units.map(u => ({ // Only save critical unit properties
+        units: gameState.units.map(u => ({
             player: u.player,
             typeName: u.type.name,
             position: u.position
@@ -8497,15 +8505,35 @@ function loadMapFromDataObject(mapData) {
     if (!gameState.mapMakerMode) {
         enterMapMakerMode();
     }
-    
-    // Clear the current board
+
+    // 1. Determine Radius
+    // If the file has a radius, use it. If not (legacy file), infer it from the furthest tile.
+    let loadedRadius = mapData.radius;
+    if (!loadedRadius) {
+        let maxCoord = 0;
+        mapData.tiles.forEach(([key]) => {
+            const [q, r] = key.split(',').map(Number);
+            const dist = Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r));
+            if (dist > maxCoord) maxCoord = dist;
+        });
+        loadedRadius = maxCoord || 3;
+    }
+
+    // 2. Resize to match loaded map size
+    // This sets the correct render scale, mode (Arcade vs Local), and grid boundaries.
+    resizeMapGrid(loadedRadius);
+
+    // 3. Clear and Repopulate
+    // resizeMapGrid clears the board, but we explicitly ensure units are empty before pushing loaded ones.
     gameState.units = [];
     gameState.tiles.clear();
     gameState.edges.forEach(edge => edge.units = []);
-    
+
     // Load tiles
     mapData.tiles.forEach(([key, tile]) => {
-        const rehydratedTile = { ...tile, type: TILE_TYPES[tile.type.name.toUpperCase()] };
+        const rehydratedTile = { ...tile,
+            type: TILE_TYPES[tile.type.name.toUpperCase()]
+        };
         gameState.tiles.set(key, rehydratedTile);
     });
 
@@ -8521,30 +8549,34 @@ function loadMapFromDataObject(mapData) {
         }
     });
 
-    // 1. Load the base camp positions from the file into the game state.
+    // 4. Restore Base Camp Logic & UI
     gameState.baseCampPositions = mapData.baseCampPositions;
     gameState.flags.p1_flag.homePosition = mapData.baseCampPositions.player1;
     gameState.flags.p2_flag.homePosition = mapData.baseCampPositions.player2;
 
-    // 2. Determine the correct slider value that corresponds to the loaded data.
+    // Determine the correct slider value that corresponds to the loaded base camp data.
     const sliderToRotations = [3, 2, 1, 0, -1, -2];
     let matchingSliderValue = '3'; // Default to 0-degree rotation
 
-    for (let i = 0; i < sliderToRotations.length; i++) {
-        const rotations = sliderToRotations[i];
-        const p1_default = parseEdgeKey(DEFAULT_FLAG_HOME_POSITIONS.player1);
-        const p1_h1_rotated = rotateAxial(p1_default[0].q, p1_default[0].r, rotations);
-        const p1_h2_rotated = rotateAxial(p1_default[1].q, p1_default[1].r, rotations);
-        const testEdgeKey = getEdgeKey(p1_h1_rotated.q, p1_h1_rotated.r, p1_h2_rotated.q, p1_h2_rotated.r);
+    // Only attempt to match rotation if a base camp actually exists (not null like in Arcade maps)
+    if (mapData.baseCampPositions.player1) {
+        for (let i = 0; i < sliderToRotations.length; i++) {
+            const rotations = sliderToRotations[i];
+            const p1_default = parseEdgeKey(DEFAULT_FLAG_HOME_POSITIONS.player1);
+            const p1_h1_rotated = rotateAxial(p1_default[0].q, p1_default[0].r, rotations);
+            const p1_h2_rotated = rotateAxial(p1_default[1].q, p1_default[1].r, rotations);
+            const testEdgeKey = getEdgeKey(p1_h1_rotated.q, p1_h1_rotated.r, p1_h2_rotated.q, p1_h2_rotated.r);
 
-        if (testEdgeKey === mapData.baseCampPositions.player1) {
-            matchingSliderValue = i.toString();
-            break; // Found the matching rotation, exit the loop.
+            if (testEdgeKey === mapData.baseCampPositions.player1) {
+                matchingSliderValue = i.toString();
+                break; // Found the matching rotation, exit the loop.
+            }
         }
     }
-    
-    // 3. Set the slider's visual position to match the loaded data.
-    document.getElementById('baseCampSlider').value = matchingSliderValue;
+
+    // Set the slider's visual position to match the loaded data.
+    const bcSlider = document.getElementById('baseCampSlider');
+    if (bcSlider) bcSlider.value = matchingSliderValue;
 
     showInstruction("Map loaded successfully!", 2000);
     return true;
@@ -9532,11 +9564,14 @@ sizeSlider.addEventListener('change', (event) => { // Use 'change' to fire after
 function resizeMapGrid(newRadius) {
     console.log(`Resizing grid to radius ${newRadius}`);
     gameState.gridRadius = newRadius;
-    document.getElementById('mapSizeSlider').value = newRadius;
+    
+    // Safe check for UI element before accessing
+    const slider = document.getElementById('mapSizeSlider');
+    if (slider) slider.value = newRadius;
 
     if (newRadius === 2) { 
         gameState.gameMode = 'arcade';
-        gameState.renderScale = 1.3; 
+        gameState.renderScale = 1.3; // Scale up for compact map
         gameState.renderOffset = { x: 0, y: 0 }; 
         gameState.baseCampPositions = { player1: null, player2: null };
     } else { 
@@ -9562,6 +9597,7 @@ function resizeMapGrid(newRadius) {
     gameState.tiles.clear();
     gameState.edges.clear();
 
+    // Basic grid generation (will be overwritten if loading a map immediately after)
     for (let q = -newRadius; q <= newRadius; q++) {
         for (let r = -newRadius; r <= newRadius; r++) {
             if (Math.abs(q + r) <= newRadius) {
@@ -9570,6 +9606,7 @@ function resizeMapGrid(newRadius) {
             }
         }
     }
+    // Edges generation
     gameState.tiles.forEach(tile => {
         getNeighbors(tile.q, tile.r).forEach(n_coord => {
             if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
@@ -9584,12 +9621,18 @@ function resizeMapGrid(newRadius) {
         });
     });
 
+    // Only update base camps if not in Arcade mode
     if (gameState.gameMode !== 'arcade') {
-        const currentRotation = document.getElementById('baseCampSlider').value;
+        const sliderEl = document.getElementById('baseCampSlider');
+        const currentRotation = sliderEl ? sliderEl.value : '3';
         updateBaseCampLocations(currentRotation);
     }
 
-    autoSaveMap();
+    // Only autosave if in Map Maker mode
+    if (gameState.mapMakerMode) {
+        autoSaveMap();
+    }
+    
     showInstruction(`Map resized to ${newRadius === 2 ? 'Compact (Arcade)' : newRadius === 3 ? 'Normal' : 'Expansive'}.`, 2500);
 }
 
@@ -10242,22 +10285,36 @@ document.getElementById('localMultiplayerButton').addEventListener('click', () =
                                 exitMapMakerMode();
                                 hideAllModals();
 
-                                // 1. PREPARE THE DATA: Correct the unit type names to be uppercase BEFORE initializing.
+                                // 1. Determine Radius
+                                let loadedRadius = data.radius;
+                                if (!loadedRadius) {
+                                    // Infer radius for legacy files
+                                    let maxCoord = 0;
+                                    data.tiles.forEach(([key]) => {
+                                        const [q, r] = key.split(',').map(Number);
+                                        const dist = Math.max(Math.abs(q), Math.abs(r), Math.abs(-q-r));
+                                        if (dist > maxCoord) maxCoord = dist;
+                                    });
+                                    loadedRadius = maxCoord || 3;
+                                }
+
+                                // 2. Resize Grid (Sets Mode and Scale)
+                                resizeMapGrid(loadedRadius);
+
+                                // 3. Prepare and Initialize Data
                                 const correctedUnits = data.units.map(unit => ({
                                     ...unit,
-                                    typeName: unit.typeName.toUpperCase() // Convert "Melee" to "MELEE"
+                                    typeName: unit.typeName.toUpperCase()
                                 }));
-                                
                                 const tileMap = new Map(data.tiles);
 
-                                // 2. INITIALIZE THE GRID: Pass the corrected unit data.
                                 initializeGrid(tileMap, correctedUnits);
 
-                                // 3. OVERWRITE DEFAULTS: AFTER initializing, apply the loaded base camp positions.
-                                // This ensures our loaded data overwrites the defaults set by initializeGrid.
                                 gameState.baseCampPositions = data.baseCampPositions;
-                                gameState.flags.p1_flag.homePosition = data.baseCampPositions.player1;
-                                gameState.flags.p2_flag.homePosition = data.baseCampPositions.player2;
+                                if (gameState.flags) {
+                                    gameState.flags.p1_flag.homePosition = data.baseCampPositions.player1;
+                                    gameState.flags.p2_flag.homePosition = data.baseCampPositions.player2;
+                                }
 
                                 showInstruction(`Custom map '${file.name}' loaded. Player 1's turn.`, 4000);
                                 break;
