@@ -2498,16 +2498,19 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
 
         // --- Initialization ---
 function initializeGrid(tileLayoutMap = null, customUnits = null) {
+    // 1. Setup Base Camp Defaults if needed
     if (!tileLayoutMap && !customUnits) {
         gameState.baseCampPositions = JSON.parse(JSON.stringify(DEFAULT_FLAG_HOME_POSITIONS));
     }
 
+    // 2. Setup Canvas & UI
     canvas.width = CANVAS_WIDTH_NORMAL;
     canvas.height = CANVAS_HEIGHT_NORMAL;
     document.querySelectorAll('.ui-panel').forEach(panel => {
         panel.style.minHeight = canvas.height + 'px';
     });
 
+    // 3. Reset Game State
     gameState.tiles.clear();
     gameState.edges.clear();
     gameState.units = [];
@@ -2531,7 +2534,13 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
     updateActionLogDisplay();
     updateRespawnQueueDisplay();
 
-    // --- ARCADE INIT ---
+    // 4. Initialize Unit Counts
+    gameState.unitCounts = {
+        player1: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 },
+        player2: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 }
+    };
+
+    // 5. Initialize Mode Specifics
     gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
     gameState.swapState = 'none';
     gameState.unitToSwap = null;
@@ -2542,106 +2551,86 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
     ui.endTurnButton.textContent = "End Turn";
 
     if (gameState.gameMode === 'arcade') {
-        gameState.supplyPoints = {
-            player1: 0,
-            player2: 0
-        };
+        gameState.supplyPoints = { player1: 0, player2: 0 };
         document.getElementById('supplyPointsContainer').style.display = 'block';
         ui.endTurnButton.classList.add('arcade-timer-active');
+        gameState.flags = null; 
     } else {
-        gameState.supplyPoints = {
-            player1: 10,
-            player2: 10
-        };
+        gameState.supplyPoints = { player1: 10, player2: 10 };
         document.getElementById('supplyPointsContainer').style.display = 'block';
     }
 
-    // Load Tiles (Standard Logic)
+    // 6. Load Tiles
     if (tileLayoutMap) {
-        const firstTileValue = tileLayoutMap.values().next().value;
-        if (firstTileValue && firstTileValue.type && firstTileValue.type.name) {
-            tileLayoutMap.forEach((savedTileObject, key) => {
-                const [q, r] = key.split(',').map(Number);
-                const rehydratedType = TILE_TYPES[savedTileObject.type.name.toUpperCase()];
-                gameState.tiles.set(key, {
-                    q,
-                    r,
-                    type: rehydratedType,
-                    fortifiedByPlayer: null
-                });
-            });
-        } else {
-            tileLayoutMap.forEach((tileObject, key) => {
-                const [q, r] = key.split(',').map(Number);
-                gameState.tiles.set(key, {
-                    q,
-                    r,
-                    type: tileObject,
-                    fortifiedByPlayer: null
-                });
-            });
-        }
+        const standardizedMap = (tileLayoutMap instanceof Map) ? tileLayoutMap : new Map(tileLayoutMap);
+        const firstValue = standardizedMap.values().next().value;
+        const isComplexObject = firstValue && (firstValue.type !== undefined) && (firstValue.type.name !== undefined);
+
+        standardizedMap.forEach((value, key) => {
+            const keyStr = String(key); 
+            const [q, r] = keyStr.split(',').map(Number);
+            
+            if (isComplexObject) {
+                if (value.type && value.type.name) {
+                    const typeName = value.type.name.toUpperCase();
+                    const rehydratedType = TILE_TYPES[typeName] || TILE_TYPES.PLAINS;
+                    gameState.tiles.set(keyStr, { q, r, type: rehydratedType, fortifiedByPlayer: null });
+                }
+            } else {
+                gameState.tiles.set(keyStr, { q, r, type: value, fortifiedByPlayer: null });
+            }
+        });
     } else {
         DEFAULT_MAP_LAYOUT_RADIUS_3.forEach((type, key) => {
             const [q, r] = key.split(',').map(Number);
-            gameState.tiles.set(key, {
-                q,
-                r,
-                type,
-                fortifiedByPlayer: null
-            });
+            gameState.tiles.set(key, { q, r, type, fortifiedByPlayer: null });
         });
     }
 
-    // Generate Edges (Standard Logic)
+    // 7. Generate Edges
     gameState.tiles.forEach(tile => {
-        const {
-            q,
-            r
-        } = tile;
+        const { q, r } = tile;
         getNeighbors(q, r).forEach(n_coord => {
             if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
                 const edgeKey = getEdgeKey(q, r, n_coord.q, n_coord.r);
                 if (!gameState.edges.has(edgeKey)) {
                     gameState.edges.set(edgeKey, {
-                        q1: q,
-                        r1: r,
-                        q2: n_coord.q,
-                        r2: n_coord.r,
-                        units: [],
-                        bridge: false,
-                        bridgeHp: null,
-                        isPathway: true
+                        q1: q, r1: r, q2: n_coord.q, r2: n_coord.r,
+                        units: [], bridge: false, bridgeHp: null, isPathway: true
                     });
                 }
             }
         });
     });
 
-    // --- Unit Placement Logic ---
+    // 8. Place Units
     if (customUnits) {
         customUnits.forEach(unitInfo => {
-            const newUnit = createUnit(unitInfo.player, UNIT_TYPES[unitInfo.typeName], unitInfo.position);
-            gameState.units.push(newUnit);
+            if (!unitInfo || !unitInfo.typeName) return;
+            const typeName = unitInfo.typeName.toUpperCase();
+            const type = UNIT_TYPES[typeName];
+            if (type && gameState.edges.has(unitInfo.position)) {
+                const newUnit = createUnit(unitInfo.player, type, unitInfo.position);
+                gameState.units.push(newUnit);
+            }
         });
     } else if (tileLayoutMap && tileLayoutMap !== DEFAULT_MAP_LAYOUT_RADIUS_3) {
-        const limit = gameState.gameMode === 'arcade' ? ARCADE_UNIT_CAP : MAX_UNITS_PER_PLAYER;
+        // Auto-place units for custom/generated maps based on the new dynamic limit
+        const limit = getMaxUnitsForCurrentMap();
         placeUnitsOnNewGeneratedMap(limit);
     } else {
-        // Default map fallback
+        // Default Starting Units
         if (gameState.gameMode === 'arcade') {
             gameState.units.push(createUnit(1, UNIT_TYPES.MELEE, getEdgeKey(1, -2, 0, -2)));
             gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER, getEdgeKey(-2, 0, -1, -1)));
-
             gameState.units.push(createUnit(2, UNIT_TYPES.MELEE, getEdgeKey(-1, 2, 0, 2)));
             gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER, getEdgeKey(1, 1, 2, 0)));
         } else {
-            // Standard Mode: 4 units
             gameState.units.push(createUnit(1, UNIT_TYPES.MELEE, getEdgeKey(1, -2, 0, -2)));
             gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER, getEdgeKey(-2, 0, -1, -1)));
             gameState.units.push(createUnit(1, UNIT_TYPES.PIKEMAN, getEdgeKey(-1, -1, 0, -2)));
             gameState.units.push(createUnit(1, UNIT_TYPES.HORSEMAN, getEdgeKey(-2, 0, -2, 1)));
-
+            
             gameState.units.push(createUnit(2, UNIT_TYPES.MELEE, getEdgeKey(-1, 2, 0, 2)));
             gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER, getEdgeKey(1, 1, 2, 0)));
             gameState.units.push(createUnit(2, UNIT_TYPES.PIKEMAN, getEdgeKey(0, 2, 1, 1)));
@@ -2649,55 +2638,26 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
         }
     }
 
-    // Link units to edges
+    // 9. Link Units to Edges
     gameState.units.forEach(unit => {
         const edge = gameState.edges.get(unit.position);
         if (edge) edge.units.push(unit);
-        else console.error("Failed to place unit on an edge:", unit.position, unit);
     });
 
+    // 10. Initialize Unit State
     gameState.units.forEach(unit => {
         unit.currentMove = unit.type.baseMove;
         unit.hasPerformedMajorAction = false;
     });
 
-    gameState.unitCounts = {
-        player1: {
-            Melee: 0,
-            Archer: 0,
-            Pikeman: 0,
-            Horseman: 0
-        },
-        player2: {
-            Melee: 0,
-            Archer: 0,
-            Pikeman: 0,
-            Horseman: 0
-        }
-    };
-    gameState.units.forEach(u => {
-        gameState.unitCounts[`player${u.player}`][u.type.name]++;
-    });
-
+    // 11. Initialize Flags
     if (gameState.gameMode !== 'arcade') {
-        gameState.flags = {
-            'p1_flag': {
-                id: 'p1_flag',
-                player: 1,
-                homePosition: gameState.baseCampPositions.player1,
-                status: 'at_base',
-                carrierId: null
-            },
-            'p2_flag': {
-                id: 'p2_flag',
-                player: 2,
-                homePosition: gameState.baseCampPositions.player2,
-                status: 'at_base',
-                carrierId: null
-            }
-        };
-    } else {
-        gameState.flags = null;
+        if (gameState.baseCampPositions.player1 && gameState.baseCampPositions.player2) {
+            gameState.flags = {
+                'p1_flag': { id: 'p1_flag', player: 1, homePosition: gameState.baseCampPositions.player1, status: 'at_base', carrierId: null },
+                'p2_flag': { id: 'p2_flag', player: 2, homePosition: gameState.baseCampPositions.player2, status: 'at_base', carrierId: null }
+            };
+        }
     }
 
     updateTurnDisplay();
@@ -4554,20 +4514,20 @@ function drawAnimations() {
             const content = document.getElementById('respawnModalContent');
             if (!overlay || !content) return;
 
-            // --- Check for total army size limit ---
+            // --- Check for total army size limit using the new helper ---
             const currentUnitCount = gameState.units.filter(u => u.player === player).length;
-            if (currentUnitCount >= MAX_UNITS_PER_PLAYER) {
+            if (currentUnitCount >= getMaxUnitsForCurrentMap()) { // CHANGED HERE
                 logAction(`P${player} has reached the maximum army size! Cannot reinforce.`, player);
                 // Reset the timer for the unit in the queue so it can try again next turn.
                 const queueKey = `player${player}`;
                 if (gameState.respawnQueue[queueKey][0]) {
                     gameState.respawnQueue[queueKey][0].turnsRemaining = 1;
                 }
-                updateRespawnQueueDisplay(); // Show the reset timer
-                return; // Exit without showing the modal
+                updateRespawnQueueDisplay(); 
+                return; 
             }
 
-            // --- Original Logic (now runs only if army size is okay) ---
+            // --- Original Logic ---
             content.className = `modal-content modal-p${player}`;
 
             const counts = gameState.unitCounts[`player${player}`];
@@ -4748,7 +4708,11 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
             checkVictoryCondition();
         }
 
-
+function getMaxUnitsForCurrentMap() {
+    if (gameState.gridRadius === 2) return 2; // Compact/Arcade
+    if (gameState.gridRadius === 4) return 6; // Expansive
+    return 4; // Standard (Radius 3)
+}
 
         function getEdgeCost(unit, edgeKey) {
             const edge = gameState.edges.get(edgeKey);
@@ -5907,6 +5871,20 @@ function updateSupplyPointsDisplay() {
     }
 }
 
+function updateSupplyPointsBasedOnFlagStatus(playerNum) {
+    const playerFlag = gameState.flags[`p${playerNum}_flag`];
+    const playerSupplyKey = `player${playerNum}`;
+
+    if (playerFlag && playerFlag.status === 'carried') {
+        // Flag is stolen, set supply to 0.
+        gameState.supplyPoints[playerSupplyKey] = 0;
+    } else {
+        // Flag is at base, restore to max.
+        gameState.supplyPoints[playerSupplyKey] = 10;
+    }
+    updateSupplyPointsDisplay();
+}
+
 function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     if (!attackingUnit || !targetUnitInfo || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) {
         showInstruction("Cannot complete attack.", 2000);
@@ -6526,40 +6504,51 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
 function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
     gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
 
-    // --- PRE-MOVE: ROBUST REMOVAL ---
-    if (unitToMove.positionType === 'edge') {
-        const expectedEdge = gameState.edges.get(unitToMove.position);
-        if (expectedEdge) {
-            expectedEdge.units = expectedEdge.units.filter(u => u.id !== unitToMove.id);
-        }
-    }
-
-    // --- UPDATE STATE: Place unit in new position ---
-    const finalTargetEdgeData = gameState.edges.get(targetEdgeKey);
-    if (!finalTargetEdgeData) {
-        console.error("Target edge for move not found:", targetEdgeKey);
+    // --- 1. MASTER REFERENCE CHECK ---
+    // Ensure we are working with the canonical unit object from the master list
+    const masterUnit = gameState.units.find(u => u.id === unitToMove.id);
+    if (!masterUnit) {
+        console.error("CRITICAL: Unit not found in master list during move.");
         return;
     }
+    
+    // Use the master reference for all operations
+    const unit = masterUnit;
 
-    unitToMove.position = targetEdgeKey;
-    unitToMove.positionType = 'edge';
-    unitToMove.currentMove -= costToMove;
+    // --- 2. GLOBAL WIPE (FAILSAFE) ---
+    // Remove this unit ID from ALL edge arrays in the game.
+    // This prevents any possibility of "ghosts" existing on old edges.
+    gameState.edges.forEach((edge) => {
+        // Use filter to create a clean array without the unit
+        if (edge.units.some(u => u.id === unit.id)) {
+            edge.units = edge.units.filter(u => u.id !== unit.id);
+        }
+    });
 
-    if (!finalTargetEdgeData.units.find(u => u.id === unitToMove.id)) {
-        finalTargetEdgeData.units.push(unitToMove);
+    // --- 3. UPDATE UNIT STATE ---
+    unit.position = targetEdgeKey;
+    unit.positionType = 'edge';
+    unit.currentMove -= costToMove;
+
+    // --- 4. ADD TO DESTINATION ---
+    const finalTargetEdgeData = gameState.edges.get(targetEdgeKey);
+    if (finalTargetEdgeData) {
+        finalTargetEdgeData.units.push(unit);
+    } else {
+        console.error("Target edge for move not found:", targetEdgeKey);
     }
 
     clearDebugPath();
 
-    // --- FLAG CAPTURE LOGIC ---
+    // --- 5. FLAG CAPTURE LOGIC ---
     if (gameState.gameMode !== 'arcade') {
-        const enemyFlag = unitToMove.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+        const enemyFlag = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
         if (enemyFlag && enemyFlag.status === 'at_base' && targetEdgeKey === enemyFlag.homePosition) {
             enemyFlag.status = 'carried';
-            enemyFlag.carrierId = unitToMove.id;
-            unitToMove.isCarryingFlag = true;
-            unitToMove.currentMove = 0;
-            logAction(`P${unitToMove.player} ${unitToMove.type.name} has picked up the flag!`, gameState.currentPlayer);
+            enemyFlag.carrierId = unit.id;
+            unit.isCarryingFlag = true;
+            unit.currentMove = 0;
+            logAction(`P${unit.player} ${unit.type.name} has picked up the flag!`, gameState.currentPlayer);
             updateAllHealingStatus();
             severSupplyLinesForPlayer(enemyFlag.player);
 
@@ -6573,7 +6562,7 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
             updateRespawnQueueDisplay();
             updateSupplyPointsBasedOnFlagStatus(enemyFlag.player);
 
-            const unitPos = getUnitScreenPosition(unitToMove);
+            const unitPos = getUnitScreenPosition(unit);
             if (unitPos) {
                 gameState.visualEffects.push({
                     type: 'flag_capture_burst',
@@ -6589,13 +6578,13 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
 
     if (checkVictoryCondition()) return;
 
-    const unitDestroyedByZoC = applyFortificationDamageOnMove(unitToMove, targetEdgeKey);
+    const unitDestroyedByZoC = applyFortificationDamageOnMove(unit, targetEdgeKey);
 
-    if (!unitDestroyedByZoC && unitToMove.hp > 0) {
-        logAction(`${unitToMove.type.name} moved. MP: ${Math.floor(unitToMove.currentMove)}`, gameState.currentPlayer);
-        if (unitToMove.currentMove >= 1 && (!unitToMove.hasPerformedMajorAction || unitToMove.type.canMoveAfterAttack)) {
-            if (gameState.gameMode !== 'singleplayer' || unitToMove.player === gameState.playerSide) {
-                gameState.currentReachableMoves = getPossibleMoves(unitToMove);
+    if (!unitDestroyedByZoC && unit.hp > 0) {
+        logAction(`${unit.type.name} moved. MP: ${Math.floor(unit.currentMove)}`, gameState.currentPlayer);
+        if (unit.currentMove >= 1 && (!unit.hasPerformedMajorAction || unit.type.canMoveAfterAttack)) {
+            if (gameState.gameMode !== 'singleplayer' || unit.player === gameState.playerSide) {
+                gameState.currentReachableMoves = getPossibleMoves(unit);
             }
         } else {
             gameState.currentReachableMoves.clear();
@@ -8390,27 +8379,39 @@ function renderMapPreview(canvas, mapData) {
 }
 
 function loadPresetMap(mapData) {
-    exitMapMakerMode();
-    hideAllModals();
+    console.group("--- LOADING PRESET MAP: " + mapData.name + " ---");
+    console.log("[DEBUG] Map Data received:", mapData);
 
-    // Resize grid logic to handle Arcade/Normal switching and correct scaling
-    // We always call this if a radius is defined to ensure the mode is set correctly
-    if (mapData.radius) {
-        resizeMapGrid(mapData.radius);
-    } else {
-        // Default to radius 3 if not specified in preset
-        resizeMapGrid(3);
+    try {
+        exitMapMakerMode();
+        hideAllModals();
+
+        // Resize grid logic
+        if (mapData.radius) {
+            console.log(`[DEBUG] Resizing grid to Radius ${mapData.radius} for preset.`);
+            resizeMapGrid(mapData.radius);
+        } else {
+            console.log(`[DEBUG] No radius in preset, defaulting to 3.`);
+            resizeMapGrid(3);
+        }
+
+        console.log("[DEBUG] Calling initializeGrid...");
+        initializeGrid(mapData.tiles, mapData.units);
+        
+        gameState.baseCampPositions = mapData.baseCampPositions;
+        
+        if (gameState.flags && mapData.baseCampPositions.player1) {
+            gameState.flags.p1_flag.homePosition = mapData.baseCampPositions.player1;
+            gameState.flags.p2_flag.homePosition = mapData.baseCampPositions.player2;
+        }
+
+        showInstruction(`Preset map '${mapData.name}' loaded. Player 1's turn.`, 4000);
+        console.log("[DEBUG] Preset load complete.");
+    } catch (error) {
+        console.error("[CRITICAL FAILURE] loadPresetMap crashed:", error);
+        alert("Error loading preset map. Check console.");
     }
-
-    initializeGrid(mapData.tiles, mapData.units);
-    gameState.baseCampPositions = mapData.baseCampPositions;
-    
-    if (gameState.flags && mapData.baseCampPositions.player1) {
-        gameState.flags.p1_flag.homePosition = mapData.baseCampPositions.player1;
-        gameState.flags.p2_flag.homePosition = mapData.baseCampPositions.player2;
-    }
-
-    showInstruction(`Preset map '${mapData.name}' loaded. Player 1's turn.`, 4000);
+    console.groupEnd();
 }
 
 function loadAutoSave() {
@@ -8833,7 +8834,7 @@ function isCoordInRadius(key, radius) {
     return Math.abs(q) <= radius && Math.abs(r) <= radius && Math.abs(q + r) <= radius;
 }
 
-function placeUnitsOnNewGeneratedMap(unitLimit = 4) {
+function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
             const landEdges = [];
             gameState.edges.forEach((edgeData, edgeKey) => {
                 // Use the new, more accurate isRoad() definition
@@ -9711,6 +9712,10 @@ function updateBaseCampLocations(sliderValue) {
     const sliderToRotations = [3, 2, 1, 0, -1, -2];
     const rotations = sliderToRotations[parseInt(sliderValue, 10)];
     const currentRadius = gameState.gridRadius;
+    
+    // Safety check: If we are in a mode/radius that doesn't have defaults defined (like R=2/Arcade), abort.
+    if (!BASE_CAMP_DEFAULTS[currentRadius]) return;
+
     const defaults = BASE_CAMP_DEFAULTS[currentRadius];
     
     // Clear old base camp tiles before calculating new ones
@@ -9735,7 +9740,7 @@ function updateBaseCampLocations(sliderValue) {
         return getTileKey(rotated.q, rotated.r);
     });
 
-    // Determine the flag edge (only for normal size)
+    // Determine the flag edge (only for normal size R=3)
     let newP1EdgeKey = null;
     let newP2EdgeKey = null;
     if (currentRadius === 3) {
@@ -9748,8 +9753,12 @@ function updateBaseCampLocations(sliderValue) {
     // Update game state
     gameState.baseCampPositions.player1 = newP1EdgeKey;
     gameState.baseCampPositions.player2 = newP2EdgeKey;
-    gameState.flags.p1_flag.homePosition = newP1EdgeKey;
-    gameState.flags.p2_flag.homePosition = newP2EdgeKey;
+    
+    // When switching from Arcade (flags=null) to Local, this runs BEFORE initializeGrid creates the flags.
+    if (gameState.flags) {
+        if (gameState.flags.p1_flag) gameState.flags.p1_flag.homePosition = newP1EdgeKey;
+        if (gameState.flags.p2_flag) gameState.flags.p2_flag.homePosition = newP2EdgeKey;
+    }
 
     // Set new base camp tiles to Plains
     [...p1_rotated_tiles, ...p2_rotated_tiles].forEach(key => {
@@ -9853,11 +9862,15 @@ function applyMapMakerBrush(x, y) {
             showInstruction("This edge is full.", 1500);
             return;
         }
+        
         const totalPlayerUnits = gameState.units.filter(u => u.player === brush.player).length;
-        if (totalPlayerUnits >= MAX_UNITS_PER_PLAYER) {
-            showInstruction(`P${brush.player} has reached the maximum of ${MAX_UNITS_PER_PLAYER} units.`, 2000);
+        const maxUnits = getMaxUnitsForCurrentMap(); // CHANGED HERE
+        
+        if (totalPlayerUnits >= maxUnits) {
+            showInstruction(`P${brush.player} has reached the maximum of ${maxUnits} units.`, 2000);
             return;
         }
+        
         const playerUnitCounts = getUnitCountsForPlayer(brush.player);
         const unitCap = UNIT_CAPS[brush.value.name];
         if (playerUnitCounts[brush.value.name] >= unitCap) {
