@@ -2424,24 +2424,28 @@ function isInternalBaseEdge(edgeKey) {
 function getMapMakerBaseCampTileKeys() {
     const baseCampTileKeys = new Set();
     
-    // Handle Array format (Expansive)
-    if (Array.isArray(gameState.baseCampPositions.player1)) {
-        gameState.baseCampPositions.player1.forEach(k => baseCampTileKeys.add(k));
-    } else if (gameState.baseCampPositions.player1) {
-        // Handle String format (Standard)
-        const [h1, h2] = parseEdgeKey(gameState.baseCampPositions.player1);
-        baseCampTileKeys.add(getTileKey(h1.q, h1.r));
-        baseCampTileKeys.add(getTileKey(h2.q, h2.r));
-    }
+    // Debug: See what the raw state looks like
+    // console.log("[DEBUG-KEYS] Raw Base Camp Positions:", JSON.stringify(gameState.baseCampPositions));
 
-    if (Array.isArray(gameState.baseCampPositions.player2)) {
-        gameState.baseCampPositions.player2.forEach(k => baseCampTileKeys.add(k));
-    } else if (gameState.baseCampPositions.player2) {
-        const [h1, h2] = parseEdgeKey(gameState.baseCampPositions.player2);
-        baseCampTileKeys.add(getTileKey(h1.q, h1.r));
-        baseCampTileKeys.add(getTileKey(h2.q, h2.r));
-    }
+    // Helper to process a player's data safely
+    const processPlayerData = (data) => {
+        if (!data) return; // Skip null/undefined
+
+        if (Array.isArray(data)) {
+            // Expansive Mode: Array of Tile Keys
+            data.forEach(k => baseCampTileKeys.add(k));
+        } else if (typeof data === 'string') {
+            // Standard Mode: Edge Key String
+            const [h1, h2] = parseEdgeKey(data);
+            if (!isNaN(h1.q)) baseCampTileKeys.add(getTileKey(h1.q, h1.r));
+            if (!isNaN(h2.q)) baseCampTileKeys.add(getTileKey(h2.q, h2.r));
+        }
+    };
+
+    processPlayerData(gameState.baseCampPositions.player1);
+    processPlayerData(gameState.baseCampPositions.player2);
     
+    // console.log("[DEBUG-KEYS] Final Protected Set:", Array.from(baseCampTileKeys));
     return baseCampTileKeys;
 }
 
@@ -4887,64 +4891,94 @@ function getMaxUnitsForCurrentMap() {
     return 4; // Standard (Radius 3)
 }
 
-        function getEdgeCost(unit, edgeKey) {
-            const edge = gameState.edges.get(edgeKey);
-            if (!edge) return Infinity;
+function getMapMakerBaseCampTileKeys() {
+    const baseCampTileKeys = new Set();
+    
+    // Check Player 1
+    const p1Data = gameState.baseCampPositions.player1;
+    if (Array.isArray(p1Data)) {
+        // Expansive Mode (Array of tile keys)
+        p1Data.forEach(k => baseCampTileKeys.add(k));
+    } else if (typeof p1Data === 'string') {
+        // Standard Mode (Edge key string)
+        const [h1, h2] = parseEdgeKey(p1Data);
+        if (!isNaN(h1.q)) baseCampTileKeys.add(getTileKey(h1.q, h1.r));
+        if (!isNaN(h2.q)) baseCampTileKeys.add(getTileKey(h2.q, h2.r));
+    }
 
-            const tileCoords = parseEdgeKey(edgeKey);
-            const tile1 = gameState.tiles.get(getTileKey(tileCoords[0].q, tileCoords[0].r));
-            const tile2 = gameState.tiles.get(getTileKey(tileCoords[1].q, tileCoords[1].r));
-            if (!tile1 || !tile2) return Infinity;
+    // Check Player 2
+    const p2Data = gameState.baseCampPositions.player2;
+    if (Array.isArray(p2Data)) {
+        p2Data.forEach(k => baseCampTileKeys.add(k));
+    } else if (typeof p2Data === 'string') {
+        const [h1, h2] = parseEdgeKey(p2Data);
+        if (!isNaN(h1.q)) baseCampTileKeys.add(getTileKey(h1.q, h1.r));
+        if (!isNaN(h2.q)) baseCampTileKeys.add(getTileKey(h2.q, h2.r));
+    }
+    
+    return baseCampTileKeys;
+}
 
-            let baseCost;
+function getEdgeCost(unit, edgeKey) {
+    const edge = gameState.edges.get(edgeKey);
+    if (!edge) return Infinity;
 
-            // Bridge always makes the cost 1, regardless of terrain
-            if (edge.bridge) {
-                baseCost = 1;
+    const tileCoords = parseEdgeKey(edgeKey);
+    const tile1 = gameState.tiles.get(getTileKey(tileCoords[0].q, tileCoords[0].r));
+    const tile2 = gameState.tiles.get(getTileKey(tileCoords[1].q, tileCoords[1].r));
+    if (!tile1 || !tile2) return Infinity;
+
+    let baseCost;
+
+    if (edge.bridge) {
+        baseCost = 1;
+    } else {
+        const isT1Water = tile1.type === TILE_TYPES.WATER;
+        const isT2Water = tile2.type === TILE_TYPES.WATER;
+
+        if (isT1Water && isT2Water) {
+            return Infinity; 
+        } else if (isT1Water || isT2Water) {
+            baseCost = 3; 
+        } else {
+            if (tile1.type === TILE_TYPES.MOUNTAIN || tile2.type === TILE_TYPES.MOUNTAIN) {
+                baseCost = TILE_TYPES.MOUNTAIN.baseMoveCost;
+            } else if (tile1.type === TILE_TYPES.FOREST || tile2.type === TILE_TYPES.FOREST) {
+                baseCost = TILE_TYPES.FOREST.baseMoveCost;
             } else {
-                const isT1Water = tile1.type === TILE_TYPES.WATER;
-                const isT2Water = tile2.type === TILE_TYPES.WATER;
-
-                if (isT1Water && isT2Water) {
-                    return Infinity; // Water-to-Water edge is impassable
-                } else if (isT1Water || isT2Water) {
-                    baseCost = 3; // Land-to-Water (beach) edge costs 3
-                } else {
-                    // Standard Land-to-Land edge logic
-                    if (tile1.type === TILE_TYPES.MOUNTAIN || tile2.type === TILE_TYPES.MOUNTAIN) {
-                        baseCost = TILE_TYPES.MOUNTAIN.baseMoveCost;
-                    } else if (tile1.type === TILE_TYPES.FOREST || tile2.type === TILE_TYPES.FOREST) {
-                        baseCost = TILE_TYPES.FOREST.baseMoveCost;
-                    } else {
-                        baseCost = TILE_TYPES.PLAINS.baseMoveCost;
-                    }
-                }
+                baseCost = TILE_TYPES.PLAINS.baseMoveCost;
             }
-            
-            // Apply fortification penalty, which is universal for all passable edges
-            let fortificationPenalty = 0;
-            const enemyPlayer = unit.player === 1 ? 2 : 1;
-            const enemyBaseEdgeKey = gameState.baseCampPositions[`player${enemyPlayer}`];
-            
-            // --- FIX: Safely handle null base camp edges (for Compact/Expansive maps) ---
-            let enemyBaseTiles = [];
-            if (enemyBaseEdgeKey) {
-                enemyBaseTiles = [enemyBaseEdgeKey.split('_')[0], enemyBaseEdgeKey.split('_')[1]];
-            }
-
-            if ((tile1.fortifiedByPlayer && tile1.fortifiedByPlayer === enemyPlayer) ||
-                (tile2.fortifiedByPlayer && tile2.fortifiedByPlayer === enemyPlayer) ||
-                enemyBaseTiles.includes(getTileKey(tile1.q, tile1.r)) ||
-                enemyBaseTiles.includes(getTileKey(tile2.q, tile2.r)))
-            {
-                fortificationPenalty = 1;
-            }
-
-            const finalCost = baseCost + fortificationPenalty;
-            // The max movement cost should not apply to beach edges
-            return (baseCost === 3) ? finalCost : Math.min(finalCost, MAX_MOVEMENT_COST);
         }
+    }
+    
+    // Apply fortification penalty
+    let fortificationPenalty = 0;
+    const enemyPlayer = unit.player === 1 ? 2 : 1;
+    
+    // --- FIX: Handle Polymorphic Base Camp Data (String or Array) ---
+    const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+    let enemyBaseTiles = [];
+    
+    if (Array.isArray(enemyBaseData)) {
+        // Expansive Map: Array of Tile Keys
+        enemyBaseTiles = enemyBaseData;
+    } else if (typeof enemyBaseData === 'string') {
+        // Standard Map: Edge Key String "q,r_q,r"
+        enemyBaseTiles = enemyBaseData.split('_');
+    }
+    // ----------------------------------------------------------------
 
+    if ((tile1.fortifiedByPlayer && tile1.fortifiedByPlayer === enemyPlayer) ||
+        (tile2.fortifiedByPlayer && tile2.fortifiedByPlayer === enemyPlayer) ||
+        enemyBaseTiles.includes(getTileKey(tile1.q, tile1.r)) ||
+        enemyBaseTiles.includes(getTileKey(tile2.q, tile2.r)))
+    {
+        fortificationPenalty = 1;
+    }
+
+    const finalCost = baseCost + fortificationPenalty;
+    return (baseCost === 3) ? finalCost : Math.min(finalCost, MAX_MOVEMENT_COST);
+}
         // --- Pathfinding ---
         function getRotationallyAdjacentEdges(currentEdgeKey) {
             const adjacentEdges = new Set(); const [h1, h2] = parseEdgeKey(currentEdgeKey);
@@ -4963,60 +4997,80 @@ function getMaxUnitsForCurrentMap() {
         }
 
         function getPossibleMoves(unit) {
-            if (gameState.mapMakerMode) {
-                return new Map(); // Return an empty map of moves.
-            }
-            if (!unit || unit.currentMove < 1 || unit.isFortified) return new Map();
-            
-            if (unit.hasPerformedMajorAction) {
-                if (!unit.type.canMoveAfterAttack) {
-                    return new Map();
-                }
-                if (isEdgeAdjacentToSpearWall(unit, unit.position)) {
-                    return new Map(); 
-                }
-            }
-
-            const playerHomeFlagEdge = gameState.baseCampPositions[`player${unit.player}`];
-            let reachable = new Map();
-            let frontier = [{ edgeKey: unit.position, pathCost: 0, pathTaken: [unit.position] }];
-            let minCostsFound = new Map(); minCostsFound.set(unit.position, 0);
-            
-            while (frontier.length > 0) {
-                frontier.sort((a, b) => a.pathCost - b.pathCost); 
-                const current = frontier.shift();
-
-                if (current.pathCost > (minCostsFound.get(current.edgeKey) || Infinity)) continue;
-                
-                const rotationallyAdjacentEdges = getRotationallyAdjacentEdges(current.edgeKey);
-
-                for (const nextAdjacentEdgeKey of rotationallyAdjacentEdges) {
-                    // Add exception for flag carriers
-                    // A unit cannot move onto its own team's flag edge, UNLESS it is carrying the enemy flag.
-                    if (nextAdjacentEdgeKey === playerHomeFlagEdge && !unit.isCarryingFlag) {
-                        continue;
-                    }
-
-                    if (nextAdjacentEdgeKey === unit.position && current.pathTaken.length === 1) continue;
-                    const nextAdjacentEdgeObject = gameState.edges.get(nextAdjacentEdgeKey); if (!nextAdjacentEdgeObject) continue;
-                    if (nextAdjacentEdgeObject.units.some(u => u.player !== unit.player)) continue;
-                    const friendlyUnitsOnNext = nextAdjacentEdgeObject.units.filter(u => u.player === unit.player);
-                    if (friendlyUnitsOnNext.length >= 2 && !friendlyUnitsOnNext.find(u => u.id === unit.id)) continue;
-                    const costToTraverseNextEdge = getEdgeCost(unit, nextAdjacentEdgeKey); if (costToTraverseNextEdge === Infinity) continue;
-                    const newTotalPathCost = current.pathCost + costToTraverseNextEdge;
-                    if (newTotalPathCost <= unit.currentMove) {
-                        const knownMinCost = minCostsFound.get(nextAdjacentEdgeKey) || Infinity;
-                        if (newTotalPathCost < knownMinCost) {
-                            minCostsFound.set(nextAdjacentEdgeKey, newTotalPathCost);
-                            const newPathTaken = current.pathTaken.concat(nextAdjacentEdgeKey);
-                            frontier.push({ edgeKey: nextAdjacentEdgeKey, pathCost: newTotalPathCost, pathTaken: newPathTaken });
-                            if (nextAdjacentEdgeKey !== unit.position) reachable.set(nextAdjacentEdgeKey, { cost: newTotalPathCost, path: newPathTaken });
-                        }
-                    }
-                }
-            }
-            return reachable;
+    if (gameState.mapMakerMode) {
+        return new Map(); 
+    }
+    if (!unit || unit.currentMove < 1 || unit.isFortified) return new Map();
+    
+    if (unit.hasPerformedMajorAction) {
+        if (!unit.type.canMoveAfterAttack) {
+            return new Map();
         }
+        if (isEdgeAdjacentToSpearWall(unit, unit.position)) {
+            return new Map(); 
+        }
+    }
+
+    const playerBaseData = gameState.baseCampPositions[`player${unit.player}`];
+    
+    let reachable = new Map();
+    let frontier = [{ edgeKey: unit.position, pathCost: 0, pathTaken: [unit.position] }];
+    let minCostsFound = new Map(); minCostsFound.set(unit.position, 0);
+    
+    while (frontier.length > 0) {
+        frontier.sort((a, b) => a.pathCost - b.pathCost); 
+        const current = frontier.shift();
+
+        if (current.pathCost > (minCostsFound.get(current.edgeKey) || Infinity)) continue;
+        
+        const rotationallyAdjacentEdges = getRotationallyAdjacentEdges(current.edgeKey);
+
+        for (const nextAdjacentEdgeKey of rotationallyAdjacentEdges) {
+            
+            // --- FIX: Check restricted base edges for both types ---
+            let isRestrictedBaseEdge = false;
+            
+            if (Array.isArray(playerBaseData)) {
+                // Expansive Logic: Check if edge is internal to base array
+                const [h1, h2] = parseEdgeKey(nextAdjacentEdgeKey);
+                const t1 = getTileKey(h1.q, h1.r);
+                const t2 = getTileKey(h2.q, h2.r);
+                if (playerBaseData.includes(t1) && playerBaseData.includes(t2)) {
+                    isRestrictedBaseEdge = true;
+                }
+            } else if (typeof playerBaseData === 'string') {
+                // Standard Logic: Check exact edge key match
+                if (nextAdjacentEdgeKey === playerBaseData) {
+                    isRestrictedBaseEdge = true;
+                }
+            }
+
+            // A unit cannot move onto its own team's restricted base edge, UNLESS carrying flag.
+            if (isRestrictedBaseEdge && !unit.isCarryingFlag) {
+                continue;
+            }
+            // -------------------------------------------------------
+
+            if (nextAdjacentEdgeKey === unit.position && current.pathTaken.length === 1) continue;
+            const nextAdjacentEdgeObject = gameState.edges.get(nextAdjacentEdgeKey); if (!nextAdjacentEdgeObject) continue;
+            if (nextAdjacentEdgeObject.units.some(u => u.player !== unit.player)) continue;
+            const friendlyUnitsOnNext = nextAdjacentEdgeObject.units.filter(u => u.player === unit.player);
+            if (friendlyUnitsOnNext.length >= 2 && !friendlyUnitsOnNext.find(u => u.id === unit.id)) continue;
+            const costToTraverseNextEdge = getEdgeCost(unit, nextAdjacentEdgeKey); if (costToTraverseNextEdge === Infinity) continue;
+            const newTotalPathCost = current.pathCost + costToTraverseNextEdge;
+            if (newTotalPathCost <= unit.currentMove) {
+                const knownMinCost = minCostsFound.get(nextAdjacentEdgeKey) || Infinity;
+                if (newTotalPathCost < knownMinCost) {
+                    minCostsFound.set(nextAdjacentEdgeKey, newTotalPathCost);
+                    const newPathTaken = current.pathTaken.concat(nextAdjacentEdgeKey);
+                    frontier.push({ edgeKey: nextAdjacentEdgeKey, pathCost: newTotalPathCost, pathTaken: newPathTaken });
+                    if (nextAdjacentEdgeKey !== unit.position) reachable.set(nextAdjacentEdgeKey, { cost: newTotalPathCost, path: newPathTaken });
+                }
+            }
+        }
+    }
+    return reachable;
+}
 
         function findSupplyPath(startFortTileKey, player) {
             // If the player's flag is stolen, they cannot have a supply line.
@@ -7381,50 +7435,48 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
 
         // --- Zone of Control Damage & Healing ---
 function applyStartOfTurnZoCDamage() {
-            const activePlayer = gameState.currentPlayer;
-            const enemyPlayer = activePlayer === 1 ? 2 : 1;
-            let unitsToDestroy = [];
+    const activePlayer = gameState.currentPlayer;
+    const enemyPlayer = activePlayer === 1 ? 2 : 1;
+    let unitsToDestroy = [];
 
-            // --- FIX: Safely handle Base Camp tiles (null in Arcade Mode) ---
-            const activePlayerBaseEdgeKey = gameState.baseCampPositions[`player${activePlayer}`];
-            let activePlayerBaseTiles = [];
-            if (activePlayerBaseEdgeKey) {
-                activePlayerBaseTiles = [
-                    activePlayerBaseEdgeKey.split('_')[0],
-                    activePlayerBaseEdgeKey.split('_')[1]
-                ];
-            }
+    // --- FIX: Safely handle Base Camp tiles (Array vs String) ---
+    const activePlayerBaseData = gameState.baseCampPositions[`player${activePlayer}`];
+    let activePlayerBaseTiles = [];
+    
+    if (Array.isArray(activePlayerBaseData)) {
+        activePlayerBaseTiles = activePlayerBaseData;
+    } else if (typeof activePlayerBaseData === 'string') {
+        activePlayerBaseTiles = activePlayerBaseData.split('_');
+    }
+    // ------------------------------------------------------------
 
-            gameState.units.forEach(unit => {
-                // We are checking for enemy units adjacent to the current player's forts/base
-                if (unit.player !== enemyPlayer || unit.positionType !== 'edge' || unit.isFortified) return;
-                
-                const edgeKey = unit.position;
-                const edgeTileCoords = parseEdgeKey(edgeKey);
-                if (edgeTileCoords.some(coord => isNaN(coord.q))) return;
+    gameState.units.forEach(unit => {
+        if (unit.player !== enemyPlayer || unit.positionType !== 'edge' || unit.isFortified) return;
         
-                const tile1Key = getTileKey(edgeTileCoords[0].q, edgeTileCoords[0].r);
-                const tile2Key = getTileKey(edgeTileCoords[1].q, edgeTileCoords[1].r);
-                const tile1 = gameState.tiles.get(tile1Key);
-                const tile2 = gameState.tiles.get(tile2Key);
-                
-                // Check for damage from a standard fort OR from the active player's base camp fort effect
-                if ((tile1 && tile1.fortifiedByPlayer === activePlayer) || 
-                    (tile2 && tile2.fortifiedByPlayer === activePlayer) ||
-                    activePlayerBaseTiles.includes(tile1Key) || 
-                    activePlayerBaseTiles.includes(tile2Key)) 
-                {
-                    unit.hp -= FORTIFICATION_DAMAGE;
-                    // Correctly log that the action happened during the ACTIVE player's turn
-                    logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, activePlayer, 3500);
-                    if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
-                        unitsToDestroy.push(unit);
-                    }
-                }
-            });
+        const edgeKey = unit.position;
+        const edgeTileCoords = parseEdgeKey(edgeKey);
+        if (edgeTileCoords.some(coord => isNaN(coord.q))) return;
 
-            if (unitsToDestroy.length > 0) unitsToDestroy.forEach(u => handleUnitDeath(u, "zoc_turn_start"));
+        const tile1Key = getTileKey(edgeTileCoords[0].q, edgeTileCoords[0].r);
+        const tile2Key = getTileKey(edgeTileCoords[1].q, edgeTileCoords[1].r);
+        const tile1 = gameState.tiles.get(tile1Key);
+        const tile2 = gameState.tiles.get(tile2Key);
+        
+        if ((tile1 && tile1.fortifiedByPlayer === activePlayer) || 
+            (tile2 && tile2.fortifiedByPlayer === activePlayer) ||
+            activePlayerBaseTiles.includes(tile1Key) || 
+            activePlayerBaseTiles.includes(tile2Key)) 
+        {
+            unit.hp -= FORTIFICATION_DAMAGE;
+            logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, activePlayer, 3500);
+            if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
+                unitsToDestroy.push(unit);
+            }
         }
+    });
+
+    if (unitsToDestroy.length > 0) unitsToDestroy.forEach(u => handleUnitDeath(u, "zoc_turn_start"));
+}
 
         function updateAllHealingStatus() {
             if (gameState.gameMode === 'arcade') return;
@@ -10150,10 +10202,7 @@ function applyMapMakerBrush(x, y) {
     if (brush.type === 'base_camp') {
         if (gameState.gridRadius !== 4) return; 
 
-        // FIX: Ensure the tile is valid (inside the map)
-        if (!gameState.tiles.has(hexKey)) {
-            return;
-        }
+        if (!gameState.tiles.has(hexKey)) return;
 
         const player = brush.player;
         const playerKey = `player${player}`;
@@ -10167,7 +10216,7 @@ function applyMapMakerBrush(x, y) {
                           ? new Set(gameState.baseCampPositions[enemyPlayerKey])
                           : new Set();
 
-        // 1. Validation: Cannot touch enemy base
+        // Validation
         const neighbors = getNeighbors(hexCoords.q, hexCoords.r);
         for (let n of neighbors) {
             if (enemyBase.has(getTileKey(n.q, n.r))) {
@@ -10176,45 +10225,45 @@ function applyMapMakerBrush(x, y) {
             }
         }
 
-        // 2. Logic: Toggle or Add
+        // Logic: Toggle or Add
         let newBase = [...currentBase];
         if (newBase.includes(hexKey)) {
-            // If clicking existing, remove it (Toggle off)
             newBase = newBase.filter(k => k !== hexKey);
         } else {
-            // If adding, max 3 tiles
             if (newBase.length >= 3) {
                 showInstruction("Base camp max size is 3 tiles.", 1500);
                 return;
             }
-            
             newBase.push(hexKey);
-
-            // Check Contiguity
+            
             if (!isSetContiguous(newBase)) {
                 showInstruction("Base tiles must be contiguous.", 1500);
                 return;
             }
         }
 
-        // 3. Apply
+        // Apply
         gameState.baseCampPositions[playerKey] = newBase;
-        
-        // Force tile to Plains
         const tile = gameState.tiles.get(hexKey);
         if (tile) tile.type = TILE_TYPES.PLAINS;
 
     // --- TILE BRUSH LOGIC ---
     } else if (brush.type === 'tile') {
-        // ... (Rest of function remains unchanged) ...
+        
+        // --- FIX: PROTECT BASE CAMP TILES ---
         const baseCampTileKeys = getMapMakerBaseCampTileKeys();
+        
         if (baseCampTileKeys.has(hexKey)) {
+            console.warn(`[PROTECTION] Blocked painting on base camp tile: ${hexKey}`);
             showInstruction("Cannot change the terrain of a base camp tile.", 2000);
-            return;
+            return; // Block painting
         }
+        // ------------------------------------
+
         const tile = gameState.tiles.get(hexKey);
         if (tile) {
             tile.type = brush.value;
+            // Remove invalid units on water
             if (brush.value === TILE_TYPES.WATER) {
                 getEdgesOfTile(tile.q, tile.r).forEach(edgeKey => {
                     const edge = gameState.edges.get(edgeKey);
@@ -10222,6 +10271,7 @@ function applyMapMakerBrush(x, y) {
                         const otherTileQ = (edge.q1 === tile.q && edge.r1 === tile.r) ? edge.q2 : edge.q1;
                         const otherTileR = (edge.r1 === tile.r && edge.q1 === tile.q) ? edge.r2 : edge.r1;
                         const otherTile = gameState.tiles.get(getTileKey(otherTileQ, otherTileR));
+                        
                         if (otherTile && otherTile.type === TILE_TYPES.WATER) {
                             edge.units.forEach(unitToRemove => {
                                 gameState.units = gameState.units.filter(u => u.id !== unitToRemove.id);
