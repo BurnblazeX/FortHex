@@ -2221,6 +2221,21 @@ function loadColorPreferences() {
             return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         }
 
+        // Helper to darken/lighten hex color for shadows
+        function adjustBrightness(hex, percent) {
+            const num = parseInt(hex.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = (num >> 16) + amt;
+            const G = (num >> 8 & 0x00FF) + amt;
+            const B = (num & 0x0000FF) + amt;
+            return '#' + (
+                0x1000000 +
+                (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+                (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+                (B < 255 ? (B < 1 ? 0 : B) : 255)
+            ).toString(16).slice(1);
+        }
+
         // Linearly interpolates between two hex colors
         function lerpColor(colorA, colorB, amount) {
             const ah = parseInt(colorA.replace(/#/g, ''), 16);
@@ -2280,6 +2295,74 @@ function loadColorPreferences() {
             return (Math.abs(dq) + Math.abs(dr) + Math.abs(ds)) / 2;
         }
 
+        function calculateBaseCentroid(baseTileKeys) {
+            if (!Array.isArray(baseTileKeys) || baseTileKeys.length !== 3) return null;
+
+            let sumX = 0, sumY = 0;
+            const tiles = baseTileKeys.map(k => {
+                const [q, r] = k.split(',').map(Number);
+                const pos = axialToPixel(q, r);
+                sumX += pos.x;
+                sumY += pos.y;
+                return { q, r };
+            });
+
+            // Check topology: Do they form a tight triangle?
+            // A touches B, B touches C, C touches A
+            const [t1, t2, t3] = tiles;
+            const d12 = axialDistance(t1.q, t1.r, t2.q, t2.r);
+            const d23 = axialDistance(t2.q, t2.r, t3.q, t3.r);
+            const d31 = axialDistance(t3.q, t3.r, t1.q, t1.r);
+
+            if (d12 === 1 && d23 === 1 && d31 === 1) {
+                // Triangle: Use true geometric centroid
+                return { x: sumX / 3, y: sumY / 3 };
+            } else {
+                // Line or 'L': Find the center tile (the one connected to the other two)
+                let centerTileIndex = 0;
+                if (d12 === 1 && d31 === 1) centerTileIndex = 0;      // 1 connects to 2 and 3
+                else if (d12 === 1 && d23 === 1) centerTileIndex = 1; // 2 connects to 1 and 3
+                else centerTileIndex = 2;                             // 3 connects to 1 and 2
+        
+                const [q, r] = baseTileKeys[centerTileIndex].split(',').map(Number);
+                return axialToPixel(q, r);
+            }
+        }
+
+        function isSetContiguous(tileKeyArray) {
+            if (tileKeyArray.length <= 1) return true;
+    
+            // Convert strings "q,r" to objects {q, r, key}
+            const tiles = tileKeyArray.map(k => {
+                const [q, r] = k.split(',').map(Number);
+                return { q, r, key: k };
+            });
+
+            // Perform a simple BFS/flood fill to count connected tiles
+            const visited = new Set();
+            const queue = [tiles[0]]; // Start from the first tile
+            visited.add(tiles[0].key);
+            let count = 0;
+
+            while (queue.length > 0) {
+                const current = queue.shift();
+                count++;
+
+                // Check against all other tiles in the set
+                for (const other of tiles) {
+                    if (!visited.has(other.key)) {
+                        if (axialDistance(current.q, current.r, other.q, other.r) === 1) {
+                            visited.add(other.key);
+                            queue.push(other);
+                        }
+                    }
+                }
+            }
+
+            // If the number of visited tiles equals the total set size, it's contiguous
+            return count === tileKeyArray.length;
+        }
+
         function findDirectionIndex(dir) {
             for (let i = 0; i < AXIAL_DIRECTIONS.length; i++) {
                 if (AXIAL_DIRECTIONS[i].q === dir.q && AXIAL_DIRECTIONS[i].r === dir.r) return i;
@@ -2323,6 +2406,44 @@ function loadColorPreferences() {
 
         function pointDistance(p1, p2) { return Math.sqrt(distSq(p1,p2)); }
 
+function isInternalBaseEdge(edgeKey) {
+    // Checks if an edge is between two tiles of the SAME base camp
+    const [h1, h2] = parseEdgeKey(edgeKey);
+    const t1 = getTileKey(h1.q, h1.r);
+    const t2 = getTileKey(h2.q, h2.r);
+
+    for (let i = 1; i <= 2; i++) {
+        const base = gameState.baseCampPositions[`player${i}`];
+        if (Array.isArray(base)) {
+            if (base.includes(t1) && base.includes(t2)) return true;
+        }
+    }
+    return false;
+}
+
+function getMapMakerBaseCampTileKeys() {
+    const baseCampTileKeys = new Set();
+    
+    // Handle Array format (Expansive)
+    if (Array.isArray(gameState.baseCampPositions.player1)) {
+        gameState.baseCampPositions.player1.forEach(k => baseCampTileKeys.add(k));
+    } else if (gameState.baseCampPositions.player1) {
+        // Handle String format (Standard)
+        const [h1, h2] = parseEdgeKey(gameState.baseCampPositions.player1);
+        baseCampTileKeys.add(getTileKey(h1.q, h1.r));
+        baseCampTileKeys.add(getTileKey(h2.q, h2.r));
+    }
+
+    if (Array.isArray(gameState.baseCampPositions.player2)) {
+        gameState.baseCampPositions.player2.forEach(k => baseCampTileKeys.add(k));
+    } else if (gameState.baseCampPositions.player2) {
+        const [h1, h2] = parseEdgeKey(gameState.baseCampPositions.player2);
+        baseCampTileKeys.add(getTileKey(h1.q, h1.r));
+        baseCampTileKeys.add(getTileKey(h2.q, h2.r));
+    }
+    
+    return baseCampTileKeys;
+}
 
         function distToSegmentSquared(p, v, w) {
             const l2 = distSq(v, w); if (l2 === 0) return distSq(p, v);
@@ -2957,32 +3078,27 @@ function drawHexEdgesAndBoundaries() {
 
 
         function drawFortificationOutlines() {
-            const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
+            const currentHexSize = HEX_SIZE * gameState.renderScale; 
             const fortifiedTilesP1 = new Set();
             const fortifiedTilesP2 = new Set();
 
             gameState.tiles.forEach((tile, key) => {
-                if (tile.fortifiedByPlayer === 1) {
-                    fortifiedTilesP1.add(key);
-                } else if (tile.fortifiedByPlayer === 2) {
-                    fortifiedTilesP2.add(key);
-                }
+                if (tile.fortifiedByPlayer === 1) fortifiedTilesP1.add(key);
+                else if (tile.fortifiedByPlayer === 2) fortifiedTilesP2.add(key);
             });
 
-            // --- FIX: Only add base tiles if the edge key is valid ---
-            const p1BaseEdgeKey = gameState.baseCampPositions.player1;
-            if (p1BaseEdgeKey) {
-                const [p1_h1, p1_h2] = parseEdgeKey(p1BaseEdgeKey);
-                if (!isNaN(p1_h1.q)) fortifiedTilesP1.add(getTileKey(p1_h1.q, p1_h1.r));
-                if (!isNaN(p1_h2.q)) fortifiedTilesP1.add(getTileKey(p1_h2.q, p1_h2.r));
-            }
-
-            const p2BaseEdgeKey = gameState.baseCampPositions.player2;
-            if (p2BaseEdgeKey) {
-                const [p2_h1, p2_h2] = parseEdgeKey(p2BaseEdgeKey);
-                if (!isNaN(p2_h1.q)) fortifiedTilesP2.add(getTileKey(p2_h1.q, p2_h1.r));
-                if (!isNaN(p2_h2.q)) fortifiedTilesP2.add(getTileKey(p2_h2.q, p2_h2.r));
-            }
+            // --- Handle Base Camp Tiles (Array or String) ---
+            const addBaseTiles = (baseData, set) => {
+                if (Array.isArray(baseData)) {
+                    baseData.forEach(key => set.add(key));
+                } else if (baseData) {
+                    const [h1, h2] = parseEdgeKey(baseData);
+                    if (!isNaN(h1.q)) set.add(getTileKey(h1.q, h1.r));
+                    if (!isNaN(h2.q)) set.add(getTileKey(h2.q, h2.r));
+                }
+            };
+            addBaseTiles(gameState.baseCampPositions.player1, fortifiedTilesP1);
+            addBaseTiles(gameState.baseCampPositions.player2, fortifiedTilesP2);
 
             const drawBordersForPlayer = (tileSet, color) => {
                 tileSet.forEach(tileKey => {
@@ -2997,6 +3113,7 @@ function drawHexEdgesAndBoundaries() {
                         const neighborR = tile.r + neighborDir.r;
                         const neighborKey = getTileKey(neighborQ, neighborR);
 
+                        // Only draw edge if neighbor is NOT in the same set (internal edges hidden)
                         if (!tileSet.has(neighborKey)) {
                              const v1_idx = MAP_DIRECTION_TO_EDGE_INDEX[i];
                              const v2_idx = (v1_idx + 1) % 6;
@@ -3022,7 +3139,7 @@ function drawHexEdgesAndBoundaries() {
 
             drawBordersForPlayer(fortifiedTilesP1, currentDrawingColors.player1.primary);
             drawBordersForPlayer(fortifiedTilesP2, currentDrawingColors.player2.primary);
-        }
+}
 
 function drawContestedEdgeIndicator() {
             const CONTESTED_EDGE_COLOR = '#C440C4';
@@ -3103,6 +3220,46 @@ function drawPulsatingBridgeHighlights() {
     });
 
     ctx.restore(); // Restore globalAlpha to 1.0
+}
+
+function drawMapMakerHighlights() {
+    if (!gameState.mapMakerMode) return;
+    
+    const brush = gameState.mapMakerBrush;
+    if (brush.type === 'base_camp' && gameState.gridRadius === 4) {
+        const player = brush.player;
+        const currentBase = gameState.baseCampPositions[`player${player}`];
+        
+        // Show suggestions if base is not full
+        if (Array.isArray(currentBase) && currentBase.length > 0 && currentBase.length < 3) {
+            const validNeighbors = new Set();
+            const enemyPlayer = player === 1 ? 2 : 1;
+            const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+            const enemyBaseSet = new Set(Array.isArray(enemyBaseData) ? enemyBaseData : []);
+
+            // Iterate over all existing base tiles to find potential neighbors
+            currentBase.forEach(key => {
+                const [q,r] = key.split(',').map(Number);
+                getNeighbors(q,r).forEach(n => {
+                    const nKey = getTileKey(n.q, n.r);
+                    // Basic Checks: On map, not in own base, not in enemy base
+                    if (gameState.tiles.has(nKey) && !currentBase.includes(nKey) && !enemyBaseSet.has(nKey)) {
+                        
+                        // --- CRITICAL FIX: Check Contiguity ---
+                        // Would adding this tile make the set contiguous?
+                        // This handles the "Split Base" scenario: only the tile connecting the split parts will pass this check.
+                        const testSet = [...currentBase, nKey];
+                        if (isSetContiguous(testSet)) {
+                            validNeighbors.add(nKey);
+                        }
+                    }
+                });
+            });
+            
+            // Draw highlights
+            drawActionSelectionHighlights(Array.from(validNeighbors), 'fortify');
+        }
+    }
 }
 
 function drawActionSelectionHighlights(targetKeys, type) {
@@ -3200,53 +3357,86 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
             });
         }
 
-        function drawFlags() {
-            if (gameState.gameMode === 'arcade') return;
-            if (!gameState.flags) return;
+function drawFlags() {
+    if (gameState.gameMode === 'arcade') return;
+    
+    const renderFlagAt = (player, x, y) => {
+        const teamColor = currentDrawingColors[`player${player}`].secondary;
+        const flagIconColor = '#F0F0F0'; 
+        const flagPoleColor = '#2c3e50';
+        const circleRadius = HEX_SIZE * 0.18;
+        const flagSize = circleRadius * 1.2; 
 
-            Object.values(gameState.flags).forEach(flag => {
-                if (flag.status === 'at_base') {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.beginPath();
+        ctx.arc(0, 0, circleRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = teamColor; 
+        ctx.fill();
+        ctx.strokeStyle = '#1a252f';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-3, flagSize * 0.5);
+        ctx.lineTo(-3, -flagSize * 0.5);
+        ctx.strokeStyle = flagPoleColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-2, -flagSize * 0.5);
+        ctx.lineTo(flagSize * 0.45, -flagSize * 0.3);
+        ctx.lineTo(-2, -flagSize * 0);
+        ctx.closePath();
+        ctx.fillStyle = flagIconColor; 
+        ctx.fill(); 
+        ctx.restore();
+    };
+
+    // 1. GAMEPLAY MODE (Uses gameState.flags)
+    if (!gameState.mapMakerMode && gameState.flags) {
+        Object.values(gameState.flags).forEach(flag => {
+            if (flag.status === 'at_base' && flag.homePosition) {
+                if (Array.isArray(flag.homePosition)) {
+                    // Expansive Mode (Tile Array)
+                    const pos = calculateBaseCentroid(flag.homePosition);
+                    if (pos) renderFlagAt(flag.player, pos.x, pos.y);
+                } else {
+                    // Standard Mode (Edge String)
                     const edge = gameState.edges.get(flag.homePosition);
-                    if (!edge) return;
-                    
+                    if (edge) {
+                        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                        renderFlagAt(flag.player, mid.x, mid.y);
+                    }
+                }
+            }
+        });
+    }
+    // 2. MAP MAKER MODE (Expansive Preview)
+    else if (gameState.mapMakerMode && gameState.gridRadius === 4) {
+        for(let p = 1; p <= 2; p++) {
+            const base = gameState.baseCampPositions[`player${p}`];
+            if (Array.isArray(base) && base.length === 3) {
+                const pos = calculateBaseCentroid(base);
+                if (pos) renderFlagAt(p, pos.x, pos.y);
+            }
+        }
+    }
+    // 3. MAP MAKER MODE (Standard Preview)
+    else if (gameState.mapMakerMode && gameState.gridRadius === 3) {
+        // Standard mode in Map Maker usually sets flags in initializeGrid,
+        // but if we are live editing rotation, we might need to fallback to baseCampPositions edge key
+        // if flags aren't synced yet. However, `updateBaseCampLocations` syncs flags.
+        if (gameState.flags) {
+             Object.values(gameState.flags).forEach(flag => {
+                const edge = gameState.edges.get(flag.homePosition);
+                if (edge) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                    const teamColor = currentDrawingColors[`player${flag.player}`].secondary;
-                    const flagIconColor = '#F0F0F0'; 
-                    const flagPoleColor = '#2c3e50';
-                    const circleRadius = HEX_SIZE * 0.18;
-                    const flagSize = circleRadius * 1.2; 
-
-                    ctx.save();
-                    ctx.translate(mid.x, mid.y);
-
-                    ctx.beginPath();
-                    ctx.arc(0, 0, circleRadius, 0, 2 * Math.PI);
-                    ctx.fillStyle = teamColor; 
-                    ctx.fill();
-
-                    ctx.strokeStyle = '#1a252f';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-
-                    ctx.beginPath();
-                    ctx.moveTo(-3, flagSize * 0.5);
-                    ctx.lineTo(-3, -flagSize * 0.5);
-                    ctx.strokeStyle = flagPoleColor;
-                    ctx.lineWidth = 3;
-                    ctx.stroke();
-
-                    ctx.beginPath();
-                    ctx.moveTo(-2, -flagSize * 0.5);
-                    ctx.lineTo(flagSize * 0.45, -flagSize * 0.3);
-                    ctx.lineTo(-2, -flagSize * 0);
-                    ctx.closePath();
-                    ctx.fillStyle = flagIconColor; 
-                    ctx.fill(); 
-                    
-                    ctx.restore();
+                    renderFlagAt(flag.player, mid.x, mid.y);
                 }
             });
         }
+    }
+}
 
         function drawSupplyLines() {
             if (gameState.gameMode === 'arcade') return;
@@ -4248,21 +4438,18 @@ function drawAnimations() {
         function gameLoop() {
             // --- ARCADE LOGIC ---
             if (gameState.gameMode === 'arcade' && !gameState.gameOver && !gameState.mapMakerMode) {
-                
-                // 1. Timer Logic
+                // ... (timer logic unchanged) ...
                 if (gameState.activeAnimations.length === 0) { 
                     gameState.arcadeTurnTimer -= 1/60; 
                     if (gameState.arcadeTurnTimer <= 0) {
                         gameState.arcadeTurnTimer = 0;
-                        if (gameState.swapState !== 'complete') {
+                        if (gameState.globalTurnNumber >= 2 && gameState.swapState !== 'complete') {
                             handleForcedSwap();
                         } else {
                             proceedToEndTurn();
                         }
                     }
                 }
-
-                // 2. End Turn Button Visualization
                 const pct = Math.max(0, (gameState.arcadeTurnTimer / ARCADE_TURN_TIME_SEC) * 100);
                 const activeColor = '#E04030'; 
                 const emptyColor = '#C03020';
@@ -4272,21 +4459,17 @@ function drawAnimations() {
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // --- Handle smooth color transition ---
+            // ... (color transition logic unchanged) ...
             if (gameState.colorTransition.active) {
                 const elapsedTime = Date.now() - gameState.colorTransition.startTime;
                 const progress = Math.min(elapsedTime / COLOR_TRANSITION_DURATION_MS, 1);
-
                 currentDrawingColors.player1.primary = lerpColor(gameState.colorTransition.from.player1.primary, gameState.colorTransition.to.player1.primary, progress);
                 currentDrawingColors.player2.primary = lerpColor(gameState.colorTransition.from.player2.primary, gameState.colorTransition.to.player2.primary, progress);
                 currentDrawingColors.player1.secondary = lerpColor(gameState.colorTransition.from.player1.secondary, gameState.colorTransition.to.player1.secondary, progress); 
                 currentDrawingColors.player2.secondary = lerpColor(gameState.colorTransition.from.player2.secondary, gameState.colorTransition.to.player2.secondary, progress); 
                 currentDrawingColors.player1.accent = lerpColor(gameState.colorTransition.from.player1.accent, gameState.colorTransition.to.player1.accent, progress);
                 currentDrawingColors.player2.accent = lerpColor(gameState.colorTransition.from.player2.accent, gameState.colorTransition.to.player2.accent, progress);
-
-                if (progress >= 1) {
-                    gameState.colorTransition.active = false;
-                }
+                if (progress >= 1) gameState.colorTransition.active = false;
             } else {
                 currentDrawingColors.player1.primary = TEAM_COLORS.player1.primary;
                 currentDrawingColors.player2.primary = TEAM_COLORS.player2.primary;
@@ -4296,32 +4479,19 @@ function drawAnimations() {
                 currentDrawingColors.player2.accent = TEAM_COLORS.player2.accent;
             }
 
-            // --- Handle Canvas Outline Color (Visuals) ---
+            // ... (Outline logic unchanged) ...
             if (gameState.mapMakerMode) {
                 canvas.style.outlineColor = '#F0F0F0';
-                canvas.style.transition = 'outline-color 0.4s ease-in-out';
             } else if (gameState.gameOver) {
                 canvas.style.outlineColor = 'transparent';
-                canvas.style.transition = 'outline-color 0.4s ease-in-out';
             } else if (gameState.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
-                // --- ARCADE SWAP PULSE ---
-                // FIX: Disable CSS transition so JS animation works instantly
-                canvas.style.transition = 'none'; 
-                
                 const time = Date.now();
                 const playerColor = TEAM_COLORS[`player${gameState.currentPlayer}`].secondary;
-                const alertColor = '#FFC020'; // Explicit Yellow requested
-                
-                // Oscillate between 0 and 1 every ~1.2 seconds
+                const alertColor = '#FFC020'; 
                 const pulse = (Math.sin(time / 200) + 1) / 2; 
-                
                 canvas.style.outlineColor = lerpColor(playerColor, alertColor, pulse);
             } else {
-                // Standard Player Turn Color
-                canvas.style.transition = 'outline-color 0.4s ease-in-out'; // Re-enable smoothing
-                canvas.style.outlineColor = gameState.currentPlayer === 1
-                    ? TEAM_COLORS.player1.secondary
-                    : TEAM_COLORS.player2.secondary;
+                canvas.style.outlineColor = gameState.currentPlayer === 1 ? TEAM_COLORS.player1.secondary : TEAM_COLORS.player2.secondary;
             }
 
             gameState.tiles.forEach(tile => drawHexFill(tile.q, tile.r, tile.type));
@@ -4353,6 +4523,9 @@ function drawAnimations() {
                         drawBridgeAttackHighlightsOnly(currentAttackTargets); 
                         break;
                 }
+                
+                // ADDED: Draw map maker highlights if needed
+                drawMapMakerHighlights();
             }
             
             drawDebugPath();
@@ -6540,19 +6713,45 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
 
     clearDebugPath();
 
-    // --- 5. FLAG CAPTURE LOGIC ---
+    // --- FLAG CAPTURE LOGIC ---
     if (gameState.gameMode !== 'arcade') {
-        const enemyFlag = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
-        if (enemyFlag && enemyFlag.status === 'at_base' && targetEdgeKey === enemyFlag.homePosition) {
-            enemyFlag.status = 'carried';
-            enemyFlag.carrierId = unit.id;
+        const enemyPlayer = unit.player === 1 ? 2 : 1;
+        let enemyFlagHome = null;
+        
+        // Logic for Expansive Mode (Pickup on any internal edge)
+        if (gameState.gridRadius === 4) {
+            if (isInternalBaseEdge(targetEdgeKey)) {
+                // Check if this internal edge belongs to the enemy
+                const [h1, h2] = parseEdgeKey(targetEdgeKey);
+                const t1 = getTileKey(h1.q, h1.r);
+                const enemyBase = gameState.baseCampPositions[`player${enemyPlayer}`];
+                if (Array.isArray(enemyBase) && enemyBase.includes(t1)) {
+                    // Confirmed: Moved onto an internal edge of enemy base
+                    enemyFlagHome = true; // Signal capture
+                }
+            }
+        } 
+        // Logic for Standard Mode (Pickup on specific edge)
+        else {
+            const flagObj = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+            if (flagObj && flagObj.homePosition === targetEdgeKey) {
+                enemyFlagHome = true;
+            }
+        }
+
+        const enemyFlagObj = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+
+        if (enemyFlagHome && enemyFlagObj.status === 'at_base') {
+            enemyFlagObj.status = 'carried';
+            enemyFlagObj.carrierId = unit.id;
             unit.isCarryingFlag = true;
             unit.currentMove = 0;
+            // ... (rest of capture logic: logs, supply severing, etc.)
             logAction(`P${unit.player} ${unit.type.name} has picked up the flag!`, gameState.currentPlayer);
             updateAllHealingStatus();
-            severSupplyLinesForPlayer(enemyFlag.player);
-
-            const victimPlayerQueue = gameState.respawnQueue[`player${enemyFlag.player}`];
+            severSupplyLinesForPlayer(enemyPlayer);
+            
+            const victimPlayerQueue = gameState.respawnQueue[`player${enemyPlayer}`];
             victimPlayerQueue.forEach(item => {
                 if (!item.timerHalved) {
                     item.turnsRemaining = Math.ceil(item.turnsRemaining / 2);
@@ -6560,7 +6759,7 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
                 }
             });
             updateRespawnQueueDisplay();
-            updateSupplyPointsBasedOnFlagStatus(enemyFlag.player);
+            updateSupplyPointsBasedOnFlagStatus(enemyPlayer);
 
             const unitPos = getUnitScreenPosition(unit);
             if (unitPos) {
@@ -6568,7 +6767,7 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
                     type: 'flag_capture_burst',
                     x: unitPos.x,
                     y: unitPos.y,
-                    player: enemyFlag.player,
+                    player: enemyPlayer,
                     startTime: Date.now(),
                     duration: 500
                 });
@@ -9182,14 +9381,14 @@ function buildMapMakerPalette() {
     const title = document.createElement('h3');
     title.textContent = 'Palette';
     title.className = 'text-center';
-    title.style.cssText = "font-size: 1.5em; color: #FFC020; margin-bottom: 15px;"; // Reduced margin
+    title.style.cssText = "font-size: 1.5em; color: #FFC020; margin-bottom: 15px;";
     paletteContainer.appendChild(title);
 
     const divider = document.createElement('hr');
     divider.style.cssText = "width: 100%; border-color: #4a6075; margin-bottom: 20px; margin-top: 0;";
     paletteContainer.appendChild(divider);
 
-    // --- Tiles Section (Unchanged from previous correct version) ---
+    // --- Tiles Section ---
     const tilesTitle = document.createElement('h4');
     tilesTitle.textContent = 'Tiles';
     tilesTitle.style.cssText = "text-align: center; color: #F0F0F0; margin-bottom: 10px;";
@@ -9198,7 +9397,6 @@ function buildMapMakerPalette() {
     tilePalette.style.cssText = "display: flex; flex-direction: column; align-items: center; gap: 12px;";
     paletteContainer.appendChild(tilePalette);
     
-    // Self-contained palette drawing function
     const PALETTE_HEX_SIZE = 30;
     function drawPaletteHex(canvas, tileType, size) {
         const ctx = canvas.getContext('2d');
@@ -9225,6 +9423,7 @@ function buildMapMakerPalette() {
     }
     Object.entries(TILE_TYPES).forEach(([key, tileType]) => {
         const tileOptionContainer = document.createElement('div');
+        tileOptionContainer.className = 'tile-option'; 
         tileOptionContainer.style.cssText = `display: flex; align-items: center; gap: 15px; cursor: pointer; width: 90%; padding: 5px; border: 2px solid #4a6075; border-radius: 8px; transition: all 0.2s;`;
         const hexCanvas = document.createElement('canvas');
         hexCanvas.width = PALETTE_HEX_SIZE * 2;
@@ -9236,16 +9435,47 @@ function buildMapMakerPalette() {
         tileOptionContainer.appendChild(hexCanvas);
         tileOptionContainer.appendChild(nameLabel);
         if (key === 'PLAINS') { tileOptionContainer.style.borderColor = '#FFC020'; }
+        
         tileOptionContainer.addEventListener('click', () => {
+            // Validate Base Camp Completion
+            if (gameState.mapMakerBrush.type === 'base_camp') {
+                const p = gameState.mapMakerBrush.player;
+                const base = gameState.baseCampPositions[`player${p}`];
+                if (Array.isArray(base) && base.length > 0 && base.length < 3) {
+                    showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
+                    return;
+                }
+            }
+
             gameState.mapMakerBrush = { type: 'tile', value: TILE_TYPES[key], player: null };
-            tilePalette.querySelectorAll('div[style*="cursor: pointer"]').forEach(el => { el.style.borderColor = '#4a6075'; });
+            
+            // Clear selections
+            tilePalette.querySelectorAll('.tile-option').forEach(el => { el.style.borderColor = '#4a6075'; });
             document.getElementById('unitPalette')?.querySelectorAll('.unit-option').forEach(el => { el.classList.remove('selected'); });
+            
+            // Deselect Base Camp Buttons (Revert Colors)
+            const controls = document.getElementById('mapMakerControlsContainer');
+            if (controls) {
+                const p1Btn = controls.querySelector('#p1BaseBtn');
+                const p2Btn = controls.querySelector('#p2BaseBtn');
+                if (p1Btn) {
+                    const c = TEAM_COLORS.player1.primary;
+                    p1Btn.style.backgroundColor = c;
+                    p1Btn.style.boxShadow = `0 3px ${adjustBrightness(c, -20)}`;
+                }
+                if (p2Btn) {
+                    const c = TEAM_COLORS.player2.primary;
+                    p2Btn.style.backgroundColor = c;
+                    p2Btn.style.boxShadow = `0 3px ${adjustBrightness(c, -20)}`;
+                }
+            }
+
             tileOptionContainer.style.borderColor = '#FFC020';
         });
         tilePalette.appendChild(tileOptionContainer);
     });
 
-    // --- Units Section (Rearchitected with Local Animation) ---
+    // --- Units Section ---
     const unitsTitle = document.createElement('h4');
     unitsTitle.textContent = 'Units';
     unitsTitle.style.cssText = "text-align: center; color: #F0F0F0; margin-top: 30px; margin-bottom: 15px;";
@@ -9273,14 +9503,7 @@ function buildMapMakerPalette() {
     paletteContainer.appendChild(unitPalette);
 
     let selectedPlayer = 1;
-    
-    // --- Self-contained animation state for the palette ---
-    let paletteAnimation = {
-        active: false,
-        startTime: 0,
-        fromColor: '',
-        toColor: ''
-    };
+    let paletteAnimation = { active: false, startTime: 0, fromColor: '', toColor: '' };
 
     const buildUnitOptions = () => {
         unitPalette.innerHTML = '';
@@ -9294,50 +9517,63 @@ function buildMapMakerPalette() {
             unitCanvas.width = (PALETTE_UNIT_RADIUS + 5) * 2;
             unitCanvas.height = (PALETTE_UNIT_RADIUS + 5) * 2;
             unitOptionContainer.appendChild(unitCanvas);
+            
             unitOptionContainer.addEventListener('click', () => {
+                // Validate Base Camp Completion
+                if (gameState.mapMakerBrush.type === 'base_camp') {
+                    const p = gameState.mapMakerBrush.player;
+                    const base = gameState.baseCampPositions[`player${p}`];
+                    if (Array.isArray(base) && base.length > 0 && base.length < 3) {
+                        showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
+                        return;
+                    }
+                }
+
                 gameState.mapMakerBrush = { type: 'unit', value: UNIT_TYPES[key], player: selectedPlayer };
                 
-                // Remove 'selected' class from all other unit options
                 unitPalette.querySelectorAll('.unit-option').forEach(el => { el.classList.remove('selected'); });
+                tilePalette.querySelectorAll('.tile-option').forEach(el => { el.style.borderColor = '#4a6075'; });
                 
-                // Add 'selected' class to the clicked option
-                unitOptionContainer.classList.add('selected');
+                // Deselect Base Camp Buttons
+                const controls = document.getElementById('mapMakerControlsContainer');
+                if (controls) {
+                    const p1Btn = controls.querySelector('#p1BaseBtn');
+                    const p2Btn = controls.querySelector('#p2BaseBtn');
+                    if (p1Btn) {
+                        const c = TEAM_COLORS.player1.primary;
+                        p1Btn.style.backgroundColor = c;
+                        p1Btn.style.boxShadow = `0 3px ${adjustBrightness(c, -20)}`;
+                    }
+                    if (p2Btn) {
+                        const c = TEAM_COLORS.player2.primary;
+                        p2Btn.style.backgroundColor = c;
+                        p2Btn.style.boxShadow = `0 3px ${adjustBrightness(c, -20)}`;
+                    }
+                }
 
-                // Deselect any selected tile
-                tilePalette.querySelectorAll('div[style*="cursor: pointer"]').forEach(el => { el.style.borderColor = 'transparent'; });
+                unitOptionContainer.classList.add('selected');
             });
             unitPalette.appendChild(unitOptionContainer);
         });
     };
 
     const runPaletteLoop = () => {
-        if (!gameState.mapMakerMode) {
-            return; // Stop the loop if we exit map maker mode
-        }
-        
-        // Update Tab Colors based on the live team colors
+        if (!gameState.mapMakerMode) return;
         p1Tab.style.color = selectedPlayer === 1 ? TEAM_COLORS.player1.secondary : '#bdc3c7';
         p1Tab.style.borderBottomColor = selectedPlayer === 1 ? TEAM_COLORS.player1.secondary : 'transparent';
         p2Tab.style.color = selectedPlayer === 2 ? TEAM_COLORS.player2.secondary : '#bdc3c7';
         p2Tab.style.borderBottomColor = selectedPlayer === 2 ? TEAM_COLORS.player2.secondary : 'transparent';
 
         let frameDrawColor = null;
-        // Check if our LOCAL animation is active
         if (paletteAnimation.active) {
             const elapsedTime = Date.now() - paletteAnimation.startTime;
             const progress = Math.min(elapsedTime / COLOR_TRANSITION_DURATION_MS, 1);
             frameDrawColor = lerpColor(paletteAnimation.fromColor, paletteAnimation.toColor, progress);
-            if (progress >= 1) {
-                paletteAnimation.active = false;
-            }
+            if (progress >= 1) paletteAnimation.active = false;
         }
 
-        // Redraw unit canvases
         const PALETTE_UNIT_RADIUS = UNIT_DRAW_SIZE_ON_EDGE * 1.8;
         const playerKey = `player${selectedPlayer}`;
-        
-        // If we are not animating, use the color from the main game's animated `currentDrawingColors`.
-        // This ensures the palette correctly updates when themes are changed from the drawer.
         const baseColor = currentDrawingColors[playerKey].primary;
         const finalDrawColor = frameDrawColor || baseColor;
 
@@ -9348,53 +9584,38 @@ function buildMapMakerPalette() {
                 const unitCtx = canvas.getContext('2d');
                 unitCtx.clearRect(0, 0, canvas.width, canvas.height);
                 const dummyUnit = { player: selectedPlayer, type: UNIT_TYPES[unitTypeKey] };
-                
-                // Temporarily override the main color for this draw call, then restore it.
                 const originalColor = currentDrawingColors[playerKey].primary;
                 currentDrawingColors[playerKey].primary = finalDrawColor;
                 drawSingleUnit(unitCtx, dummyUnit, canvas.width / 2, canvas.height / 2, PALETTE_UNIT_RADIUS, null, true);
-                currentDrawingColors[playerKey].primary = originalColor; // Restore immediately
+                currentDrawingColors[playerKey].primary = originalColor; 
 
-                // If this container is the selected one, draw the yellow ring on its canvas.
                 if (container.classList.contains('selected')) {
                     const centerX = canvas.width / 2;
                     const centerY = canvas.height / 2;
-                    const ringRadius = PALETTE_UNIT_RADIUS + 2; // Slightly outside the unit
-
+                    const ringRadius = PALETTE_UNIT_RADIUS + 2; 
                     unitCtx.beginPath();
                     unitCtx.arc(centerX, centerY, ringRadius, 0, 2 * Math.PI);
-                    unitCtx.strokeStyle = '#FFD700'; // Same yellow as in-game selection
-                    unitCtx.lineWidth = 3; // Same thickness
+                    unitCtx.strokeStyle = '#FFD700'; 
+                    unitCtx.lineWidth = 3; 
                     unitCtx.stroke();
                 }
             }
         });
-        
         requestAnimationFrame(runPaletteLoop);
     };
 
     const handleTabClick = (newPlayer) => {
         if (selectedPlayer === newPlayer) return;
-
-        // 1. Visually deselect by removing the highlight class.
-        unitPalette.querySelectorAll('.unit-option.selected').forEach(el => {
-            el.classList.remove('selected');
-        });
-        // 2. Logically deselect by resetting the brush to a neutral default.
+        unitPalette.querySelectorAll('.unit-option.selected').forEach(el => { el.classList.remove('selected'); });
         if (gameState.mapMakerBrush.type === 'unit') {
             gameState.mapMakerBrush = { type: 'tile', value: TILE_TYPES.PLAINS, player: null };
         }
-
-        // --- TRIGGER THE LOCAL PALETTE-ONLY ANIMATION ---
         const fromPlayerKey = `player${selectedPlayer}`;
         const toPlayerKey = `player${newPlayer}`;
-        
         paletteAnimation.fromColor = TEAM_COLORS[fromPlayerKey].primary;
         paletteAnimation.toColor = TEAM_COLORS[toPlayerKey].primary;
         paletteAnimation.active = true;
         paletteAnimation.startTime = Date.now();
-        // --- WE DO NOT TOUCH gameState.colorTransition HERE ---
-
         selectedPlayer = newPlayer;
         p1Tab.classList.toggle('active', selectedPlayer === 1);
         p2Tab.classList.toggle('active', selectedPlayer === 2);
@@ -9403,7 +9624,6 @@ function buildMapMakerPalette() {
     p1Tab.addEventListener('click', () => handleTabClick(1));
     p2Tab.addEventListener('click', () => handleTabClick(2));
 
-    // Initial Setup
     buildUnitOptions();
     p1Tab.classList.add('active');
     runPaletteLoop();
@@ -9419,21 +9639,21 @@ function buildMapMakerControls() {
         controlsContainer.style.width = '100%';
         rightPanel.prepend(controlsContainer);
     }
-    controlsContainer.innerHTML = ''; // Clear previous content
+    controlsContainer.innerHTML = ''; 
 
-    // --- Title ---
     const title = document.createElement('h3');
     title.textContent = 'Options';
     title.className = 'text-center';
-    title.style.cssText = "font-size: 1.5em; color: #FFC020; margin-bottom: 15px;"; // Reduced margin
+    title.style.cssText = "font-size: 1.5em; color: #FFC020; margin-bottom: 15px;";
     controlsContainer.appendChild(title);
 
     const divider = document.createElement('hr');
     divider.style.cssText = "width: 100%; border-color: #4a6075; margin-bottom: 20px; margin-top: 0;";
     controlsContainer.appendChild(divider);
 
-    // --- Base Camp Slider Section ---
+    // --- Base Camp Slider (Standard R=3) ---
     const sliderContainer = document.createElement('div');
+    sliderContainer.id = 'baseCampSliderContainer'; 
     sliderContainer.style.cssText = `
         display: flex;
         flex-direction: column;
@@ -9443,6 +9663,7 @@ function buildMapMakerControls() {
         border: 1px solid #4a6075;
         border-radius: 5px;
     `;
+    sliderContainer.style.display = (gameState.gridRadius === 3) ? 'flex' : 'none';
     
     const sliderLabel = document.createElement('label');
     sliderLabel.htmlFor = 'baseCampSlider';
@@ -9453,12 +9674,11 @@ function buildMapMakerControls() {
     slider.id = 'baseCampSlider';
     slider.type = 'range';
     slider.min = '0';
-        slider.max = '5'; // This gives us 6 positions (0, 1, 2, 3, 4, 5)
-    slider.step = '1'; // This makes the slider snap to integer values
-    slider.value = '3'; // Default to the middle position (0-degree rotation)
+    slider.max = '5'; 
+    slider.step = '1'; 
+    slider.value = '3'; 
     slider.style.width = '100%';
 
-    // Add an event listener
     slider.addEventListener('input', (event) => {
         const position = event.target.value;
         updateBaseCampLocations(position);
@@ -9468,7 +9688,103 @@ function buildMapMakerControls() {
     sliderContainer.appendChild(slider);
     controlsContainer.appendChild(sliderContainer);
 
-    // --- Map Size Slider Section ---
+    // --- Expansive Map Base Camp Buttons (R=4) ---
+    if (gameState.gridRadius === 4) {
+        const baseToolsContainer = document.createElement('div');
+        baseToolsContainer.style.cssText = "display: flex; gap: 10px; justify-content: center; margin-top: 10px; margin-bottom: 10px;";
+
+        // Helper: Check if we can switch away from the current tool
+        const canSwitchFromBaseCamp = () => {
+            if (gameState.mapMakerBrush.type === 'base_camp') {
+                const p = gameState.mapMakerBrush.player;
+                const base = gameState.baseCampPositions[`player${p}`];
+                if (Array.isArray(base) && base.length > 0 && base.length < 3) {
+                    showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        // Colors
+        const p1Color = TEAM_COLORS.player1.primary;
+        const p1Shadow = adjustBrightness(p1Color, -20);
+        const p2Color = TEAM_COLORS.player2.primary;
+        const p2Shadow = adjustBrightness(p2Color, -20);
+        const activeColor = '#FFC020';
+        const activeShadow = adjustBrightness(activeColor, -20);
+
+        // Helper: Common logic for clicking a base button
+        const handleBaseButtonClick = (player, btn, otherBtn, originalColor, originalShadow, otherOriginalColor, otherOriginalShadow) => {
+            // 1. If clicking the already active button -> Toggle Off
+            if (gameState.mapMakerBrush.type === 'base_camp' && gameState.mapMakerBrush.player === player) {
+                if (!canSwitchFromBaseCamp()) return;
+                // Deselect: Reset brush to default tile
+                gameState.mapMakerBrush = { type: 'tile', value: TILE_TYPES.PLAINS, player: null };
+                // Revert visual state
+                btn.style.backgroundColor = originalColor;
+                btn.style.boxShadow = `0 3px ${originalShadow}`;
+                return;
+            }
+
+            // 2. If switching from another tool (or the other player) -> Check constraints
+            if (!canSwitchFromBaseCamp()) return;
+
+            // 3. Activate this button
+            gameState.mapMakerBrush = { type: 'base_camp', player: player };
+            
+            // Highlight this button (Yellow)
+            btn.style.backgroundColor = activeColor;
+            btn.style.boxShadow = `0 3px ${activeShadow}`;
+            
+            // Reset the other button
+            otherBtn.style.backgroundColor = otherOriginalColor;
+            otherBtn.style.boxShadow = `0 3px ${otherOriginalShadow}`;
+            
+            // Deactivate Fill Tool if active
+            if (gameState.fillToolActive) {
+                gameState.fillToolActive = false;
+                const fillBtn = document.getElementById('fillToolButton');
+                if (fillBtn) {
+                    fillBtn.textContent = 'Fill';
+                    fillBtn.classList.remove('selecting');
+                }
+            }
+
+            // Clear Palette selections
+            const palette = document.getElementById('mapMakerPaletteContainer');
+            if (palette) {
+                palette.querySelectorAll('.unit-option').forEach(el => el.classList.remove('selected'));
+                palette.querySelectorAll('.tile-option').forEach(el => el.style.borderColor = '#4a6075');
+            }
+        };
+
+        const p1BaseBtn = document.createElement('button');
+        p1BaseBtn.id = 'p1BaseBtn';
+        p1BaseBtn.textContent = "P1 Base";
+        p1BaseBtn.className = 'action-button';
+        p1BaseBtn.style.backgroundColor = p1Color;
+        p1BaseBtn.style.boxShadow = `0 3px ${p1Shadow}`;
+        p1BaseBtn.style.width = 'auto';
+        p1BaseBtn.style.margin = '0';
+        p1BaseBtn.onclick = () => handleBaseButtonClick(1, p1BaseBtn, p2BaseBtn, p1Color, p1Shadow, p2Color, p2Shadow);
+
+        const p2BaseBtn = document.createElement('button');
+        p2BaseBtn.id = 'p2BaseBtn';
+        p2BaseBtn.textContent = "P2 Base";
+        p2BaseBtn.className = 'action-button';
+        p2BaseBtn.style.backgroundColor = p2Color;
+        p2BaseBtn.style.boxShadow = `0 3px ${p2Shadow}`;
+        p2BaseBtn.style.width = 'auto';
+        p2BaseBtn.style.margin = '0';
+        p2BaseBtn.onclick = () => handleBaseButtonClick(2, p2BaseBtn, p1BaseBtn, p2Color, p2Shadow, p1Color, p1Shadow);
+
+        baseToolsContainer.appendChild(p1BaseBtn);
+        baseToolsContainer.appendChild(p2BaseBtn);
+        controlsContainer.appendChild(baseToolsContainer);
+    }
+
+    // --- Map Size Slider ---
     const sizeSliderContainer = document.createElement('div');
     sizeSliderContainer.style.cssText = `
         display: flex;
@@ -9487,10 +9803,10 @@ function buildMapMakerControls() {
     const sizeSlider = document.createElement('input');
     sizeSlider.id = 'mapSizeSlider';
     sizeSlider.type = 'range';
-    sizeSlider.min = '2'; // Compact
-    sizeSlider.max = '4'; // Expansive
+    sizeSlider.min = '2'; 
+    sizeSlider.max = '4'; 
     sizeSlider.step = '1';
-    sizeSlider.value = gameState.gridRadius.toString(); // Set initial value
+    sizeSlider.value = gameState.gridRadius.toString();
     sizeSlider.style.width = '100%';
 
     const sizeValueLabel = document.createElement('span');
@@ -9501,23 +9817,12 @@ function buildMapMakerControls() {
     };
     updateSizeLabel(sizeSlider.value);
 
-sizeSlider.addEventListener('change', (event) => { // Use 'change' to fire after release
+    sizeSlider.addEventListener('change', (event) => { 
         const newRadius = parseInt(event.target.value, 10);
         if (newRadius !== gameState.gridRadius) {
             document.getElementById('customConfirmMessage').textContent = 'Resizing the map will clear all units and terrain. Are you sure?';
-            
-            // Action on Confirm (OK)
-            currentConfirmAction = () => {
-                resizeMapGrid(newRadius);
-                currentCancelAction = null;
-            };
-
-            // NEW: Action on Cancel (Revert slider visuals)
-            currentCancelAction = () => {
-                sizeSlider.value = gameState.gridRadius; // Snap back to the current valid radius
-                updateSizeLabel(gameState.gridRadius);   // Update the text label back to match
-            };
-
+            currentConfirmAction = () => { resizeMapGrid(newRadius); currentCancelAction = null; };
+            currentCancelAction = () => { sizeSlider.value = gameState.gridRadius; updateSizeLabel(gameState.gridRadius); };
             const confirmModal = document.getElementById('customConfirmModal');
             if (confirmModal) {
                 confirmModal.style.display = 'flex';
@@ -9525,39 +9830,60 @@ sizeSlider.addEventListener('change', (event) => { // Use 'change' to fire after
             }
         }
     });
-     sizeSlider.addEventListener('input', (event) => { // Use 'input' for live label update
-        updateSizeLabel(event.target.value);
-    });
+     sizeSlider.addEventListener('input', (event) => { updateSizeLabel(event.target.value); });
 
     sizeSliderContainer.appendChild(sizeSliderLabel);
     sizeSliderContainer.appendChild(sizeSlider);
     controlsContainer.appendChild(sizeSliderContainer);
 
     // --- Fill Tool Button ---
-    // Create a dedicated container to handle the centering
     const fillButtonContainer = document.createElement('div');
     fillButtonContainer.style.cssText = "display: flex; justify-content: center; width: 100%; margin-top: 20px;";
 
     const fillButton = document.createElement('button');
     fillButton.id = 'fillToolButton';
     fillButton.className = 'action-button';
-    // Give the button a standard width and remove conflicting margins
     fillButton.style.width = '160px';
     fillButton.style.margin = '0'; 
     fillButton.textContent = 'Fill';
 
     fillButton.addEventListener('click', () => {
-        gameState.fillToolActive = !gameState.fillToolActive; // Toggle the state
+        // Check if we can switch tool (Base Camp validation)
+        if (gameState.mapMakerBrush.type === 'base_camp') {
+            const p = gameState.mapMakerBrush.player;
+            const base = gameState.baseCampPositions[`player${p}`];
+            if (Array.isArray(base) && base.length > 0 && base.length < 3) {
+                showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
+                return;
+            }
+            // If valid switch, reset brush to default tile
+            gameState.mapMakerBrush = { type: 'tile', value: TILE_TYPES.PLAINS, player: null };
+            
+            // Visually deselect base buttons (revert colors)
+            const p1Btn = document.getElementById('p1BaseBtn');
+            const p2Btn = document.getElementById('p2BaseBtn');
+            if (p1Btn) {
+                const c = TEAM_COLORS.player1.primary;
+                p1Btn.style.backgroundColor = c;
+                p1Btn.style.boxShadow = `0 3px ${adjustBrightness(c, -20)}`;
+            }
+            if (p2Btn) {
+                const c = TEAM_COLORS.player2.primary;
+                p2Btn.style.backgroundColor = c;
+                p2Btn.style.boxShadow = `0 3px ${adjustBrightness(c, -20)}`;
+            }
+        }
+
+        gameState.fillToolActive = !gameState.fillToolActive; 
         if (gameState.fillToolActive) {
             fillButton.textContent = 'Cancel Fill';
-            fillButton.classList.add('selecting'); // Turns the button red
+            fillButton.classList.add('selecting'); 
         } else {
             fillButton.textContent = 'Fill';
             fillButton.classList.remove('selecting');
         }
     });
 
-    // Add the button to its centering container, then add the container to the panel
     fillButtonContainer.appendChild(fillButton);
     controlsContainer.appendChild(fillButtonContainer);
 }
@@ -9566,13 +9892,13 @@ function resizeMapGrid(newRadius) {
     console.log(`Resizing grid to radius ${newRadius}`);
     gameState.gridRadius = newRadius;
     
-    // Safe check for UI element before accessing
     const slider = document.getElementById('mapSizeSlider');
     if (slider) slider.value = newRadius;
 
+    // We update mode BEFORE rebuilding controls, so buildMapMakerControls sees the new radius
     if (newRadius === 2) { 
         gameState.gameMode = 'arcade';
-        gameState.renderScale = 1.3; // Scale up for compact map
+        gameState.renderScale = 1.3; 
         gameState.renderOffset = { x: 0, y: 0 }; 
         gameState.baseCampPositions = { player1: null, player2: null };
     } else { 
@@ -9586,19 +9912,22 @@ function resizeMapGrid(newRadius) {
         gameState.renderOffset = { x: 0, y: 0 };
     }
 
-    // Use FIXED canvas dimensions
+    // Rebuild Controls (Adds/Removes Base Camp Buttons based on radius)
+    if (gameState.mapMakerMode) {
+        buildMapMakerControls();
+        buildMapMakerPalette();
+    }
+
     canvas.width = CANVAS_WIDTH_NORMAL;
     canvas.height = CANVAS_HEIGHT_NORMAL;
     document.querySelectorAll('.ui-panel').forEach(panel => {
         panel.style.minHeight = canvas.height + 'px';
     });
     
-    // Clear and repopulate grid
     gameState.units = [];
     gameState.tiles.clear();
     gameState.edges.clear();
 
-    // Basic grid generation (will be overwritten if loading a map immediately after)
     for (let q = -newRadius; q <= newRadius; q++) {
         for (let r = -newRadius; r <= newRadius; r++) {
             if (Math.abs(q + r) <= newRadius) {
@@ -9607,7 +9936,6 @@ function resizeMapGrid(newRadius) {
             }
         }
     }
-    // Edges generation
     gameState.tiles.forEach(tile => {
         getNeighbors(tile.q, tile.r).forEach(n_coord => {
             if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
@@ -9622,14 +9950,19 @@ function resizeMapGrid(newRadius) {
         });
     });
 
-    // Only update base camps if not in Arcade mode
-    if (gameState.gameMode !== 'arcade') {
+    // --- BASE CAMP LOGIC UPDATE ---
+    if (newRadius === 3) {
         const sliderEl = document.getElementById('baseCampSlider');
         const currentRotation = sliderEl ? sliderEl.value : '3';
         updateBaseCampLocations(currentRotation);
+    } else {
+        gameState.baseCampPositions = { player1: null, player2: null };
+        if (gameState.flags) {
+             gameState.flags.p1_flag.homePosition = null;
+             gameState.flags.p2_flag.homePosition = null;
+        }
     }
 
-    // Only autosave if in Map Maker mode
     if (gameState.mapMakerMode) {
         autoSaveMap();
     }
@@ -9713,12 +10046,12 @@ function updateBaseCampLocations(sliderValue) {
     const rotations = sliderToRotations[parseInt(sliderValue, 10)];
     const currentRadius = gameState.gridRadius;
     
-    // Safety check: If we are in a mode/radius that doesn't have defaults defined (like R=2/Arcade), abort.
+    // Safety check
     if (!BASE_CAMP_DEFAULTS[currentRadius]) return;
 
     const defaults = BASE_CAMP_DEFAULTS[currentRadius];
     
-    // Clear old base camp tiles before calculating new ones
+    // 1. Clear old base camp tiles (Reset to Plains)
     const oldP1Tiles = getBaseCampTiles(gameState.baseCampPositions.player1);
     const oldP2Tiles = getBaseCampTiles(gameState.baseCampPositions.player2);
     [...oldP1Tiles, ...oldP2Tiles].forEach(key => {
@@ -9726,41 +10059,53 @@ function updateBaseCampLocations(sliderValue) {
         if (tile) tile.type = TILE_TYPES.PLAINS;
     });
 
-    // Calculate new Player 1 positions
+    // 2. Calculate new Rotated Tile Keys
     const p1_rotated_tiles = defaults.player1.tiles.map(key => {
         const [q, r] = key.split(',').map(Number);
         const rotated = rotateAxial(q, r, rotations);
         return getTileKey(rotated.q, rotated.r);
     });
     
-    // Calculate new Player 2 positions
     const p2_rotated_tiles = defaults.player2.tiles.map(key => {
         const [q, r] = key.split(',').map(Number);
         const rotated = rotateAxial(q, r, rotations);
         return getTileKey(rotated.q, rotated.r);
     });
 
-    // Determine the flag edge (only for normal size R=3)
+    // 3. Determine the Flag Edge (Only for Standard Size R=3)
     let newP1EdgeKey = null;
     let newP2EdgeKey = null;
+    
     if (currentRadius === 3) {
-        const p1_coords = p1_rotated_tiles.map(k => parseEdgeKey(k.replace(',', '_'))[0]);
-        const p2_coords = p2_rotated_tiles.map(k => parseEdgeKey(k.replace(',', '_'))[0]);
-        newP1EdgeKey = getEdgeKey(p1_coords[0].q, p1_coords[0].r, p1_coords[1].q, p1_coords[1].r);
-        newP2EdgeKey = getEdgeKey(p2_coords[0].q, p2_coords[0].r, p2_coords[1].q, p2_coords[1].r);
+        // FIX: Correctly parse simple tile keys "q,r" instead of treating them as edge keys
+        const p1_coords = p1_rotated_tiles.map(k => {
+            const [q, r] = k.split(',').map(Number);
+            return { q, r };
+        });
+        const p2_coords = p2_rotated_tiles.map(k => {
+            const [q, r] = k.split(',').map(Number);
+            return { q, r };
+        });
+
+        // Assuming standard base has 2 tiles, creating an edge between them
+        if (p1_coords.length >= 2) {
+            newP1EdgeKey = getEdgeKey(p1_coords[0].q, p1_coords[0].r, p1_coords[1].q, p1_coords[1].r);
+        }
+        if (p2_coords.length >= 2) {
+            newP2EdgeKey = getEdgeKey(p2_coords[0].q, p2_coords[0].r, p2_coords[1].q, p2_coords[1].r);
+        }
     }
 
-    // Update game state
+    // 4. Update Game State
     gameState.baseCampPositions.player1 = newP1EdgeKey;
     gameState.baseCampPositions.player2 = newP2EdgeKey;
     
-    // When switching from Arcade (flags=null) to Local, this runs BEFORE initializeGrid creates the flags.
     if (gameState.flags) {
         if (gameState.flags.p1_flag) gameState.flags.p1_flag.homePosition = newP1EdgeKey;
         if (gameState.flags.p2_flag) gameState.flags.p2_flag.homePosition = newP2EdgeKey;
     }
 
-    // Set new base camp tiles to Plains
+    // 5. Set new base camp tiles to Plains (ensuring they are valid for movement/fortification)
     [...p1_rotated_tiles, ...p2_rotated_tiles].forEach(key => {
         const tile = gameState.tiles.get(key);
         if (tile) tile.type = TILE_TYPES.PLAINS;
@@ -9796,81 +10141,129 @@ function applyMapMakerBrush(x, y) {
     const hexCoords = pixelToAxial(x, y);
     const hexKey = getTileKey(hexCoords.q, hexCoords.r);
 
-    // Optimization: Don't paint the same hex repeatedly during a single drag
-    if (hexKey === gameState.mapMakerLastPaintedHexKey && gameState.isDragging) {
-        return;
-    }
+    if (hexKey === gameState.mapMakerLastPaintedHexKey && gameState.isDragging) return;
     gameState.mapMakerLastPaintedHexKey = hexKey;
     
     const brush = gameState.mapMakerBrush;
 
-    if (brush.type === 'tile') {
-        const baseCampTileKeys = getMapMakerBaseCampTileKeys();
+    // --- BASE CAMP BRUSH LOGIC ---
+    if (brush.type === 'base_camp') {
+        if (gameState.gridRadius !== 4) return; 
 
-        if (baseCampTileKeys.has(hexKey)) {
-            // If the tile is a base camp, show a message and do not allow painting.
-            showInstruction("Cannot change the terrain of a base camp tile.", 2000);
-            return; // Exit the function before any changes are made.
+        // FIX: Ensure the tile is valid (inside the map)
+        if (!gameState.tiles.has(hexKey)) {
+            return;
         }
-        // --- End of New Check ---
 
+        const player = brush.player;
+        const playerKey = `player${player}`;
+        const enemyPlayerKey = `player${player === 1 ? 2 : 1}`;
+        
+        const currentBase = Array.isArray(gameState.baseCampPositions[playerKey]) 
+                            ? gameState.baseCampPositions[playerKey] 
+                            : [];
+        
+        const enemyBase = Array.isArray(gameState.baseCampPositions[enemyPlayerKey])
+                          ? new Set(gameState.baseCampPositions[enemyPlayerKey])
+                          : new Set();
+
+        // 1. Validation: Cannot touch enemy base
+        const neighbors = getNeighbors(hexCoords.q, hexCoords.r);
+        for (let n of neighbors) {
+            if (enemyBase.has(getTileKey(n.q, n.r))) {
+                showInstruction("Cannot be adjacent to enemy base.", 1500);
+                return;
+            }
+        }
+
+        // 2. Logic: Toggle or Add
+        let newBase = [...currentBase];
+        if (newBase.includes(hexKey)) {
+            // If clicking existing, remove it (Toggle off)
+            newBase = newBase.filter(k => k !== hexKey);
+        } else {
+            // If adding, max 3 tiles
+            if (newBase.length >= 3) {
+                showInstruction("Base camp max size is 3 tiles.", 1500);
+                return;
+            }
+            
+            newBase.push(hexKey);
+
+            // Check Contiguity
+            if (!isSetContiguous(newBase)) {
+                showInstruction("Base tiles must be contiguous.", 1500);
+                return;
+            }
+        }
+
+        // 3. Apply
+        gameState.baseCampPositions[playerKey] = newBase;
+        
+        // Force tile to Plains
+        const tile = gameState.tiles.get(hexKey);
+        if (tile) tile.type = TILE_TYPES.PLAINS;
+
+    // --- TILE BRUSH LOGIC ---
+    } else if (brush.type === 'tile') {
+        // ... (Rest of function remains unchanged) ...
+        const baseCampTileKeys = getMapMakerBaseCampTileKeys();
+        if (baseCampTileKeys.has(hexKey)) {
+            showInstruction("Cannot change the terrain of a base camp tile.", 2000);
+            return;
+        }
         const tile = gameState.tiles.get(hexKey);
         if (tile) {
             tile.type = brush.value;
-
-            // Only trigger this logic if the brush is WATER.
             if (brush.value === TILE_TYPES.WATER) {
-                // Iterate over the edges of the tile that was just painted.
                 getEdgesOfTile(tile.q, tile.r).forEach(edgeKey => {
                     const edge = gameState.edges.get(edgeKey);
-                    // If there are units on an adjacent edge...
                     if (edge && edge.units.length > 0) {
-                        // Find the other tile connected to this edge.
                         const otherTileQ = (edge.q1 === tile.q && edge.r1 === tile.r) ? edge.q2 : edge.q1;
                         const otherTileR = (edge.r1 === tile.r && edge.q1 === tile.q) ? edge.r2 : edge.r1;
                         const otherTile = gameState.tiles.get(getTileKey(otherTileQ, otherTileR));
-
-                        // ONLY remove units if the other tile is ALSO water, creating an invalid edge.
                         if (otherTile && otherTile.type === TILE_TYPES.WATER) {
                             edge.units.forEach(unitToRemove => {
                                 gameState.units = gameState.units.filter(u => u.id !== unitToRemove.id);
                             });
-                            edge.units = []; // Clear the local edge's unit array.
+                            edge.units = [];
                         }
                     }
                 });
             }
         }
+
+    // --- UNIT BRUSH LOGIC ---
     } else if (brush.type === 'unit') {
         const { key: closestEdgeKey } = findClosestEdgeToPoint(x, y);
         if (!closestEdgeKey) return;
 
-        // Centralized Validation
+        if (isInternalBaseEdge(closestEdgeKey)) {
+            showInstruction("Cannot place units inside base camp.", 2000);
+            return;
+        }
+
         if (!isEdgePlaceable(closestEdgeKey)) {
             showInstruction("Cannot place a unit on this edge.", 1500);
             return;
         }
 
         const edge = gameState.edges.get(closestEdgeKey);
-
         if (edge.units.length > 0 && edge.units[0].player !== brush.player) {
             showInstruction("Cannot place on an edge occupied by the enemy.", 2000);
             return;
         }
-
         if (edge.units.length >= 2) {
             showInstruction("This edge is full.", 1500);
             return;
         }
         
         const totalPlayerUnits = gameState.units.filter(u => u.player === brush.player).length;
-        const maxUnits = getMaxUnitsForCurrentMap(); // CHANGED HERE
-        
+        const maxUnits = getMaxUnitsForCurrentMap(); 
         if (totalPlayerUnits >= maxUnits) {
             showInstruction(`P${brush.player} has reached the maximum of ${maxUnits} units.`, 2000);
             return;
         }
-        
         const playerUnitCounts = getUnitCountsForPlayer(brush.player);
         const unitCap = UNIT_CAPS[brush.value.name];
         if (playerUnitCounts[brush.value.name] >= unitCap) {
@@ -9878,7 +10271,6 @@ function applyMapMakerBrush(x, y) {
             return;
         }
 
-        // Place the unit
         const newUnit = createUnit(brush.player, brush.value, closestEdgeKey);
         gameState.units.push(newUnit);
         edge.units.push(newUnit);
