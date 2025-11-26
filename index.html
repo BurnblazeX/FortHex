@@ -2813,25 +2813,45 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
         }
 
         function spawnUnit(player, unitType) {
-            const homeBaseEdgeKey = gameState.baseCampPositions[`player${player}`];
-            let spawnEdgeKey = null;
+            const baseData = gameState.baseCampPositions[`player${player}`];
+            let potentialSpawnEdges = [];
 
+            // Helper to check validity
             const isEdgeValidForSpawn = (edgeKey) => {
                 const edge = gameState.edges.get(edgeKey);
                 // A valid edge must exist, have less than 2 units, and have NO enemy units.
-                // Also ensure it's not the home flag edge itself.
-                if (edgeKey === homeBaseEdgeKey) return false;
-                return edge && edge.units.length < 2 && !edge.units.some(u => u.player !== player);
+                if (!edge || edge.units.length >= 2 || edge.units.some(u => u.player !== player)) return false;
+                
+                // Special check: Don't spawn ON the flag edge if in Standard mode
+                if (typeof baseData === 'string' && edgeKey === baseData) return false;
+                
+                return true;
             };
 
-            // Search rotationally adjacent edges for a valid spawn point
-            const adjacentEdges = getRotationallyAdjacentEdges(homeBaseEdgeKey);
-            for (const edgeKey of adjacentEdges) {
-                if (isEdgeValidForSpawn(edgeKey)) {
-                    spawnEdgeKey = edgeKey;
-                    break; 
-                }
+            if (Array.isArray(baseData)) {
+                // --- EXPANSIVE MAP LOGIC (Radius 4) ---
+                // baseData is an array of tile keys. We find all edges connected to these tiles.
+                const processedEdges = new Set();
+                
+                baseData.forEach(tileKey => {
+                    const [q, r] = tileKey.split(',').map(Number);
+                    getNeighbors(q, r).forEach(n => {
+                        // Construct edge key between base tile and neighbor
+                        const edgeKey = getEdgeKey(q, r, n.q, n.r);
+                        if (!processedEdges.has(edgeKey)) {
+                            processedEdges.add(edgeKey);
+                            potentialSpawnEdges.push(edgeKey);
+                        }
+                    });
+                });
+            } else {
+                // --- STANDARD MAP LOGIC (Radius 3) ---
+                // baseData is an edge key string
+                potentialSpawnEdges = getRotationallyAdjacentEdges(baseData);
             }
+
+            // Find first valid edge in the potential list
+            const spawnEdgeKey = potentialSpawnEdges.find(edgeKey => isEdgeValidForSpawn(edgeKey));
 
             if (spawnEdgeKey) {
                 const newUnit = createUnit(player, unitType, spawnEdgeKey);
@@ -3510,34 +3530,57 @@ function drawFlags() {
         }
 
         function drawUnitAttackHighlightsOnly(targetsToHighlight) {
-            if (!targetsToHighlight || targetsToHighlight.length === 0) return;
-            targetsToHighlight.forEach(targetInfo => {
-                if (!targetInfo.isBridgeTarget && targetInfo.unit) {
-                    const targetUnit = targetInfo.unit; let unitX, unitY;
-                    const unitSizeToHighlight = HEX_SIZE * 0.3;
-                    if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
-                        const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
-                        if (tile) { const centerPixel = axialToPixel(tile.q, tile.r); unitX = centerPixel.x; unitY = centerPixel.y; }
-                        else return;
-                    } else if (targetInfo.edgeKey) {
-                        const edge = gameState.edges.get(targetInfo.edgeKey); if (!edge) return;
-                        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2); unitX = mid.x; unitY = mid.y;
-                        const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
-                        const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === targetUnit.id);
-                        if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
-                            const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
-                            const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
-                            let dx = p2.x - p1.x, dy = p2.y - p1.y; const len = Math.sqrt(dx*dx + dy*dy) || 1;
-                            let perpX = -dy / len, perpY = dx / len;
-                            unitX += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
-                            unitY += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
-                        }
-                    } else return;
-                    ctx.beginPath(); ctx.arc(unitX, unitY, unitSizeToHighlight, 0, 2 * Math.PI);
-                    ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; ctx.lineWidth = 3; ctx.stroke();
+    if (!targetsToHighlight || targetsToHighlight.length === 0) return;
+
+    // --- FIX: Apply renderScale to the highlight radius and offset ---
+    const unitSizeToHighlight = (HEX_SIZE * 0.3) * gameState.renderScale;
+    const scaledOffset = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
+
+    targetsToHighlight.forEach(targetInfo => {
+        if (!targetInfo.isBridgeTarget && targetInfo.unit) {
+            const targetUnit = targetInfo.unit; 
+            let unitX, unitY;
+            
+            if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
+                const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
+                if (tile) { 
+                    const centerPixel = axialToPixel(tile.q, tile.r); 
+                    unitX = centerPixel.x; 
+                    unitY = centerPixel.y; 
+                } else return;
+            } else if (targetInfo.edgeKey) {
+                const edge = gameState.edges.get(targetInfo.edgeKey); 
+                if (!edge) return;
+                
+                const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2); 
+                unitX = mid.x; 
+                unitY = mid.y;
+                
+                const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
+                const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === targetUnit.id);
+                
+                if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
+                    const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
+                    const p1 = axialToPixel(edge.q1, edge.r1); 
+                    const p2 = axialToPixel(edge.q2, edge.r2);
+                    let dx = p2.x - p1.x, dy = p2.y - p1.y; 
+                    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+                    let perpX = -dy / len, perpY = dx / len;
+                    
+                    // --- FIX: Use the scaled offset here ---
+                    unitX += perpX * scaledOffset * offsetSign * (0.5);
+                    unitY += perpY * scaledOffset * offsetSign * (0.5);
                 }
-            });
+            } else return;
+            
+            ctx.beginPath(); 
+            ctx.arc(unitX, unitY, unitSizeToHighlight, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; 
+            ctx.lineWidth = 3; 
+            ctx.stroke();
         }
+    });
+}
 
         function drawSword(ctx, centerX, centerY, symbolDisplayRadius, symbolColor) {
             const scale = symbolDisplayRadius * 0.75; 
@@ -4255,10 +4298,13 @@ function drawAnimations() {
         const unitToAnimate = anim.unit || anim.attacker;
         
         if (anim.type === 'attack_lunge' || anim.type === 'attack_projectile') {
-            // ... (All attack animation logic remains unchanged) ...
             const startPos = getUnitScreenPosition(unitToAnimate);
             if (!startPos) { stillAnimating.push(anim); return; }
-            const drawRadius = unitToAnimate.isFortified ? FORTIFIED_UNIT_DRAW_SIZE : UNIT_DRAW_SIZE_ON_EDGE;
+            
+            // --- FIX: Scale the unit size for attack animations ---
+            const baseSize = unitToAnimate.isFortified ? FORTIFIED_UNIT_DRAW_SIZE : UNIT_DRAW_SIZE_ON_EDGE;
+            const drawRadius = baseSize * gameState.renderScale;
+
             if (anim.type === 'attack_lunge') {
                 const targetPos = getUnitScreenPosition(anim.target);
                 if (!targetPos) { stillAnimating.push(anim); return; }
@@ -4310,10 +4356,13 @@ function drawAnimations() {
         } else if (anim.type === 'fortify' || anim.type === 'unfortify') {
              const startPos = getUnitScreenPosition(unitToAnimate);
              if (!startPos && anim.type === 'fortify') { stillAnimating.push(anim); return; }
+             
+             // --- FIX: Scale the unit size during fortify animation ---
+             const fortifyDrawRadius = FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale;
+
             if (anim.type === 'fortify') {
                  const [q, r] = anim.targetTileKey.split(',').map(Number);
                  const endPos = axialToPixel(q, r);
-                 const fortifyDrawRadius = FORTIFIED_UNIT_DRAW_SIZE;
                  const travelPhaseDuration = 0.4; 
                  if (progress < travelPhaseDuration) {
                      let travelProgress = progress / travelPhaseDuration;
@@ -4329,7 +4378,10 @@ function drawAnimations() {
                      const easedRingProgress = Math.pow(ringPhaseProgress, 2);
                      const ringOpacity = easedRingProgress;
                      const ringColor = anim.unit.player === 1 ? `rgba(91, 148, 255, ${ringOpacity})` : `rgba(255, 99, 132, ${ringOpacity})`;
-                     const currentHexSize = HEX_SIZE * easedRingProgress;
+                     
+                     // --- FIX: Scale the expanding hex ring ---
+                     const currentHexSize = HEX_SIZE * gameState.renderScale * easedRingProgress;
+                     
                      ctx.strokeStyle = ringColor;
                      ctx.lineWidth = 4;
                      ctx.beginPath();
@@ -4347,12 +4399,15 @@ function drawAnimations() {
                  const [q, r] = anim.startTileKey.split(',').map(Number);
                  const unfortifyStartPos = axialToPixel(q, r);
                 if (progress < collapsePhaseDuration) {
-                    drawSingleUnit(ctx, anim.unit, unfortifyStartPos.x, unfortifyStartPos.y, FORTIFIED_UNIT_DRAW_SIZE, '#000');
+                    drawSingleUnit(ctx, anim.unit, unfortifyStartPos.x, unfortifyStartPos.y, fortifyDrawRadius, '#000');
                     let phaseProgress = progress / collapsePhaseDuration;
                     const easedProgress = Math.pow(phaseProgress, 2);
                     const ringOpacity = 1.0 - easedProgress;
                     const ringColor = anim.unit.player === 1 ? `rgba(91, 148, 255, ${ringOpacity})` : `rgba(255, 99, 132, ${ringOpacity})`;
-                    const currentHexSize = HEX_SIZE * (1.0 - easedProgress);
+                    
+                    // --- FIX: Scale the collapsing hex ring ---
+                    const currentHexSize = HEX_SIZE * gameState.renderScale * (1.0 - easedProgress);
+                    
                     ctx.strokeStyle = ringColor;
                     ctx.lineWidth = 4;
                     ctx.beginPath();
@@ -4371,7 +4426,10 @@ function drawAnimations() {
                     const easedProgress = 1 - Math.pow(1 - phaseProgress, 3);
                     const currentX = lerp(unfortifyStartPos.x, endPos.x, easedProgress);
                     const currentY = lerp(unfortifyStartPos.y, endPos.y, easedProgress);
-                    drawSingleUnit(ctx, anim.unit, currentX, currentY, UNIT_DRAW_SIZE_ON_EDGE, '#FFF');
+                    
+                    // --- FIX: Scale the unit size for edge movement ---
+                    const edgeDrawRadius = UNIT_DRAW_SIZE_ON_EDGE * gameState.renderScale;
+                    drawSingleUnit(ctx, anim.unit, currentX, currentY, edgeDrawRadius, '#FFF');
                 }
             }
         } else if (anim.type === 'build_bridge') {
@@ -4383,54 +4441,46 @@ function drawAnimations() {
 
             const targetEdgePos = getEdgeMidpoint(targetEdge.q1, targetEdge.r1, targetEdge.q2, targetEdge.r2);
             
-            // Define the "build" position near the edge
             const buildPos = {
-                x: lerp(startPos.x, targetEdgePos.x, 0.4), // Move 40% of the way to the edge
+                x: lerp(startPos.x, targetEdgePos.x, 0.4), 
                 y: lerp(startPos.y, targetEdgePos.y, 0.4)
             };
 
             let currentPos = { x: 0, y: 0 };
             
-            // --- Phase 1: Move FORWARD, fade in main body (0 -> 0.25) ---
             if (progress < 0.25) {
                 const phaseProgress = progress / 0.25;
                 currentPos.x = lerp(startPos.x, buildPos.x, phaseProgress);
                 currentPos.y = lerp(startPos.y, buildPos.y, phaseProgress);
-                
                 ctx.globalAlpha = phaseProgress;
-                drawBridge(targetEdge, '#8B4513'); // Main body only
+                drawBridge(targetEdge, '#8B4513'); 
                 ctx.globalAlpha = 1.0;
             }
-            // --- Phase 2: Move BACK (0.25 -> 0.5) ---
             else if (progress < 0.5) {
                 const phaseProgress = (progress - 0.25) / 0.25;
                 currentPos.x = lerp(buildPos.x, startPos.x, phaseProgress);
                 currentPos.y = lerp(buildPos.y, startPos.y, phaseProgress);
-                
-                drawBridge(targetEdge, '#8B4513'); // Main body is now solid
+                drawBridge(targetEdge, '#8B4513');
             }
-            // --- Phase 3: Move FORWARD again, fade in planks (0.5 -> 0.75) ---
             else if (progress < 0.75) {
                 const phaseProgress = (progress - 0.5) / 0.25;
                 currentPos.x = lerp(startPos.x, buildPos.x, phaseProgress);
                 currentPos.y = lerp(startPos.y, buildPos.y, phaseProgress);
-
-                drawBridge(targetEdge, '#8B4513'); // Draw solid main body first
+                drawBridge(targetEdge, '#8B4513');
                 ctx.globalAlpha = phaseProgress;
-                drawBridge(targetEdge, 'transparent'); // Draw planks on top with fade
+                drawBridge(targetEdge, 'transparent'); 
                 ctx.globalAlpha = 1.0;
             }
-            // --- Phase 4: Move BACK again (0.75 -> 1.0) ---
             else {
                 const phaseProgress = (progress - 0.75) / 0.25;
                 currentPos.x = lerp(buildPos.x, startPos.x, phaseProgress);
                 currentPos.y = lerp(buildPos.y, startPos.y, phaseProgress);
-                
-                drawBridge(targetEdge); // Draw full, solid bridge
+                drawBridge(targetEdge); 
             }
             
-            // Draw the builder at its calculated current position for this frame
-            drawSingleUnit(ctx, builder, currentPos.x, currentPos.y, UNIT_DRAW_SIZE_ON_EDGE);
+            // --- FIX: Scale the builder unit size ---
+            const unitSize = UNIT_DRAW_SIZE_ON_EDGE * gameState.renderScale;
+            drawSingleUnit(ctx, builder, currentPos.x, currentPos.y, unitSize);
         }
         
         stillAnimating.push(anim);
@@ -4587,14 +4637,8 @@ function drawAnimations() {
         }
         
         function updateSelectedUnitInfoPanel() {
-            if (gameState.mapMakerMode) {
-                if (event.button === 0) { // Left Mouse Button
-                    applyMapMakerBrush(x, y);
-                } else if (event.button === 2) { // Right Mouse Button
-                    eraseAt(x, y);
-                }
-                return;
-            }
+            // --- FIX: Removed problematic mapMakerMode check causing ReferenceError ---
+            
             const { selectedUnit, currentActionState } = gameState;
 
             if (currentActionState !== ACTION_STATES.SELECTING_ATTACK_TARGET) {
@@ -4894,27 +4938,21 @@ function getMaxUnitsForCurrentMap() {
 function getMapMakerBaseCampTileKeys() {
     const baseCampTileKeys = new Set();
     
-    // Check Player 1
-    const p1Data = gameState.baseCampPositions.player1;
-    if (Array.isArray(p1Data)) {
-        // Expansive Mode (Array of tile keys)
-        p1Data.forEach(k => baseCampTileKeys.add(k));
-    } else if (typeof p1Data === 'string') {
-        // Standard Mode (Edge key string)
-        const [h1, h2] = parseEdgeKey(p1Data);
-        if (!isNaN(h1.q)) baseCampTileKeys.add(getTileKey(h1.q, h1.r));
-        if (!isNaN(h2.q)) baseCampTileKeys.add(getTileKey(h2.q, h2.r));
-    }
+    const processPlayerData = (data) => {
+        if (!data) return;
+        if (Array.isArray(data)) {
+            // Expansive Mode: Data is an array of tile keys ['q,r', 'q,r']
+            data.forEach(k => baseCampTileKeys.add(k));
+        } else if (typeof data === 'string') {
+            // Standard Mode: Data is an edge key string 'q,r_q,r'
+            const [h1, h2] = parseEdgeKey(data);
+            if (!isNaN(h1.q)) baseCampTileKeys.add(getTileKey(h1.q, h1.r));
+            if (!isNaN(h2.q)) baseCampTileKeys.add(getTileKey(h2.q, h2.r));
+        }
+    };
 
-    // Check Player 2
-    const p2Data = gameState.baseCampPositions.player2;
-    if (Array.isArray(p2Data)) {
-        p2Data.forEach(k => baseCampTileKeys.add(k));
-    } else if (typeof p2Data === 'string') {
-        const [h1, h2] = parseEdgeKey(p2Data);
-        if (!isNaN(h1.q)) baseCampTileKeys.add(getTileKey(h1.q, h1.r));
-        if (!isNaN(h2.q)) baseCampTileKeys.add(getTileKey(h2.q, h2.r));
-    }
+    processPlayerData(gameState.baseCampPositions.player1);
+    processPlayerData(gameState.baseCampPositions.player2);
     
     return baseCampTileKeys;
 }
@@ -5074,21 +5112,33 @@ function getEdgeCost(unit, edgeKey) {
 
         function findSupplyPath(startFortTileKey, player) {
             // If the player's flag is stolen, they cannot have a supply line.
-            const playerFlag = gameState.flags[`p${player}`];
+            const playerFlag = gameState.flags[`p${player}_flag`]; 
             if (playerFlag && playerFlag.status === 'carried') {
                 return null;
             }
 
-            const baseEdgeKey = gameState.baseCampPositions[`player${player}`];
-            const [baseH1, baseH2] = parseEdgeKey(baseEdgeKey);
-            
+            // --- FIX: Normalized Base Camp Tiles retrieval ---
+            const rawBaseData = gameState.baseCampPositions[`player${player}`];
+            let baseTiles = [];
+            if (Array.isArray(rawBaseData)) {
+                baseTiles = rawBaseData;
+            } else if (typeof rawBaseData === 'string') {
+                const [h1, h2] = parseEdgeKey(rawBaseData);
+                if (!isNaN(h1.q)) baseTiles.push(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
+            }
+
             // The "start" for our pathfinding are all edges adjacent to the fort
             const startTile = gameState.tiles.get(startFortTileKey);
             if (!startTile) return null;
             const startEdges = getEdgesOfTile(startTile.q, startTile.r);
             
-            // The "goals" are all edges adjacent to either base tile
-            const endEdges = new Set([...getEdgesOfTile(baseH1.q, baseH1.r), ...getEdgesOfTile(baseH2.q, baseH2.r)]);
+            // The "goals" are all edges adjacent to ANY base tile
+            const endEdges = new Set();
+            baseTiles.forEach(tileKey => {
+                const [q, r] = tileKey.split(',').map(Number);
+                getEdgesOfTile(q, r).forEach(e => endEdges.add(e));
+            });
 
             let frontier = [];
             for (const edge of startEdges) {
@@ -5156,18 +5206,22 @@ function getEdgeCost(unit, edgeKey) {
                 return; 
             }
 
+            // --- FIX: Get Normalized Base Tiles ---
+            const rawBaseData = gameState.baseCampPositions[playerSupplyKey];
+            let baseTiles = [];
+            if (Array.isArray(rawBaseData)) {
+                baseTiles = rawBaseData;
+            } else if (typeof rawBaseData === 'string') {
+                const [h1, h2] = parseEdgeKey(rawBaseData);
+                if (!isNaN(h1.q)) baseTiles.push(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
+            }
+
             // Reset all non-base supply lines for the player to start fresh
             gameState.units.forEach(unit => {
                 if (unit.player === playerNum && unit.isFortified) {
-                    const baseEdgeKey = DEFAULT_FLAG_HOME_POSITIONS[playerSupplyKey];
-                    // Safety check for base edge
-                    if (baseEdgeKey) {
-                        const playerBaseTiles = [baseEdgeKey.split('_')[0], baseEdgeKey.split('_')[1]];
-                        if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                             unit.supplyLine = null;
-                        }
-                    } else {
-                        unit.supplyLine = null;
+                    if (!baseTiles.includes(unit.fortifiedTileKey)) {
+                         unit.supplyLine = null;
                     }
                 }
             });
@@ -5177,18 +5231,15 @@ function getEdgeCost(unit, edgeKey) {
             const fortifiedUnits = gameState.units.filter(u => u.player === playerNum && u.isFortified);
 
             fortifiedUnits.forEach(unit => {
-                const baseEdgeKey = DEFAULT_FLAG_HOME_POSITIONS[playerSupplyKey];
-                if (baseEdgeKey) {
-                    const playerBaseTiles = [baseEdgeKey.split('_')[0], baseEdgeKey.split('_')[1]];
-                    if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                        const pathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
-                        if (pathData) {
-                            potentialSupplies.push({
-                                unit: unit,
-                                cost: Math.round(pathData.cost), 
-                                pathData: pathData
-                            });
-                        }
+                // Check if not in base tiles using the normalized array
+                if (!baseTiles.includes(unit.fortifiedTileKey)) {
+                    const pathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
+                    if (pathData) {
+                        potentialSupplies.push({
+                            unit: unit,
+                            cost: Math.round(pathData.cost), 
+                            pathData: pathData
+                        });
                     }
                 }
             });
@@ -5224,6 +5275,7 @@ function fundNewFortification(unit) {
     const player = unit.player;
     const playerSupplyKey = `player${player}`;
 
+    // Supply calculation now relies on the fixed findSupplyPath logic
     const pathData = findSupplyPath(unit.fortifiedTileKey, player);
 
     if (pathData && pathData.cost <= gameState.supplyPoints[playerSupplyKey]) {
@@ -5250,21 +5302,27 @@ function fundNewFortification(unit) {
 
         function recalculateSupplyLinesForPlayer(playerNum) {
             logAction(`P${playerNum}'s flag has been returned! Supply lines are re-established.`, playerNum);
+            
+            // --- FIX: Normalized Base Tiles ---
+            const rawBaseData = gameState.baseCampPositions[`player${playerNum}`];
+            let baseTiles = [];
+            if (Array.isArray(rawBaseData)) {
+                baseTiles = rawBaseData;
+            } else if (typeof rawBaseData === 'string') {
+                const [h1, h2] = parseEdgeKey(rawBaseData);
+                if (!isNaN(h1.q)) baseTiles.push(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
+            }
+
             gameState.units.forEach(unit => {
                 if (unit.player === playerNum && unit.isFortified) {
-                    const baseEdgeKey = DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`];
-                    let playerBaseTiles = [];
-                    
-                    // --- FIX: Safety check ---
-                    if (baseEdgeKey) {
-                        playerBaseTiles = [baseEdgeKey.split('_')[0], baseEdgeKey.split('_')[1]];
-                    }
-
-                    if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                    if (!baseTiles.includes(unit.fortifiedTileKey)) {
                         unit.supplyLine = findSupplyPath(unit.fortifiedTileKey, unit.player);
                     }
                 }
             });
+            // Recalculate costs too
+            recalculatePlayerSupplyNetwork(playerNum);
         }
 
         function attemptToResupplyForts(playerNum) {
@@ -5277,17 +5335,21 @@ function fundNewFortification(unit) {
 
             if (unsuppliedForts.length === 0) return;
 
+            // --- FIX: Normalize Base Tiles ---
+            const rawBaseData = gameState.baseCampPositions[playerSupplyKey];
+            let baseTiles = [];
+            if (Array.isArray(rawBaseData)) {
+                baseTiles = rawBaseData;
+            } else if (typeof rawBaseData === 'string') {
+                const [h1, h2] = parseEdgeKey(rawBaseData);
+                if (!isNaN(h1.q)) baseTiles.push(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
+            }
+
             // Find potential supply lines and their costs for all unsupplied forts
             const potentialResupplies = [];
             unsuppliedForts.forEach(unit => {
-                const baseEdgeKey = DEFAULT_FLAG_HOME_POSITIONS[playerSupplyKey];
-                let playerBaseTiles = [];
-                // --- FIX: Safety check ---
-                if (baseEdgeKey) {
-                    playerBaseTiles = [baseEdgeKey.split('_')[0], baseEdgeKey.split('_')[1]];
-                }
-
-                if (!playerBaseTiles.includes(unit.fortifiedTileKey)) {
+                if (!baseTiles.includes(unit.fortifiedTileKey)) {
                     const supplyPathData = findSupplyPath(unit.fortifiedTileKey, playerNum);
                     if (supplyPathData) {
                         potentialResupplies.push({
@@ -7520,14 +7582,20 @@ function applyStartOfTurnHealing() {
         }
             
         let isSupplied = false;
-        const playerBaseEdgeKey = DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`];
         
-        // Ensure base positions exist before checking
-        if (playerBaseEdgeKey) {
-            const playerBaseTiles = [playerBaseEdgeKey.split('_')[0], playerBaseEdgeKey.split('_')[1]];
-            if (playerBaseTiles.includes(unit.fortifiedTileKey)) {
-                isSupplied = true;
-            }
+        // --- FIX: Normalize Base Tiles for Check ---
+        const rawBaseData = gameState.baseCampPositions[`player${unit.player}`];
+        let baseTiles = [];
+        if (Array.isArray(rawBaseData)) {
+            baseTiles = rawBaseData;
+        } else if (typeof rawBaseData === 'string') {
+            const [h1, h2] = parseEdgeKey(rawBaseData);
+            if (!isNaN(h1.q)) baseTiles.push(getTileKey(h1.q, h1.r));
+            if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
+        }
+        
+        if (baseTiles.includes(unit.fortifiedTileKey)) {
+            isSupplied = true;
         }
 
         if (!isSupplied && unit.supplyLine && unit.supplyLine.path) {
@@ -8759,7 +8827,6 @@ function loadMapFromDataObject(mapData) {
     }
 
     // 1. Determine Radius
-    // If the file has a radius, use it. If not (legacy file), infer it from the furthest tile.
     let loadedRadius = mapData.radius;
     if (!loadedRadius) {
         let maxCoord = 0;
@@ -8772,11 +8839,9 @@ function loadMapFromDataObject(mapData) {
     }
 
     // 2. Resize to match loaded map size
-    // This sets the correct render scale, mode (Arcade vs Local), and grid boundaries.
     resizeMapGrid(loadedRadius);
 
     // 3. Clear and Repopulate
-    // resizeMapGrid clears the board, but we explicitly ensure units are empty before pushing loaded ones.
     gameState.units = [];
     gameState.tiles.clear();
     gameState.edges.forEach(edge => edge.units = []);
@@ -8796,8 +8861,6 @@ function loadMapFromDataObject(mapData) {
         const edge = gameState.edges.get(unitInfo.position);
         if (edge) {
             edge.units.push(newUnit);
-        } else {
-            console.error("Failed to place loaded unit on edge:", unitInfo.position);
         }
     });
 
@@ -8806,11 +8869,38 @@ function loadMapFromDataObject(mapData) {
     gameState.flags.p1_flag.homePosition = mapData.baseCampPositions.player1;
     gameState.flags.p2_flag.homePosition = mapData.baseCampPositions.player2;
 
-    // Determine the correct slider value that corresponds to the loaded base camp data.
-    const sliderToRotations = [3, 2, 1, 0, -1, -2];
-    let matchingSliderValue = '3'; // Default to 0-degree rotation
+    // --- SYNC FLAGS TO TILES ---
+    const setBaseFlags = (baseData) => {
+        if (!baseData) return;
+        if (Array.isArray(baseData)) {
+            // Expansive: Array of tile keys
+            baseData.forEach(k => {
+                const tile = gameState.tiles.get(k);
+                if (tile) { 
+                    tile.type = TILE_TYPES.PLAINS; 
+                    tile.isBaseCampTile = true; 
+                }
+            });
+        } else if (typeof baseData === 'string') {
+            // Standard: Edge key string
+            const [h1, h2] = parseEdgeKey(baseData);
+            [getTileKey(h1.q, h1.r), getTileKey(h2.q, h2.r)].forEach(k => {
+                const tile = gameState.tiles.get(k);
+                if (tile) { 
+                    tile.type = TILE_TYPES.PLAINS; 
+                    tile.isBaseCampTile = true; 
+                }
+            });
+        }
+    };
+    setBaseFlags(gameState.baseCampPositions.player1);
+    setBaseFlags(gameState.baseCampPositions.player2);
+    // ---------------------------
 
-    // Only attempt to match rotation if a base camp actually exists (not null like in Arcade maps)
+    // Determine the correct slider value
+    const sliderToRotations = [3, 2, 1, 0, -1, -2];
+    let matchingSliderValue = '3'; 
+
     if (mapData.baseCampPositions.player1) {
         for (let i = 0; i < sliderToRotations.length; i++) {
             const rotations = sliderToRotations[i];
@@ -8821,12 +8911,11 @@ function loadMapFromDataObject(mapData) {
 
             if (testEdgeKey === mapData.baseCampPositions.player1) {
                 matchingSliderValue = i.toString();
-                break; // Found the matching rotation, exit the loop.
+                break; 
             }
         }
     }
 
-    // Set the slider's visual position to match the loaded data.
     const bcSlider = document.getElementById('baseCampSlider');
     if (bcSlider) bcSlider.value = matchingSliderValue;
 
@@ -9172,12 +9261,36 @@ function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
         }
 
 function startMapTest() {
+    // 1. Unit Validation (Applies to ALL map sizes)
     const p1Units = gameState.units.filter(u => u.player === 1).length;
     const p2Units = gameState.units.filter(u => u.player === 2).length;
 
     if (p1Units === 0 || p2Units === 0) {
         showInstruction("Map must contain at least one unit for each player to start a test.", 3000);
         return; 
+    }
+
+    // 2. Base Camp Validation (Applies ONLY to Expansive R=4 maps)
+    if (gameState.gridRadius === 4) {
+        const p1Base = gameState.baseCampPositions.player1;
+        const p2Base = gameState.baseCampPositions.player2;
+
+        // Check if bases are arrays (Expansive format) and have exactly 3 tiles
+        const p1Complete = Array.isArray(p1Base) && p1Base.length === 3;
+        const p2Complete = Array.isArray(p2Base) && p2Base.length === 3;
+
+        if (!p1Complete || !p2Complete) {
+            let msg = "Cannot start test: ";
+            if (!p1Complete && !p2Complete) {
+                msg += "Both players need complete Base Camps (3 tiles).";
+            } else if (!p1Complete) {
+                msg += "Player 1 needs a complete Base Camp (3 tiles).";
+            } else {
+                msg += "Player 2 needs a complete Base Camp (3 tiles).";
+            }
+            showInstruction(msg, 4000);
+            return;
+        }
     }
 
     console.log("Starting map test...");
@@ -9193,17 +9306,20 @@ function startMapTest() {
     const units = mapMakerStateBackup.units.map(u => ({ ...u, typeName: u.typeName.toUpperCase() }));
     initializeGrid(tileMap, units);
     gameState.baseCampPositions = mapMakerStateBackup.baseCampPositions;
-    gameState.flags.p1_flag.homePosition = mapMakerStateBackup.baseCampPositions.player1;
-    gameState.flags.p2_flag.homePosition = mapMakerStateBackup.baseCampPositions.player2;
-
+    
+    // Ensure flags are linked to the positions (handling both Edge strings and Tile Arrays implicitly via game logic)
+    if (gameState.flags) {
+        gameState.flags.p1_flag.homePosition = mapMakerStateBackup.baseCampPositions.player1;
+        gameState.flags.p2_flag.homePosition = mapMakerStateBackup.baseCampPositions.player2;
+    }
 
     // 4. Configure the UI for test mode
     const testButtonContainer = document.getElementById('testButtonContainer');
     const testStopButton = document.getElementById('testStopButton');
     if (testButtonContainer && testStopButton) {
-        testButtonContainer.style.display = 'block'; // Keep this from our previous layout fix
+        testButtonContainer.style.display = 'block'; 
         testStopButton.textContent = 'Stop Test';
-        testStopButton.className = 'action-button'; // Set the base class
+        testStopButton.className = 'action-button'; 
 
         testStopButton.style.backgroundColor = '#3090D0'; 
         testStopButton.style.boxShadow = '0 3px #2080B0';
@@ -9249,13 +9365,12 @@ function getMapMakerBaseCampTileKeys() {
 }
 
 function performFloodFill(startQ, startR) {
-    const baseCampTileKeys = getMapMakerBaseCampTileKeys();
     const startKey = getTileKey(startQ, startR);
     const startTile = gameState.tiles.get(startKey);
     if (!startTile) return;
 
     // Prevent starting a fill ON a base camp tile 
-    if (baseCampTileKeys.has(startKey)) {
+    if (startTile.isBaseCampTile) {
         showInstruction("Cannot change the terrain of a base camp tile.", 2000);
         return;
     }
@@ -9275,7 +9390,7 @@ function performFloodFill(startQ, startR) {
         const currentTile = gameState.tiles.get(currentKey);
 
         // Prevent the fill from SPREADING to a base camp tile
-        if (baseCampTileKeys.has(currentKey)) {
+        if (currentTile.isBaseCampTile) {
             continue; // Skip this tile and move to the next in the queue
         }
 
@@ -10043,6 +10158,10 @@ function eraseAt(x, y) {
         // Otherwise, erase the tile by setting it to plains
         const tile = gameState.tiles.get(hexKey);
         if (tile) {
+            if (tile.isBaseCampTile) {
+                showInstruction("Cannot erase a base camp tile.", 1500);
+                return;
+            }
             tile.type = TILE_TYPES.PLAINS;
         }
     }
@@ -10103,12 +10222,15 @@ function updateBaseCampLocations(sliderValue) {
 
     const defaults = BASE_CAMP_DEFAULTS[currentRadius];
     
-    // 1. Clear old base camp tiles (Reset to Plains)
+    // 1. Clear old base camp tiles (Reset to Plains and remove flag)
     const oldP1Tiles = getBaseCampTiles(gameState.baseCampPositions.player1);
     const oldP2Tiles = getBaseCampTiles(gameState.baseCampPositions.player2);
     [...oldP1Tiles, ...oldP2Tiles].forEach(key => {
         const tile = gameState.tiles.get(key);
-        if (tile) tile.type = TILE_TYPES.PLAINS;
+        if (tile) {
+            tile.type = TILE_TYPES.PLAINS;
+            tile.isBaseCampTile = false; // Clear the property
+        }
     });
 
     // 2. Calculate new Rotated Tile Keys
@@ -10129,7 +10251,6 @@ function updateBaseCampLocations(sliderValue) {
     let newP2EdgeKey = null;
     
     if (currentRadius === 3) {
-        // FIX: Correctly parse simple tile keys "q,r" instead of treating them as edge keys
         const p1_coords = p1_rotated_tiles.map(k => {
             const [q, r] = k.split(',').map(Number);
             return { q, r };
@@ -10139,7 +10260,6 @@ function updateBaseCampLocations(sliderValue) {
             return { q, r };
         });
 
-        // Assuming standard base has 2 tiles, creating an edge between them
         if (p1_coords.length >= 2) {
             newP1EdgeKey = getEdgeKey(p1_coords[0].q, p1_coords[0].r, p1_coords[1].q, p1_coords[1].r);
         }
@@ -10157,10 +10277,13 @@ function updateBaseCampLocations(sliderValue) {
         if (gameState.flags.p2_flag) gameState.flags.p2_flag.homePosition = newP2EdgeKey;
     }
 
-    // 5. Set new base camp tiles to Plains (ensuring they are valid for movement/fortification)
+    // 5. Set new base camp tiles to Plains and apply the Lock Flag
     [...p1_rotated_tiles, ...p2_rotated_tiles].forEach(key => {
         const tile = gameState.tiles.get(key);
-        if (tile) tile.type = TILE_TYPES.PLAINS;
+        if (tile) {
+            tile.type = TILE_TYPES.PLAINS;
+            tile.isBaseCampTile = true; // Set the property
+        }
     });
 }
 
@@ -10228,8 +10351,14 @@ function applyMapMakerBrush(x, y) {
         // Logic: Toggle or Add
         let newBase = [...currentBase];
         if (newBase.includes(hexKey)) {
+            // --- REMOVE FROM BASE ---
             newBase = newBase.filter(k => k !== hexKey);
+            const tile = gameState.tiles.get(hexKey);
+            if (tile) {
+                tile.isBaseCampTile = false; // Unlock the tile
+            }
         } else {
+            // --- ADD TO BASE ---
             if (newBase.length >= 3) {
                 showInstruction("Base camp max size is 3 tiles.", 1500);
                 return;
@@ -10240,28 +10369,27 @@ function applyMapMakerBrush(x, y) {
                 showInstruction("Base tiles must be contiguous.", 1500);
                 return;
             }
+            
+            const tile = gameState.tiles.get(hexKey);
+            if (tile) {
+                tile.type = TILE_TYPES.PLAINS; // Force Plains
+                tile.isBaseCampTile = true;    // Lock the tile
+            }
         }
 
         // Apply
         gameState.baseCampPositions[playerKey] = newBase;
-        const tile = gameState.tiles.get(hexKey);
-        if (tile) tile.type = TILE_TYPES.PLAINS;
 
     // --- TILE BRUSH LOGIC ---
     } else if (brush.type === 'tile') {
-        
-        // --- FIX: PROTECT BASE CAMP TILES ---
-        const baseCampTileKeys = getMapMakerBaseCampTileKeys();
-        
-        if (baseCampTileKeys.has(hexKey)) {
-            console.warn(`[PROTECTION] Blocked painting on base camp tile: ${hexKey}`);
-            showInstruction("Cannot change the terrain of a base camp tile.", 2000);
-            return; // Block painting
-        }
-        // ------------------------------------
-
         const tile = gameState.tiles.get(hexKey);
         if (tile) {
+            // --- PROPERTY CHECK ---
+            if (tile.isBaseCampTile) {
+                showInstruction("Cannot change the terrain of a base camp tile.", 2000);
+                return; // Block painting
+            }
+
             tile.type = brush.value;
             // Remove invalid units on water
             if (brush.value === TILE_TYPES.WATER) {
@@ -10293,6 +10421,7 @@ function applyMapMakerBrush(x, y) {
             return;
         }
 
+        // ... (Rest of unit logic remains the same) ...
         if (!isEdgePlaceable(closestEdgeKey)) {
             showInstruction("Cannot place a unit on this edge.", 1500);
             return;
