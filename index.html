@@ -4652,7 +4652,9 @@ function drawAnimations() {
         }
         
         function updateSelectedUnitInfoPanel() {
-            // --- FIX: Removed problematic mapMakerMode check causing ReferenceError ---
+            // --- FIX: Prevent UI updates in Map Maker mode ---
+            // This ensures the Action Log doesn't pop up over the Palette on mobile touches.
+            if (gameState.mapMakerMode) return;
             
             const { selectedUnit, currentActionState } = gameState;
 
@@ -4744,7 +4746,7 @@ function drawAnimations() {
                 ui.attackButton.textContent = "Attack"; ui.attackButton.classList.remove('selecting');
             }
         }
-
+        
         function showRespawnModal(player) {
             const overlay = document.getElementById('respawnModalOverlay');
             const content = document.getElementById('respawnModalContent');
