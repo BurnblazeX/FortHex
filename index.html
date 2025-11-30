@@ -1863,7 +1863,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "indev B28//3";
+        const BUILD_VERSION = "B28//3";
         const HEX_SIZE = 70; 
         const CANVAS_WIDTH_NORMAL = (2 * 3 + 1.5) * (HEX_SIZE * Math.sqrt(3));
         const CANVAS_HEIGHT_NORMAL = (2 * 3 + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;
@@ -5078,9 +5078,10 @@ function getEdgeCost(unit, edgeKey) {
     }
 
     const finalCost = baseCost + fortificationPenalty;
-    return (baseCost === 3) ? finalCost : Math.min(finalCost, MAX_MOVEMENT_COST);
+    return Math.min(finalCost, MAX_MOVEMENT_COST);
 }
-        // --- Pathfinding ---
+
+// --- Pathfinding ---
         function getRotationallyAdjacentEdges(currentEdgeKey) {
             const adjacentEdges = new Set(); const [h1, h2] = parseEdgeKey(currentEdgeKey);
             if (isNaN(h1.q) || isNaN(h2.q)) return [];
@@ -5444,16 +5445,37 @@ function getPotentialUnfortifyTargets(unit) {
     if (!unit || !unit.isFortified || unit.positionType !== 'center') return [];
     const fortifiedTile = gameState.tiles.get(unit.position); if (!fortifiedTile) return [];
     
-    const playerHomeFlagEdge = gameState.baseCampPositions[`player${unit.player}`];
+    // Use the generic name as it can be a String or Array
+    const playerBaseData = gameState.baseCampPositions[`player${unit.player}`];
     const validTargets = [];
 
     getNeighbors(fortifiedTile.q, fortifiedTile.r).forEach(neighborCoords => {
         const edgeKey = getEdgeKey(fortifiedTile.q, fortifiedTile.r, neighborCoords.q, neighborCoords.r);
         
-        // Prevent unfortifying onto the player's own home flag tile.
-        if (edgeKey === playerHomeFlagEdge) {
+        // --- FIX: Check restricted base edges for both map types ---
+        let isRestricted = false;
+        
+        if (Array.isArray(playerBaseData)) {
+            // Expansive Mode: Check if edge connects two of our own base tiles
+            // We know one tile is the fortified tile (unit.position)
+            const t1 = unit.position; 
+            const t2 = getTileKey(neighborCoords.q, neighborCoords.r);
+            
+            // If both tiles are in the base camp array, this is an internal edge -> Restricted
+            if (playerBaseData.includes(t1) && playerBaseData.includes(t2)) {
+                isRestricted = true;
+            }
+        } else {
+            // Standard Mode: Check specific edge key string
+            if (edgeKey === playerBaseData) {
+                isRestricted = true;
+            }
+        }
+
+        if (isRestricted) {
             return; // Skip this edge, it's not a valid target.
         }
+        // -----------------------------------------------------------
 
         const edge = gameState.edges.get(edgeKey);
         if (edge && getEdgeCost(unit, edgeKey) !== Infinity) {
@@ -9789,7 +9811,13 @@ function updateMainButtonsForTestMode(isTesting) {
 function enterMapMakerMode() {
     console.log("Entering Map Maker mode.");
     gameState.mapMakerMode = true;
+    
+    // --- FIX: Clear all gameplay selection states to prevent visual artifacts ---
     gameState.selectedUnit = null;
+    gameState.currentReachableMoves.clear();
+    resetActionSelectionStates();
+    // ---------------------------------------------------------------------------
+
     gameState.playerActionTaken.player1 = false;
     gameState.playerActionTaken.player2 = false;
 
