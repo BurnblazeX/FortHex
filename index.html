@@ -1863,7 +1863,7 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B28//3c";
+        const BUILD_VERSION = "B28//3d";
         const HEX_SIZE = 70; 
         const CANVAS_WIDTH_NORMAL = (2 * 3 + 1.5) * (HEX_SIZE * Math.sqrt(3));
         const CANVAS_HEIGHT_NORMAL = (2 * 3 + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;
@@ -2597,7 +2597,7 @@ function getUnitScreenPosition(unit) {
         }
 
         function isLand(tileType) {
-            return tileType === TILE_TYPES.PLAINS || tileType === TILE_TYPES.FOREST || tileType === TILE_TYPES.MOUNTAIN;
+            return tileType.name === 'Plains' || tileType.name === 'Forest' || tileType.name === 'Mountain';
         }
 
 function isEdgeAdjacentToSpearWall(unit, edgeKey) {
@@ -2967,7 +2967,7 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
 
         function pointDistance(p1, p2) { return Math.sqrt(distSq(p1,p2)); }
 
-function drawHexFill(q, r, tileType) {
+        function drawHexFill(q, r, tileType) {
             const { x, y } = axialToPixel(q, r);
             const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
 
@@ -2976,7 +2976,8 @@ function drawHexFill(q, r, tileType) {
 
             if (useFancyVisuals) {
                 // --- FANCY VISUALS ON ---
-                if (tileType === TILE_TYPES.MOUNTAIN) {
+                // FIX: Check name property instead of object reference to handle cloned Base Camp tiles
+                if (tileType.name === 'Mountain') {
                     const mountainColors = [
                         '#808080', '#707070', '#606060', '#707070', '#808080', '#A0A0A0'
                     ];
@@ -2996,7 +2997,7 @@ function drawHexFill(q, r, tileType) {
                         ctx.fillStyle = mountainColors[i];
                         ctx.fill();
                     }
-                } else if (tileType === TILE_TYPES.FOREST) {
+                } else if (tileType.name === 'Forest') {
                     const forestEdgeColors = [
                         '#209020', '#207020', '#206020', '#207020', '#209020', '#209F20'
                     ];
@@ -3028,7 +3029,7 @@ function drawHexFill(q, r, tileType) {
                     ctx.closePath();
                     ctx.fillStyle = topHexColor;
                     ctx.fill();
-                } else if (tileType === TILE_TYPES.WATER) {
+                } else if (tileType.name === 'Water') {
                     ctx.save();
                     ctx.translate(x, y);
                     ctx.rotate(-60 * Math.PI / 180);
@@ -3052,7 +3053,7 @@ function drawHexFill(q, r, tileType) {
                         ctx.fillRect(stripeX, -currentHexSize, stripeWidth + 1, currentHexSize * 2);
                     }
                     ctx.restore();
-                } else if (tileType === TILE_TYPES.PLAINS) {
+                } else if (tileType.name === 'Plains') {
                     // --- Logic for concentric Plains hexagons ---
                     const plainsColors = ['#70E070', '#7AE07A', '#85E085', '#90E090']; 
                     const plainsSizeMultipliers = [1.0, 0.75, 0.50, 0.25]; 
@@ -3087,11 +3088,12 @@ function drawHexFill(q, r, tileType) {
             } else {
                 // --- FANCY VISUALS OFF (SIMPLE SOLID COLORS) ---
                 let fallbackColor;
-                switch (tileType) {
-                    case TILE_TYPES.MOUNTAIN: fallbackColor = '#808080'; break;
-                    case TILE_TYPES.FOREST: fallbackColor = '#208020'; break;
-                    case TILE_TYPES.WATER: fallbackColor = '#80C0E0'; break;
-                    case TILE_TYPES.PLAINS: fallbackColor = '#90E090'; break;
+                // FIX: Check name property here too for consistency
+                switch (tileType.name) {
+                    case 'Mountain': fallbackColor = '#808080'; break;
+                    case 'Forest': fallbackColor = '#208020'; break;
+                    case 'Water': fallbackColor = '#80C0E0'; break;
+                    case 'Plains': fallbackColor = '#90E090'; break;
                     default: fallbackColor = tileType.color;
                 }
                 
@@ -11576,7 +11578,7 @@ document.querySelectorAll('.swap-choice').forEach(btn => {
         }
     </script>
           
-<div id="buildVersionDisplay">FortHex Build B28//3c</div>
+<div id="buildVersionDisplay">FortHex Build B28//3d</div>
 <div id="confettiContainer"></div>
 
 <div id="victoryInteractionBlocker" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1999; display: none; background-color: rgba(44, 62, 80, 0.4); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); transition: background-color 0.5s ease, backdrop-filter 0.5s ease;"></div>
