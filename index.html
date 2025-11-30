@@ -1870,8 +1870,12 @@
 
         // Gameplay Constants
         const RESPAWN_TURN_TIMER = 10;
-        const MAX_BASE_CAMP_TURNS = 7;
-        const MAX_UNITS_PER_PLAYER = 4;
+        const MAX_BASE_CAMP_TURNS = 5;
+        const MAP_SIZE_UNIT_LIMITS = {
+            2: 2, // Compact (Arcade)
+            3: 4, // Normal
+            4: 6  // Expansive
+        };
         const UNIT_CAPS = {
             Melee: 2,
             Archer: 2,
@@ -1904,6 +1908,8 @@
         const PATH_DRAW_PAUSE_DURATION_MS = 500; 
         const PATH_DRAW_HOVER_DELAY_MS = 1000; 
 
+
+        
         // Arcade Mode Constants
         const ARCADE_TURN_TIME_SEC = 30;
         const ARCADE_MAX_TURNS = 10;
@@ -2708,6 +2714,7 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
     gameState.swapState = 'none';
     gameState.unitToSwap = null;
     gameState.arcadeTotalTurns = 0;
+    gameState.arcadeGameStartedInteraction = false; // --- NEW: Flag to track start interaction ---
 
     ui.endTurnButton.classList.remove('arcade-timer-active');
     ui.endTurnButton.style.background = '';
@@ -3430,11 +3437,21 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
 function drawFlags() {
     if (gameState.gameMode === 'arcade') return;
     
+    // --- CUSTOMIZABLE FLAG SIZE ---
+    // Adjust this multiplier to change the size of the flag.
+    // 0.18 = Original small size
+    // 0.25 = Same size as a unit on an edge
+    // 0.30 = Same size as a fortified unit
+    const FLAG_SCALE_FACTOR = 0.21; 
+    // ------------------------------
+
     const renderFlagAt = (player, x, y) => {
         const teamColor = currentDrawingColors[`player${player}`].secondary;
         const flagIconColor = '#F0F0F0'; 
         const flagPoleColor = '#2c3e50';
-        const circleRadius = HEX_SIZE * 0.18;
+        
+        // Calculate size based on the multiplier and current zoom level
+        const circleRadius = (HEX_SIZE * gameState.renderScale) * FLAG_SCALE_FACTOR;
         const flagSize = circleRadius * 1.2; 
 
         ctx.save();
@@ -3493,9 +3510,6 @@ function drawFlags() {
     }
     // 3. MAP MAKER MODE (Standard Preview)
     else if (gameState.mapMakerMode && gameState.gridRadius === 3) {
-        // Standard mode in Map Maker usually sets flags in initializeGrid,
-        // but if we are live editing rotation, we might need to fallback to baseCampPositions edge key
-        // if flags aren't synced yet. However, `updateBaseCampLocations` syncs flags.
         if (gameState.flags) {
              Object.values(gameState.flags).forEach(flag => {
                 const edge = gameState.edges.get(flag.homePosition);
@@ -3835,7 +3849,7 @@ function drawFlags() {
             drawUnitSymbol(ctx, unit, x, y, radiusForSymbol, symbolColor);
         }
 
-        function drawUnits() {
+function drawUnits() {
             const isEffectivelyDragging = gameState.isDragging && !gameState.mapMakerMode;
             const animatedUnitIds = new Set(gameState.activeAnimations.map(a => (a.unit || a.attacker).id));
             const offsetDistance = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
@@ -3868,7 +3882,27 @@ function drawFlags() {
                     const tile = gameState.tiles.get(unit.position);
                     if (tile) {
                         const {x, y} = axialToPixel(tile.q, tile.r);
+                        
+                        // --- VISUAL FIX: Alternate Opacity if covering Flag ---
+                        let alpha = 1.0;
+                        if (gameState.flags && gameState.gridRadius === 4) {
+                            const myFlag = gameState.flags[`p${unit.player}_flag`];
+                            // Check if flag is at base and base is defined as an array (Expansive)
+                            if (myFlag && myFlag.status === 'at_base' && Array.isArray(myFlag.homePosition)) {
+                                const flagPos = calculateBaseCentroid(myFlag.homePosition);
+                                // Check if unit center is on top of the flag center
+                                if (flagPos && distSq({x, y}, flagPos) < 1) {
+                                    const time = Date.now();
+                                    // Pulse opacity full range 0.0 to 1.0
+                                    alpha = (Math.sin(time / 500) + 1) / 2; 
+                                }
+                            }
+                        }
+                        
+                        ctx.save();
+                        ctx.globalAlpha = alpha;
                         drawSingleUnit(ctx, unit, x, y, FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale);
+                        ctx.restore();
                     }
                 }
             });
@@ -3896,7 +3930,6 @@ function drawFlags() {
                 drawSingleUnit(ctx, unit, unitX, unitY, fullRadius);
             }
         }
-
 
 function drawMovementHighlights() {
     const unitForHighlights = gameState.isDragging ? gameState.draggingUnit : gameState.selectedUnit;
@@ -4535,11 +4568,13 @@ function drawAnimations() {
     gameState.activeAnimations = stillAnimating;
 }
 
-        function gameLoop() {
+            function gameLoop() {
             // --- ARCADE LOGIC ---
             if (gameState.gameMode === 'arcade' && !gameState.gameOver && !gameState.mapMakerMode) {
-                // ... (timer logic unchanged) ...
-                if (gameState.activeAnimations.length === 0) { 
+                // Check if we are waiting for P1 to start the game
+                const waitingForStart = gameState.globalTurnNumber === 1 && gameState.currentPlayer === 1 && !gameState.arcadeGameStartedInteraction;
+
+                if (gameState.activeAnimations.length === 0 && !waitingForStart) { 
                     gameState.arcadeTurnTimer -= 1/60; 
                     if (gameState.arcadeTurnTimer <= 0) {
                         gameState.arcadeTurnTimer = 0;
@@ -4559,7 +4594,8 @@ function drawAnimations() {
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // ... (color transition logic unchanged) ...
+            // ... (rest of function remains unchanged)
+            
             if (gameState.colorTransition.active) {
                 const elapsedTime = Date.now() - gameState.colorTransition.startTime;
                 const progress = Math.min(elapsedTime / COLOR_TRANSITION_DURATION_MS, 1);
@@ -4650,7 +4686,6 @@ function drawAnimations() {
             
             requestAnimationFrame(gameLoop);
         }
-
             // Function to set CSS Variables from the TEAM_COLORS object
             function updateCssVariables() {
                 const root = document.documentElement;
@@ -4735,10 +4770,26 @@ function drawAnimations() {
                         if (!isSelectingFortify) {
                             const edgeCoords = parseEdgeKey(selectedUnit.position);
                             if (edgeCoords && edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
-                                const tile1 = gameState.tiles.get(getTileKey(edgeCoords[0].q, edgeCoords[0].r));
-                                const tile2 = gameState.tiles.get(getTileKey(edgeCoords[1].q, edgeCoords[1].r));
-                                const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null;
-                                const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null;
+                                const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r);
+                                const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
+                                const tile1 = gameState.tiles.get(tile1Key);
+                                const tile2 = gameState.tiles.get(tile2Key);
+
+                                // --- FIX: Check for enemy base tiles here as well ---
+                                const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
+                                const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+                                const enemyBaseTileKeys = new Set();
+                                if (Array.isArray(enemyBaseData)) {
+                                    enemyBaseData.forEach(k => enemyBaseTileKeys.add(k));
+                                } else if (typeof enemyBaseData === 'string') {
+                                    const [h1, h2] = parseEdgeKey(enemyBaseData);
+                                    if (!isNaN(h1.q)) enemyBaseTileKeys.add(getTileKey(h1.q, h1.r));
+                                    if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
+                                }
+                                // ---------------------------------------------------
+
+                                const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key);
+                                const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key);
                                 fortifyDisabledCondition = !(canFortifyTile1 || canFortifyTile2) || selectedUnit.positionType === 'center';
                             } else {
                                 fortifyDisabledCondition = true;
@@ -4993,9 +5044,7 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
         }
 
 function getMaxUnitsForCurrentMap() {
-    if (gameState.gridRadius === 2) return 2; // Compact/Arcade
-    if (gameState.gridRadius === 4) return 6; // Expansive
-    return 4; // Standard (Radius 3)
+    return MAP_SIZE_UNIT_LIMITS[gameState.gridRadius] || 4;
 }
 
 function getMapMakerBaseCampTileKeys() {
@@ -5571,9 +5620,21 @@ function completeFortify(unitToFortify, targetTileKeyToFortify) {
              if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { showInstruction("Unit not on valid edge.", 2000); return; }
 
             const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
-            const enemyBaseEdgeKey = gameState.baseCampPositions[`player${enemyPlayer}`];
-            const [enemy_h1, enemy_h2] = parseEdgeKey(enemyBaseEdgeKey);
-            const enemyBaseTileKeys = new Set([getTileKey(enemy_h1.q, enemy_h1.r), getTileKey(enemy_h2.q, enemy_h2.r)]);
+            
+            // --- FIX: Correctly identify Base Camp tiles for both map types ---
+            const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+            const enemyBaseTileKeys = new Set();
+            
+            if (Array.isArray(enemyBaseData)) {
+                // Expansive Mode: Array of Tile Keys
+                enemyBaseData.forEach(k => enemyBaseTileKeys.add(k));
+            } else if (typeof enemyBaseData === 'string') {
+                // Standard Mode: Edge Key String
+                const [h1, h2] = parseEdgeKey(enemyBaseData);
+                if (!isNaN(h1.q)) enemyBaseTileKeys.add(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
+            }
+            // -----------------------------------------------------------------
 
             const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); 
             const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
@@ -5599,7 +5660,7 @@ function completeFortify(unitToFortify, targetTileKeyToFortify) {
             }
             updateSelectedUnitInfoPanel();
         }
-
+        
 function completeUnfortify(unitToUnfortify, targetEdgeKey) {
     if (!unitToUnfortify || !unitToUnfortify.isFortified || unitToUnfortify.hasPerformedMajorAction) {
         showInstruction("Cannot unfortify now.", 2000); 
@@ -6724,156 +6785,6 @@ function handleForcedSwap() {
             }
             return false;
         }
-
-function handleInteractionStart(x, y, isTouchEvent = false) {
-            if (gameState.fillToolActive) {
-                if (gameState.mapMakerBrush.type !== 'tile') {
-                    showInstruction("Please select a tile type to fill with.", 2000);
-                    return;
-                }
-                const coords = pixelToAxial(x, y);
-                performFloodFill(coords.q, coords.r);
-                return;
-            }
-
-            if (gameState.mapMakerMode) {
-                gameState.isDragging = true;
-                gameState.mapMakerLastPaintedHexKey = null;
-                applyMapMakerBrush(x, y);
-                return;
-            }
-            if (gameState.gameOver) return;
-
-            // --- ARCADE SWAP INTERCEPTION ---
-            if (gameState.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
-                const baseClickRadius = isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS;
-                const clickRadius = baseClickRadius * gameState.renderScale;
-                
-                // Simple finding logic for Swap Click
-                let clickedUnit = null;
-                const edgeUnits = [];
-                gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
-                
-                for (let i = edgeUnits.length - 1; i >= 0; i--) {
-                     const {unit, edge} = edgeUnits[i];
-                     if (unit.player !== gameState.currentPlayer) continue;
-                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                     // (Simplified math from main handler for brevity, full implementation recommended in production)
-                     if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < clickRadius) {
-                         clickedUnit = unit;
-                         break;
-                     }
-                }
-                // Also check fortified units (though rare in arcade)
-                if (!clickedUnit) {
-                    for (const unit of gameState.units) {
-                         if (unit.player === gameState.currentPlayer && unit.isFortified) {
-                             const tile = gameState.tiles.get(unit.position);
-                             if (tile) {
-                                 const {x: tx, y: ty} = axialToPixel(tile.q, tile.r);
-                                 if (Math.sqrt((x - tx)**2 + (y - ty)**2) < clickRadius) {
-                                     clickedUnit = unit;
-                                     break;
-                                 }
-                             }
-                         }
-                    }
-                }
-
-                if (clickedUnit) {
-                    gameState.unitToSwap = clickedUnit;
-                    gameState.swapState = 'selecting_class';
-                    showSwapClassModal(clickedUnit);
-                } else {
-                    showInstruction("You must select a unit to SWAP!", 1500);
-                }
-                return; // Stop standard interaction
-            }
-
-            if (gameState.fillToolActive) {
-                if (gameState.mapMakerBrush.type !== 'tile') {
-                    showInstruction("Please select a tile type to fill with.", 2000);
-                    return;
-                }
-                const coords = pixelToAxial(x, y);
-                performFloodFill(coords.q, coords.r);
-                return;
-            }
-
-            if (gameState.mapMakerMode) {
-                gameState.isDragging = true;
-                gameState.mapMakerLastPaintedHexKey = null;
-                applyMapMakerBrush(x, y);
-                return;
-            }
-            if (gameState.gameOver || gameState.currentActionState !== ACTION_STATES.IDLE && gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED) return;
-
-            dragOperationJustConcluded = false; 
-            clearDebugPath();
-            gameState.dragStartX = x; 
-            gameState.dragStartY = y; 
-            gameState.draggedDistance = 0;
-
-            let unitToDrag = null;
-            
-            // --- FIX: Apply renderScale to click radius ---
-            const baseClickRadius = isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS;
-            const clickRadius = baseClickRadius * gameState.renderScale;
-            // ----------------------------------------------
-
-            const edgeUnits = [];
-            gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
-            
-            for (let i = edgeUnits.length - 1; i >= 0; i--) {
-                 const {unit, edge} = edgeUnits[i];
-                 if (unit.player !== gameState.currentPlayer) continue;
-                if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; 
-                if (unit.isFortified || unit.currentMove < 1) continue;
-                 if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
-                 
-                 const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                 let unitCenterX = mid.x, unitCenterY = mid.y;
-                 const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
-                 const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === unit.id);
-                 if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
-                    const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
-                    const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
-                    let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
-                    let perpX = -dy_val / len, perpY = dx_val / len;
-                    
-                    // --- FIX: Apply renderScale to visual offset calculation ---
-                    unitCenterX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); 
-                    unitCenterY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
-                 }
-                 
-                 if (Math.sqrt((x - unitCenterX)**2 + (y - unitCenterY)**2) < clickRadius) { 
-                     unitToDrag = unit; 
-                     break; 
-                 }
-            }
-
-            if (unitToDrag) {
-                gameState.isDragging = true; 
-                gameState.dragStartTime = Date.now();
-                gameState.draggingUnit = unitToDrag;
-                gameState.dragUnitOriginalPosition = unitToDrag.position; 
-                gameState.dragUnitOriginalType = unitToDrag.positionType;
-                gameState.dragUnitRenderX = x; 
-                gameState.dragUnitRenderY = y;
-                if (!gameState.selectedUnit || gameState.selectedUnit.id !== unitToDrag.id) {
-                    gameState.selectedUnit = unitToDrag;
-                    gameState.currentActionState = ACTION_STATES.UNIT_SELECTED;
-                    updateSelectedUnitInfoPanel();
-                }
-                gameState.currentReachableMoves = getPossibleMoves(unitToDrag);
-                if (unitToDrag.positionType === 'edge') {
-                    const edgeData = gameState.edges.get(unitToDrag.position);
-                    if (edgeData) edgeData.units = edgeData.units.filter(u => u.id !== unitToDrag.id);
-                }
-                canvas.style.cursor = 'grabbing'; 
-            }
-        }
-
     
 function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
     gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
@@ -7185,12 +7096,19 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             }
             if (gameState.gameOver) return;
 
+            // --- ARCADE TIMER TRIGGER ---
+            // Timer starts only after P1 interacts on Turn 1
+            if (gameState.gameMode === 'arcade' && !gameState.arcadeGameStartedInteraction) {
+                gameState.arcadeGameStartedInteraction = true;
+            }
+            // ----------------------------
+
             // --- ARCADE SWAP INTERCEPTION ---
-            // This blocks normal interaction if we are in the 'selecting_unit' phase (Turn 2+)
             if (gameState.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
                 const baseClickRadius = isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS;
                 const clickRadius = baseClickRadius * gameState.renderScale;
                 
+                // Simple finding logic for Swap Click
                 let clickedUnit = null;
                 const edgeUnits = [];
                 gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
@@ -7199,11 +7117,13 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                      const {unit, edge} = edgeUnits[i];
                      if (unit.player !== gameState.currentPlayer) continue;
                      const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                     // (Simplified math from main handler for brevity, full implementation recommended in production)
                      if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < clickRadius) {
                          clickedUnit = unit;
                          break;
                      }
                 }
+                // Also check fortified units (though rare in arcade)
                 if (!clickedUnit) {
                     for (const unit of gameState.units) {
                          if (unit.player === gameState.currentPlayer && unit.isFortified) {
@@ -7226,29 +7146,48 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 } else {
                     showInstruction("You must select a unit to SWAP!", 1500);
                 }
-                return; // Stop standard interaction here
+                return; // Stop standard interaction
             }
 
-            // Standard Interaction continues below...
-            if (gameState.currentActionState !== ACTION_STATES.IDLE && gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED) return;
+            if (gameState.fillToolActive) {
+                if (gameState.mapMakerBrush.type !== 'tile') {
+                    showInstruction("Please select a tile type to fill with.", 2000);
+                    return;
+                }
+                const coords = pixelToAxial(x, y);
+                performFloodFill(coords.q, coords.r);
+                return;
+            }
+
+            if (gameState.mapMakerMode) {
+                gameState.isDragging = true;
+                gameState.mapMakerLastPaintedHexKey = null;
+                applyMapMakerBrush(x, y);
+                return;
+            }
+            if (gameState.gameOver || gameState.currentActionState !== ACTION_STATES.IDLE && gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED) return;
 
             dragOperationJustConcluded = false; 
             clearDebugPath();
-            
             gameState.dragStartX = x; 
             gameState.dragStartY = y; 
             gameState.draggedDistance = 0;
 
             let unitToDrag = null;
-            const clickRadius = (isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS) * gameState.renderScale;
+            
+            // --- FIX: Apply renderScale to click radius ---
+            const baseClickRadius = isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS;
+            const clickRadius = baseClickRadius * gameState.renderScale;
+            // ----------------------------------------------
+
             const edgeUnits = [];
             gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
             
             for (let i = edgeUnits.length - 1; i >= 0; i--) {
                  const {unit, edge} = edgeUnits[i];
                  if (unit.player !== gameState.currentPlayer) continue;
-                 if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; 
-                 if (unit.isFortified || unit.currentMove < 1) continue;
+                if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; 
+                if (unit.isFortified || unit.currentMove < 1) continue;
                  if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
                  
                  const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
@@ -7260,9 +7199,12 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                     const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
                     let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
                     let perpX = -dy_val / len, perpY = dx_val / len;
+                    
+                    // --- FIX: Apply renderScale to visual offset calculation ---
                     unitCenterX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); 
                     unitCenterY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
                  }
+                 
                  if (Math.sqrt((x - unitCenterX)**2 + (y - unitCenterY)**2) < clickRadius) { 
                      unitToDrag = unit; 
                      break; 
@@ -7277,15 +7219,12 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 gameState.dragUnitOriginalType = unitToDrag.positionType;
                 gameState.dragUnitRenderX = x; 
                 gameState.dragUnitRenderY = y;
-                
                 if (!gameState.selectedUnit || gameState.selectedUnit.id !== unitToDrag.id) {
                     gameState.selectedUnit = unitToDrag;
                     gameState.currentActionState = ACTION_STATES.UNIT_SELECTED;
                     updateSelectedUnitInfoPanel();
                 }
-                
                 gameState.currentReachableMoves = getPossibleMoves(unitToDrag);
-                
                 if (unitToDrag.positionType === 'edge') {
                     const edgeData = gameState.edges.get(unitToDrag.position);
                     if (edgeData) edgeData.units = edgeData.units.filter(u => u.id !== unitToDrag.id);
