@@ -159,6 +159,65 @@
     color: #E04030; /* Bright Red */
 }
 
+/* --- Debug Console Styles --- */
+#debugConsoleModal {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 350px;
+    height: 300px;
+    background-color: rgba(0, 0, 0, 0.85);
+    border: 1px solid #F0A010;
+    z-index: 10000; /* On top of everything */
+    color: #0f0;
+    font-family: 'Courier New', Courier, monospace;
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    border-radius: 5px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    resize: both;
+    overflow: hidden; /* Handle resize */
+}
+
+#debugConsoleHeader {
+    padding: 5px 10px;
+    background-color: #333;
+    color: #F0A010;
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.9em;
+    border-bottom: 1px solid #555;
+    user-select: none;
+}
+
+#debugConsoleCloseBtn {
+    background: transparent;
+    border: none;
+    color: #F0F0F0;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+#debugConsoleCloseBtn:hover { color: #E04030; }
+
+#debugConsoleContent {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 5px;
+    font-size: 0.8em;
+    white-space: pre-wrap;
+    word-break: break-all;
+    scrollbar-width: thin;
+    scrollbar-color: #4a6075 #222;
+}
+
+.console-log { color: #ccc; border-bottom: 1px solid #222; padding: 2px 0; }
+.console-error { color: #ff5555; border-bottom: 1px solid #222; padding: 2px 0; }
+.console-warn { color: #f0a010; border-bottom: 1px solid #222; padding: 2px 0; }
+
 #topLeftControlsContainer {
     position: absolute;
     top: 20px;
@@ -1085,10 +1144,10 @@
 
 /* Reuse Respawn Modal for Swap Phase */
 #respawnModalContent.swap-mode {
-    border-color: #9b59b6 !important; /* Purple */
+    border-color: #FFC020 !important; /* Yellow */
 }
 #respawnModalContent.swap-mode h3 {
-    color: #9b59b6 !important;
+    color: #FFC020 !important;
 }
 
     </style>
@@ -1398,7 +1457,11 @@
                 </div>
                 <input type="range" id="settingUiScale" min="0.5" max="1.5" value="1" step="0.05" style="width: 100%;" disabled="">
             </div>
-
+            <hr style="width: 100%; border-color: #4a6075; margin: 10px 0;">
+            <div class="settings-option">
+                <label for="settingDebugMode" style="color: #F0A010;">Dev Debug Mode</label>
+                <input type="checkbox" id="settingDebugMode" name="debugMode">
+            </div>
     
         </div>
         <button id="settingsBackButton" class="action-button action-button-cancel" style="margin-top: 30px; width: 100%;">Back</button>
@@ -1410,6 +1473,44 @@
     <div class="modal-content" style="max-width: 500px; text-align: left;">
         <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px; text-align: center;">Changelog</h3>
         <div id="changelogList" style="max-height: 50vh; overflow-y: auto; padding-right: 15px;">
+
+<h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 3: (The Patch so big, it could be its own update)</h4>
+                <!-- Features -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Variable Map Sizes:</strong> The grid is no longer locked to Radius 3. Play on Compact (R=2), Normal (R=3), or massive Expansive (R=4) maps.</li>
+                        <li><strong>Arcade Mode:</strong> A fast-paced deathmatch mode on Compact maps featuring a 30s turn timer, mandatory unit swapping, and HP scoring.</li>
+                        <li><strong>Dynamic Unit Limits:</strong> Army caps now scale based on the map size (2, 4, or 6 units).</li>
+                        <li><strong>Legacy Save Converter:</strong> A new engine automatically detects and upgrades older save files to be compatible with B28.</li>
+                        <li><strong>Preset Maps:</strong> Added "River Fork" (Standard) and "Alpha Grounds" (Arcade) to the New Map menu.</li>
+                    </ul>
+                </li>
+                <!-- Improvements -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Map Maker Overhaul:</strong> Added tools for custom-shaped Base Camps (Expansive only), a smarter generation engine, and strict validation for Test Mode.</li>
+                        <li><strong>Rendering Scalability:</strong> The game engine now supports dynamic zooming. Grid lines, units, and animations scale perfectly with map size.</li>
+                        <li><strong>Gameplay Balance:</strong> Fortifying and building bridges now cost 1 MP. Capturing a flag now halves the enemy's respawn timers.</li>
+                        <li><strong>Bridge Physics:</strong> Destroying a bridge now instantly severs supply lines and damages (or drowns) units standing on it.</li>
+                        <li><strong>Victory Screen:</strong> Overhauled with a background blur, input blocking, and confetti.</li>
+                    </ul>
+                </li>
+                <!-- Fixes -->
+                <li style="margin-bottom: 15px;">
+            <ul style="list-style-type: none; padding-left: 0;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                    <p style="font-style: italic; font-size: 0.85em; color: #bdc3c7; margin-top: 5px; margin-bottom: 5px; padding-left: 20px;">(Note: Most fixes are compared to the in-development version, addressing bugs introduced during the B28//3 development cycle.)</p>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>The "Ghost Unit" Fix:</strong> Resolved a critical bug where units would duplicate or desync during movement.</li>
+                        <li><strong>Input Detection:</strong> Fixed mouse/touch offsets when playing on resized or zoomed-in maps.</li>
+                        <li><strong>Stability:</strong> Fixed crashes caused by loading save files with different map radii and resolved animation glitches on bridges.</li>
+                        <li><strong>Logic:</strong> Corrected victory conditions for Expansive maps and fixed Base Camp rotation math.</li>
+                    </ul>
+                </li>
+            </ul>
+            <hr style="border-color: #4a6075; margin: 20px 0;">
 
             <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 2</h4>
             <ul style="list-style-type: none; padding-left: 0;">
@@ -1825,15 +1926,19 @@
 
     <script>
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "indev B28//3";
+        const BUILD_VERSION = "Indev B29";
         const HEX_SIZE = 70; 
         const CANVAS_WIDTH_NORMAL = (2 * 3 + 1.5) * (HEX_SIZE * Math.sqrt(3));
         const CANVAS_HEIGHT_NORMAL = (2 * 3 + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;
 
         // Gameplay Constants
         const RESPAWN_TURN_TIMER = 10;
-        const MAX_BASE_CAMP_TURNS = 7;
-        const MAX_UNITS_PER_PLAYER = 4;
+        const MAX_BASE_CAMP_TURNS = 5;
+        const MAP_SIZE_UNIT_LIMITS = {
+            2: 2, // Compact (Arcade)
+            3: 4, // Normal
+            4: 6  // Expansive
+        };
         const UNIT_CAPS = {
             Melee: 2,
             Archer: 2,
@@ -1866,6 +1971,8 @@
         const PATH_DRAW_PAUSE_DURATION_MS = 500; 
         const PATH_DRAW_HOVER_DELAY_MS = 1000; 
 
+
+        
         // Arcade Mode Constants
         const ARCADE_TURN_TIME_SEC = 30;
         const ARCADE_MAX_TURNS = 10;
@@ -1929,19 +2036,20 @@
         };
 
         // Tile Definitions
+        // Visibility: 3=High (All), 2=Medium (Blocked Opposite), 1=Low (Melee/Adjacent Only), 0=None
         const TILE_TYPES = {
-            PLAINS:   { name: 'Plains',   color: '#90EE90', baseMoveCost: 1, canFortify: true },
-            FOREST:   { name: 'Forest',   color: '#228B22', baseMoveCost: 2, canFortify: true },
-            WATER:    { name: 'Water',    color: '#87CEEB', baseMoveCost: Infinity, crossable: false, canFortify: false },
-            MOUNTAIN: { name: 'Mountain', color: '#808080', baseMoveCost: 3, canFortify: false, blocksLOS: true } 
+            PLAINS:   { name: 'Plains',   color: '#90EE90', baseMoveCost: 1, canFortify: true, visibility: 3 },
+            FOREST:   { name: 'Forest',   color: '#228B22', baseMoveCost: 2, canFortify: true, visibility: 1 },
+            WATER:    { name: 'Water',    color: '#87CEEB', baseMoveCost: Infinity, crossable: false, canFortify: false, visibility: 3 },
+            MOUNTAIN: { name: 'Mountain', color: '#808080', baseMoveCost: 3, canFortify: false, blocksLOS: true, visibility: 0 } 
         };
 
-        // Unit Definitions
+    // Unit Definitions (Templates)
         const UNIT_TYPES = {
-            MELEE:    { name: 'Melee',    hp: 12, baseMove: 4, attack: 3, symbol: 'M', canBuildBridge: true,  canFortify: true,  fortificationBonus: 1, attackType: 'melee', defenseNegation: 0, canMoveAfterAttack: false, strengths: ['Archer'],   weaknesses: ['Horseman'] },
-            ARCHER:   { name: 'Archer',   hp: 10, baseMove: 3, attack: 3, symbol: 'A', canBuildBridge: false, canFortify: true,  fortificationBonus: 1, attackType: 'ranged', defenseNegation: 0, canMoveAfterAttack: false, strengths: ['Pikeman'],  weaknesses: ['Melee'] },
-            PIKEMAN:  { name: 'Pikeman',  hp: 13, baseMove: 3, attack: 3, symbol: 'P', canBuildBridge: false, canFortify: true,  fortificationBonus: 2, attackType: 'melee', defenseNegation: 1, canMoveAfterAttack: false, strengths: ['Horseman'], weaknesses: ['Archer'] },
-            HORSEMAN: { name: 'Horseman', hp: 11, baseMove: 5, attack: 3, symbol: 'H', canBuildBridge: false, canFortify: false, fortificationBonus: 0, attackType: 'melee', defenseNegation: 0, canMoveAfterAttack: true,  strengths: ['Melee'],    weaknesses: ['Pikeman'] }
+            MELEE:    { typeName: 'MELEE',    name: 'Melee',    hp: 12, speed: 4, damage: 3, defense: 1, symbol: 'M', canBuildBridge: true,  canFortify: true,  attackType: 'melee', canMoveAfterAttack: false, strengths: ['Archer'],   weaknesses: ['Horseman'] },
+            ARCHER:   { typeName: 'ARCHER',   name: 'Archer',   hp: 10, speed: 3, damage: 3, defense: 1, symbol: 'A', canBuildBridge: false, canFortify: true,  attackType: 'ranged', canMoveAfterAttack: false, strengths: ['Pikeman'],  weaknesses: ['Melee'] },
+            PIKEMAN:  { typeName: 'PIKEMAN',  name: 'Pikeman',  hp: 13, speed: 3, damage: 3, defense: 2, symbol: 'P', canBuildBridge: false, canFortify: true,  attackType: 'melee', canMoveAfterAttack: false, strengths: ['Horseman'], weaknesses: ['Archer'] },
+            HORSEMAN: { typeName: 'HORSEMAN', name: 'Horseman', hp: 11, speed: 5, damage: 3, defense: 0, symbol: 'H', canBuildBridge: false, canFortify: false, attackType: 'melee', canMoveAfterAttack: true,  strengths: ['Melee'],    weaknesses: ['Pikeman'] }
         };
 
         const UNIT_SVGS = {
@@ -2004,6 +2112,52 @@
                 { player: 2, typeName: 'MELEE', position: '-1,1_0,1' }, { player: 2, typeName: 'ARCHER', position: '0,1_1,0' }
             ],
             baseCampPositions: { player1: null, player2: null }
+        };
+
+        const PRESET_MAP_3 = {
+            name: "Volcano Island",
+            radius: 4,
+            tiles: new Map([
+                ['-4,0', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }], ['-4,1', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }], 
+                ['-4,2', TILE_TYPES.WATER], ['-4,3', TILE_TYPES.WATER], ['-4,4', TILE_TYPES.WATER],
+                ['-3,-1', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }], ['-3,0', TILE_TYPES.PLAINS], 
+                ['-3,1', TILE_TYPES.FOREST], ['-3,2', TILE_TYPES.PLAINS], ['-3,3', TILE_TYPES.FOREST], ['-3,4', TILE_TYPES.WATER],
+                ['-2,-2', TILE_TYPES.WATER], ['-2,-1', TILE_TYPES.FOREST], ['-2,0', TILE_TYPES.PLAINS], 
+                ['-2,1', TILE_TYPES.FOREST], ['-2,2', TILE_TYPES.FOREST], ['-2,3', TILE_TYPES.PLAINS], ['-2,4', TILE_TYPES.WATER],
+                ['-1,-3', TILE_TYPES.WATER], ['-1,-2', TILE_TYPES.PLAINS], ['-1,-1', TILE_TYPES.FOREST], 
+                ['-1,0', TILE_TYPES.PLAINS], ['-1,1', TILE_TYPES.PLAINS], ['-1,2', TILE_TYPES.FOREST], 
+                ['-1,3', TILE_TYPES.PLAINS], ['-1,4', TILE_TYPES.WATER],
+                ['0,-4', TILE_TYPES.WATER], ['0,-3', TILE_TYPES.FOREST], ['0,-2', TILE_TYPES.FOREST], 
+                ['0,-1', TILE_TYPES.PLAINS], ['0,0', TILE_TYPES.MOUNTAIN], ['0,1', TILE_TYPES.PLAINS], 
+                ['0,2', TILE_TYPES.FOREST], ['0,3', TILE_TYPES.FOREST], ['0,4', TILE_TYPES.WATER],
+                ['1,-4', TILE_TYPES.WATER], ['1,-3', TILE_TYPES.PLAINS], ['1,-2', TILE_TYPES.FOREST], 
+                ['1,-1', TILE_TYPES.PLAINS], ['1,0', TILE_TYPES.PLAINS], ['1,1', TILE_TYPES.FOREST], 
+                ['1,2', TILE_TYPES.PLAINS], ['1,3', TILE_TYPES.WATER],
+                ['2,-4', TILE_TYPES.WATER], ['2,-3', TILE_TYPES.PLAINS], ['2,-2', TILE_TYPES.FOREST], 
+                ['2,-1', TILE_TYPES.FOREST], ['2,0', TILE_TYPES.PLAINS], ['2,1', TILE_TYPES.FOREST], ['2,2', TILE_TYPES.WATER],
+                ['3,-4', TILE_TYPES.WATER], ['3,-3', TILE_TYPES.FOREST], ['3,-2', TILE_TYPES.PLAINS], 
+                ['3,-1', TILE_TYPES.FOREST], ['3,0', TILE_TYPES.PLAINS], ['3,1', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }],
+                ['4,-4', TILE_TYPES.WATER], ['4,-3', TILE_TYPES.WATER], ['4,-2', TILE_TYPES.WATER], 
+                ['4,-1', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }], ['4,0', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }]
+            ]),
+            units: [
+                { player: 1, typeName: 'HORSEMAN', position: '2,0_3,0' },
+                { player: 1, typeName: 'PIKEMAN', position: '3,0_4,0' },
+                { player: 1, typeName: 'MELEE', position: '3,-1_3,0' },
+                { player: 1, typeName: 'MELEE', position: '2,1_3,0' },
+                { player: 1, typeName: 'ARCHER', position: '3,0_4,-1' },
+                { player: 1, typeName: 'ARCHER', position: '3,0_3,1' },
+                { player: 2, typeName: 'PIKEMAN', position: '-4,0_-3,0' },
+                { player: 2, typeName: 'HORSEMAN', position: '-3,0_-2,0' },
+                { player: 2, typeName: 'ARCHER', position: '-3,-1_-3,0' },
+                { player: 2, typeName: 'ARCHER', position: '-4,1_-3,0' },
+                { player: 2, typeName: 'MELEE', position: '-3,0_-2,-1' },
+                { player: 2, typeName: 'MELEE', position: '-3,0_-3,1' }
+            ],
+            baseCampPositions: { 
+                player1: ['4,-1', '4,0', '3,1'], 
+                player2: ['-3,-1', '-4,0', '-4,1'] 
+            }
         };
 
         const DEFAULT_MAP_LAYOUT_RADIUS_3 = new Map([
@@ -2150,7 +2304,8 @@ let gameSettings = {
     fancyVisualsEnabled: true, //Enable/Disable New Tile Textures
     passTurnConfirmationEnabled: true, //Enable/Disable the Skip Turn Confirmation Modal
     tooltipsEnabled: true, //Enable/Disable Tooltips
-    //uiScale: 1.0
+    debugModeEnabled: false, //Enable/Disable Debug Mode
+    uiScale: 1.0
 };
 
 const SETTINGS_STORAGE_KEY = 'forthex_user_settings';
@@ -2212,6 +2367,108 @@ function loadColorPreferences() {
         let currentCancelAction = null; // NEW: Stores logic to run if a modal is cancelled
 
         // --- Utility Functions ---
+
+        // --- DEBUG CONSOLE SYSTEM ---
+        function setupDebugConsoleSystem() {
+            // Hook into console.log/error/warn
+            const previousLog = console.log;
+            const previousError = console.error;
+            const previousWarn = console.warn || console.log;
+
+            function appendToVisualConsole(args, type) {
+                const consoleContent = document.getElementById('debugConsoleContent');
+                if (!consoleContent) return;
+
+                const msg = args.map(arg => {
+                    if (typeof arg === 'object') {
+                        try { return JSON.stringify(arg); } 
+                        catch(e) { return '[Obj]'; }
+                    }
+                    return String(arg);
+                }).join(' ');
+
+                const line = document.createElement('div');
+                line.className = `console-${type}`;
+                line.textContent = `> ${msg}`;
+                consoleContent.appendChild(line);
+                consoleContent.scrollTop = consoleContent.scrollHeight;
+            }
+
+            console.log = function(...args) {
+                previousLog.apply(console, args);
+                appendToVisualConsole(args, 'log');
+            };
+
+            console.error = function(...args) {
+                previousError.apply(console, args);
+                appendToVisualConsole(args, 'error');
+            };
+
+            console.warn = function(...args) {
+                previousWarn.apply(console, args);
+                appendToVisualConsole(args, 'warn');
+            };
+
+            // Initialize Dragging
+            makeElementDraggable(document.getElementById("debugConsoleModal"));
+            
+            // Close Button Logic
+            document.getElementById('debugConsoleCloseBtn').addEventListener('click', () => {
+                document.getElementById('debugConsoleModal').style.display = 'none';
+            });
+
+            // Alt + C Toggle
+            document.addEventListener('keydown', (e) => {
+                if (e.altKey && (e.key === 'c' || e.key === 'C')) {
+                    if (gameSettings.debugModeEnabled) {
+                        const modal = document.getElementById('debugConsoleModal');
+                        if (modal.style.display === 'none' || modal.style.display === '') {
+                            modal.style.display = 'flex';
+                        } else {
+                            modal.style.display = 'none';
+                        }
+                    }
+                }
+            });
+        }
+
+        function makeElementDraggable(elmnt) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            const header = document.getElementById(elmnt.id + "Header");
+            
+            if (header) {
+                header.onmousedown = dragMouseDown;
+            } else {
+                elmnt.onmousedown = dragMouseDown;
+            }
+
+            function dragMouseDown(e) {
+                e = e || window.event;
+                e.preventDefault();
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                e = e || window.event;
+                e.preventDefault();
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+                elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+                // Reset right to auto so left positioning takes precedence after move
+                elmnt.style.right = 'auto'; 
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
 
         // Hex Color to RGBA
         function hexToRgba(hex, alpha = 1) {
@@ -2329,6 +2586,56 @@ function loadColorPreferences() {
             }
         }
 
+        function getBaseVisibility(player) {
+            const visibleEdges = new Set();
+            const visibleTiles = new Set();
+            
+            // 1. Identify Base Tiles
+            const baseData = gameState.baseCampPositions[`player${player}`];
+            const baseTileKeys = new Set();
+            
+            if (Array.isArray(baseData)) {
+                baseData.forEach(k => baseTileKeys.add(k));
+            } else if (typeof baseData === 'string') {
+                const [h1, h2] = parseEdgeKey(baseData);
+                if (!isNaN(h1.q)) baseTileKeys.add(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) baseTileKeys.add(getTileKey(h2.q, h2.r));
+            }
+
+            // 2. Find Outer Edges (Edges connecting a base tile to a non-base tile)
+            const outerEdges = new Set();
+            baseTileKeys.forEach(tileKey => {
+                const [q, r] = tileKey.split(',').map(Number);
+                getNeighbors(q, r).forEach(n => {
+                    const nKey = getTileKey(n.q, n.r);
+                    if (!baseTileKeys.has(nKey)) {
+                        // This neighbor is NOT part of the base, so the edge between them is an "Outer Edge"
+                        const edgeKey = getEdgeKey(q, r, n.q, n.r);
+                        if (gameState.edges.has(edgeKey)) {
+                            outerEdges.add(edgeKey);
+                        }
+                    }
+                });
+            });
+
+            // 3. Aggregate Visibility from all Outer Edges
+            outerEdges.forEach(edgeKey => {
+                // Create a dummy unit representing a lookout on this edge
+                const dummyUnit = { 
+                    position: edgeKey, 
+                    positionType: 'edge', 
+                    isFortified: false,
+                    player: player // Needed if we add team-specific logic later
+                };
+                
+                const vis = getVisibleKeysFromUnit(dummyUnit);
+                vis.edges.forEach(e => visibleEdges.add(e));
+                vis.tiles.forEach(t => visibleTiles.add(t));
+            });
+
+            return { edges: visibleEdges, tiles: visibleTiles };
+        }
+
         function isSetContiguous(tileKeyArray) {
             if (tileKeyArray.length <= 1) return true;
     
@@ -2400,6 +2707,22 @@ function loadColorPreferences() {
             gameState.debugAttackRangeHighlights = [];
             
             clearDebugPath();
+        }
+
+        function clearSelectionAndDebugState() {
+            gameState.selectedUnit = null;
+            gameState.debugSelectedBasePlayer = null;
+            gameState.hoveredUnitId = null;
+            gameState.currentReachableMoves.clear();
+            
+            // Clear Action States
+            resetActionSelectionStates();
+            
+            // Reset UI
+            updateSelectedUnitInfoPanel();
+            
+            // Force a cursor reset
+            canvas.style.cursor = 'default';
         }
 
         function distSq(p1, p2) { return (p1.x - p2.x)**2 + (p1.y - p2.y)**2; }
@@ -2589,39 +2912,214 @@ function isEdgeAdjacentToSpearWall(unit, edgeKey) {
             return (h1.q === tileQ && h1.r === tileR) || (h2.q === tileQ && h2.r === tileR);
         }
 
-        function isEdgeRotationallyAdjacentToEdgeOnTile(centerTileQ, centerTileR, referenceEdgeKey, targetEdgeKey) {
-            if (!isEdgePartOfTile(centerTileQ, centerTileR, referenceEdgeKey) || 
-                !isEdgePartOfTile(centerTileQ, centerTileR, targetEdgeKey) ||
-                referenceEdgeKey === targetEdgeKey) {
-                return false;
+    // --- VISIBILITY & FOG OF WAR SYSTEM ---
+
+        function getTileVisibility(tile) {
+            if (!tile) return 0;
+            
+            let vis = tile.type.visibility;
+
+            // If a tile is fortified by ANYONE (friend or foe), it creates an obstruction
+            // reducing visibility to 2 (unless it was already lower, like Forest/Mountain).
+            // NOTE: Base Camps do not count as obstructions for this rule per instructions.
+            if (tile.fortifiedByPlayer !== null && !tile.isBaseCampTile) {
+                vis = Math.min(vis, 2);
             }
 
-            const [ref_h1, ref_h2] = parseEdgeKey(referenceEdgeKey);
-            const [tar_h1, tar_h2] = parseEdgeKey(targetEdgeKey);
-
-            let pivotHex, otherHexFromRefEdge, otherHexFromTargetEdge;
-
-            if (ref_h1.q === centerTileQ && ref_h1.r === centerTileR) { pivotHex = ref_h1; otherHexFromRefEdge = ref_h2; }
-            else if (ref_h2.q === centerTileQ && ref_h2.r === centerTileR) { pivotHex = ref_h2; otherHexFromRefEdge = ref_h1; }
-            else { return false; }
-            
-            if (tar_h1.q === centerTileQ && tar_h1.r === centerTileR) { otherHexFromTargetEdge = tar_h2; }
-            else if (tar_h2.q === centerTileQ && tar_h2.r === centerTileR) { otherHexFromTargetEdge = tar_h1; }
-            else { return false; }
-
-            const dirToRefOther = { q: otherHexFromRefEdge.q - pivotHex.q, r: otherHexFromRefEdge.r - pivotHex.r };
-            const dirToTargetOther = { q: otherHexFromTargetEdge.q - pivotHex.q, r: otherHexFromTargetEdge.r - pivotHex.r };
-
-            const refDirIdx = findDirectionIndex(dirToRefOther);
-            const targetDirIdx = findDirectionIndex(dirToTargetOther);
-
-            if (refDirIdx === -1 || targetDirIdx === -1) return false;
-
-            return (targetDirIdx === (refDirIdx + 1) % 6) || (targetDirIdx === (refDirIdx + 5) % 6);
+            return vis;
         }
 
+        // Returns an object containing Sets of visible EdgeKeys and TileKeys
+        function getVisibleKeysFromUnit(unit) {
+            const visibleEdges = new Set();
+            const visibleTiles = new Set(); // For targeting fortified units
+
+            if (!unit) return { edges: visibleEdges, tiles: visibleTiles };
+
+            // --- 1. Identify "Touching" Tiles (Adjacency Context) ---
+            const touchingTileKeys = new Set();
+
+            if (unit.positionType === 'edge') {
+                const [h1, h2] = parseEdgeKey(unit.position);
+                if (!isNaN(h1.q)) touchingTileKeys.add(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) touchingTileKeys.add(getTileKey(h2.q, h2.r));
+
+                // End-of-Road Tiles
+                if (!isNaN(h1.q) && !isNaN(h2.q)) {
+                    const n1 = getNeighbors(h1.q, h1.r);
+                    n1.forEach(n => {
+                        if (axialDistance(n.q, n.r, h2.q, h2.r) === 1) {
+                            touchingTileKeys.add(getTileKey(n.q, n.r));
+                        }
+                    });
+                }
+            } else if (unit.positionType === 'center') {
+                // Fortified: All 6 neighbors and own tile are touching
+                const t = gameState.tiles.get(unit.position);
+                if (t) {
+                    touchingTileKeys.add(unit.position);
+                    getNeighbors(t.q, t.r).forEach(n => touchingTileKeys.add(getTileKey(n.q, n.r)));
+                }
+            }
+
+            // --- 2. Define Blocking Helper ---
+            const isBlockedByMountain = (edgeKey) => {
+                if (edgeKey === unit.position) return false; 
+                if (unit.positionType === 'center' && unit.isFortified) {
+                    const [ea, eb] = parseEdgeKey(edgeKey);
+                    if (getTileKey(ea.q, ea.r) === unit.position || getTileKey(eb.q, eb.r) === unit.position) {
+                        return false; 
+                    }
+                }
+
+                const [ea, eb] = parseEdgeKey(edgeKey);
+                const k1 = !isNaN(ea.q) ? getTileKey(ea.q, ea.r) : null;
+                const k2 = !isNaN(eb.q) ? getTileKey(eb.q, eb.r) : null;
+
+                const checkBlock = (k) => {
+                    if (!k) return false;
+                    const t = gameState.tiles.get(k);
+                    if (t && getTileVisibility(t) === 0 && touchingTileKeys.has(k)) {
+                        return true;
+                    }
+                    return false;
+                };
+
+                return checkBlock(k1) || checkBlock(k2);
+            };
+
+            const safeAddEdge = (key) => {
+                if (!isBlockedByMountain(key)) {
+                    visibleEdges.add(key);
+                }
+            };
+
+            // --- 3. Process Visibility ---
+            const processTileVisibility = (tileKey, viewingEdgeKey) => {
+                const tile = gameState.tiles.get(tileKey);
+                if (!tile) return;
+
+                let visLevel = getTileVisibility(tile);
+                const tileEdges = getEdgesOfTile(tile.q, tile.r);
+
+                // --- MODIFIED: Fortified Vision Restriction ---
+                // If fortified, force all visible neighbors to use "Level 1" geometry (Spokes only).
+                // This hides the outer ring edges (pink circle in your previous reference),
+                // matching the yellow/brown diagram.
+                if (unit.isFortified && unit.positionType === 'center') {
+                    if (visLevel > 0) visLevel = 1;
+                }
+
+                if (visLevel === 3) {
+                    // PLAINS/WATER
+                    tileEdges.forEach(e => safeAddEdge(e));
+                    visibleTiles.add(tileKey);
+                } 
+                else if (visLevel === 2) {
+                    // FORTIFIED OBSTRUCTION (Used by Edge units looking at forts)
+                    let viewingEdgeIndex = -1;
+                    for(let i=0; i<6; i++) {
+                        const neighbor = AXIAL_DIRECTIONS[i];
+                        const checkKey = getEdgeKey(tile.q, tile.r, tile.q + neighbor.q, tile.r + neighbor.r);
+                        if (checkKey === viewingEdgeKey) {
+                            viewingEdgeIndex = i;
+                            break;
+                        }
+                    }
+
+                    if (viewingEdgeIndex !== -1) {
+                        const oppositeIndex = (viewingEdgeIndex + 3) % 6;
+                        for(let i=0; i<6; i++) {
+                            if (i !== oppositeIndex) {
+                                const neighbor = AXIAL_DIRECTIONS[i];
+                                const eKey = getEdgeKey(tile.q, tile.r, tile.q + neighbor.q, tile.r + neighbor.r);
+                                safeAddEdge(eKey);
+                            }
+                        }
+                    }
+                    visibleTiles.add(tileKey);
+                } 
+                else if (visLevel === 1) {
+                    // FOREST / FORTIFIED VIEW (Spokes Only)
+                    if (viewingEdgeKey) {
+                        const adjacentEdges = getRotationallyAdjacentEdges(viewingEdgeKey);
+                        adjacentEdges.forEach(adjKey => {
+                            if (isEdgePartOfTile(tile.q, tile.r, adjKey)) {
+                                safeAddEdge(adjKey);
+                            }
+                        });
+                    }
+                    visibleTiles.add(tileKey);
+                }
+            };
+
+            if (unit.positionType === 'edge') {
+                const [h1, h2] = parseEdgeKey(unit.position);
+                
+                if (!isNaN(h1.q)) processTileVisibility(getTileKey(h1.q, h1.r), unit.position);
+                if (!isNaN(h2.q)) processTileVisibility(getTileKey(h2.q, h2.r), unit.position);
+
+                visibleEdges.add(unit.position);
+
+                // Process "End of Road" Tiles (C and D)
+                if (!isNaN(h1.q) && !isNaN(h2.q)) {
+                    const n1_neighbors = getNeighbors(h1.q, h1.r);
+                    const commonNeighbors = [];
+                    n1_neighbors.forEach(n => {
+                        if (axialDistance(n.q, n.r, h2.q, h2.r) === 1) commonNeighbors.push({ q: n.q, r: n.r });
+                    });
+
+                    commonNeighbors.forEach(n => {
+                        const endTileKey = getTileKey(n.q, n.r);
+                        const endTile = gameState.tiles.get(endTileKey);
+                        
+                        if (endTile) {
+                            const vis = getTileVisibility(endTile);
+                            if (vis > 0) {
+                                visibleTiles.add(endTileKey);
+                                
+                                if (vis >= 3) {
+                                    // Hide back edges
+                                    const dirToA = { q: h1.q - n.q, r: h1.r - n.r };
+                                    const dirToB = { q: h2.q - n.q, r: h2.r - n.r };
+                                    const idxA = findDirectionIndex(dirToA);
+                                    const idxB = findDirectionIndex(dirToB);
+                                    const forbiddenIdx1 = (idxA + 3) % 6;
+                                    const forbiddenIdx2 = (idxB + 3) % 6;
+                                    
+                                    for(let i=0; i<6; i++) {
+                                        if (i !== forbiddenIdx1 && i !== forbiddenIdx2) {
+                                            const neighborDir = AXIAL_DIRECTIONS[i];
+                                            const eKey = getEdgeKey(n.q, n.r, n.q + neighborDir.q, n.r + neighborDir.r);
+                                            safeAddEdge(eKey);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } 
+            else if (unit.positionType === 'center' && unit.isFortified) {
+                const myTile = gameState.tiles.get(unit.position);
+                if (myTile) {
+                    // Own tile edges
+                    getEdgesOfTile(myTile.q, myTile.r).forEach(e => safeAddEdge(e));
+                    
+                    // Neighbors
+                    getNeighbors(myTile.q, myTile.r).forEach(n => {
+                        const neighborKey = getTileKey(n.q, n.r);
+                        const sharedEdgeKey = getEdgeKey(myTile.q, myTile.r, n.q, n.r);
+                        processTileVisibility(neighborKey, sharedEdgeKey);
+                    });
+                }
+            }
+
+            return { edges: visibleEdges, tiles: visibleTiles };
+        }
 
         // --- Initialization ---
+
 function initializeGrid(tileLayoutMap = null, customUnits = null) {
     // 1. Setup Base Camp Defaults if needed
     if (!tileLayoutMap && !customUnits) {
@@ -2670,6 +3168,7 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
     gameState.swapState = 'none';
     gameState.unitToSwap = null;
     gameState.arcadeTotalTurns = 0;
+    gameState.arcadeGameStartedInteraction = false; 
 
     ui.endTurnButton.classList.remove('arcade-timer-active');
     ui.endTurnButton.style.background = '';
@@ -2733,33 +3232,35 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
         customUnits.forEach(unitInfo => {
             if (!unitInfo || !unitInfo.typeName) return;
             const typeName = unitInfo.typeName.toUpperCase();
-            const type = UNIT_TYPES[typeName];
+            // Legacy Fix: If UNIT_TYPES has new structure, ensure typeName matches keys
+            const type = UNIT_TYPES[typeName]; 
+            
             if (type && gameState.edges.has(unitInfo.position)) {
+                // Pass typeName string or type object
                 const newUnit = createUnit(unitInfo.player, type, unitInfo.position);
                 gameState.units.push(newUnit);
             }
         });
     } else if (tileLayoutMap && tileLayoutMap !== DEFAULT_MAP_LAYOUT_RADIUS_3) {
-        // Auto-place units for custom/generated maps based on the new dynamic limit
         const limit = getMaxUnitsForCurrentMap();
         placeUnitsOnNewGeneratedMap(limit);
     } else {
         // Default Starting Units
         if (gameState.gameMode === 'arcade') {
-            gameState.units.push(createUnit(1, UNIT_TYPES.MELEE, getEdgeKey(1, -2, 0, -2)));
-            gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER, getEdgeKey(-2, 0, -1, -1)));
-            gameState.units.push(createUnit(2, UNIT_TYPES.MELEE, getEdgeKey(-1, 2, 0, 2)));
-            gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER, getEdgeKey(1, 1, 2, 0)));
+            gameState.units.push(createUnit(1, 'MELEE', getEdgeKey(1, -2, 0, -2)));
+            gameState.units.push(createUnit(1, 'ARCHER', getEdgeKey(-2, 0, -1, -1)));
+            gameState.units.push(createUnit(2, 'MELEE', getEdgeKey(-1, 2, 0, 2)));
+            gameState.units.push(createUnit(2, 'ARCHER', getEdgeKey(1, 1, 2, 0)));
         } else {
-            gameState.units.push(createUnit(1, UNIT_TYPES.MELEE, getEdgeKey(1, -2, 0, -2)));
-            gameState.units.push(createUnit(1, UNIT_TYPES.ARCHER, getEdgeKey(-2, 0, -1, -1)));
-            gameState.units.push(createUnit(1, UNIT_TYPES.PIKEMAN, getEdgeKey(-1, -1, 0, -2)));
-            gameState.units.push(createUnit(1, UNIT_TYPES.HORSEMAN, getEdgeKey(-2, 0, -2, 1)));
+            gameState.units.push(createUnit(1, 'MELEE', getEdgeKey(1, -2, 0, -2)));
+            gameState.units.push(createUnit(1, 'ARCHER', getEdgeKey(-2, 0, -1, -1)));
+            gameState.units.push(createUnit(1, 'PIKEMAN', getEdgeKey(-1, -1, 0, -2)));
+            gameState.units.push(createUnit(1, 'HORSEMAN', getEdgeKey(-2, 0, -2, 1)));
             
-            gameState.units.push(createUnit(2, UNIT_TYPES.MELEE, getEdgeKey(-1, 2, 0, 2)));
-            gameState.units.push(createUnit(2, UNIT_TYPES.ARCHER, getEdgeKey(1, 1, 2, 0)));
-            gameState.units.push(createUnit(2, UNIT_TYPES.PIKEMAN, getEdgeKey(0, 2, 1, 1)));
-            gameState.units.push(createUnit(2, UNIT_TYPES.HORSEMAN, getEdgeKey(2, 0, 2, -1)));
+            gameState.units.push(createUnit(2, 'MELEE', getEdgeKey(-1, 2, 0, 2)));
+            gameState.units.push(createUnit(2, 'ARCHER', getEdgeKey(1, 1, 2, 0)));
+            gameState.units.push(createUnit(2, 'PIKEMAN', getEdgeKey(0, 2, 1, 1)));
+            gameState.units.push(createUnit(2, 'HORSEMAN', getEdgeKey(2, 0, 2, -1)));
         }
     }
 
@@ -2771,7 +3272,8 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
 
     // 10. Initialize Unit State
     gameState.units.forEach(unit => {
-        unit.currentMove = unit.type.baseMove;
+        // --- FIX: Use .stats.speed instead of obsolete .type.baseMove ---
+        unit.currentMove = unit.stats.speed; 
         unit.hasPerformedMajorAction = false;
     });
 
@@ -2791,25 +3293,75 @@ function initializeGrid(tileLayoutMap = null, customUnits = null) {
     updateSupplyPointsDisplay();
 }
 
-        function createUnit(player, type, edgeKey) {
-            const unitId = `unit_${player}_${type.name.toLowerCase()}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-            
-            if (gameState.unitCounts) {
-                gameState.unitCounts[`player${player}`][type.name]++;
+        function createUnit(player, typeInput, edgeKey) {
+            // Robust Type Lookup: Handle String Key or Object
+            let typeKey = 'MELEE';
+            if (typeof typeInput === 'string') {
+                typeKey = typeInput.toUpperCase();
+            } else if (typeInput && typeInput.typeName) {
+                typeKey = typeInput.typeName.toUpperCase();
+            } else if (typeInput && typeInput.name) {
+                // Fallback for old map data using 'name'
+                typeKey = typeInput.name.toUpperCase();
             }
 
+            const template = UNIT_TYPES[typeKey];
+            if (!template) {
+                console.error(`[createUnit] Invalid unit type: ${typeKey} (Input: ${JSON.stringify(typeInput)})`);
+                return null;
+            }
+
+            // Fallback values for stats to prevent NaN
+            const speedVal = template.speed !== undefined ? template.speed : (template.baseMove || 0);
+            const defVal = template.defense !== undefined ? template.defense : (template.fortificationBonus || 0);
+
+            const unitId = `unit_${player}_${template.name.toLowerCase()}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+            
             return {
-    id: unitId, player, type, hp: type.hp, maxHp: type.hp,
-    currentMove: type.baseMove, positionType: 'edge', position: edgeKey,
-    isFortified: false, fortifiedTileKey: null, hasPerformedMajorAction: false,
-    isCarryingFlag: false,
-    turnsFortifiedAtBase: 0,
-    turnsFortified: 0,
-    fortifyCooldown: 0,
-    canHeal: true,
-    supplyLine: null,
-    lastAttackedByHostileOnTurn: 0,
-};
+                id: unitId, 
+                player: player, 
+                typeId: typeKey, 
+                
+                // COMPATIBILITY GETTER
+                get type() { return UNIT_TYPES[this.typeId]; }, 
+
+                // MUTABLE STATS CONTAINER
+                stats: {
+                    hp: template.hp,
+                    maxHp: template.hp,
+                    speed: speedVal,
+                    damage: template.damage,
+                    defense: defVal,
+                    range: template.attackType === 'ranged' ? 2 : 1
+                },
+                
+                // LEGACY GETTERS/SETTERS (Bridge for old code accessing unit.hp directly)
+                get hp() { return this.stats.hp; },
+                set hp(val) { this.stats.hp = val; },
+                get maxHp() { return this.stats.maxHp; },
+                set maxHp(val) { this.stats.maxHp = val; },
+
+                currentMove: speedVal, // Initialize with full speed
+                
+                positionType: 'edge', 
+                position: edgeKey,
+                
+                isFortified: false, 
+                fortifiedTileKey: null, 
+                hasPerformedMajorAction: false,
+                isCarryingFlag: false,
+                
+                turnsFortifiedAtBase: 0,
+                turnsFortified: 0,
+                fortifyCooldown: 0,
+                canHeal: true,
+                supplyLine: null,
+                lastAttackedByHostileOnTurn: 0,
+                
+                // VETERANCY
+                level: 0,
+                upgrades: { health: 0, speed: 0, damage: 0, defense: 0 }
+            };
         }
 
         function spawnUnit(player, unitType) {
@@ -3017,18 +3569,46 @@ function drawHexFill(q, r, tileType) {
             }
         }
 
-function drawHexEdgesAndBoundaries() {
+        function drawHexEdgesAndBoundaries() {
             const edgeLineWidth = 2;
             const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
+
+            // Logic: Fancy visuals are active if the Setting is ON AND we are NOT in the Map Editor.
+            // This allows them to show up during "Test Map" (since mapMakerMode is false then), but not during editing.
+            const useFancyVisuals = gameSettings.fancyVisualsEnabled && !gameState.mapMakerMode;
 
             gameState.edges.forEach(edge => {
                 const tileA = gameState.tiles.get(getTileKey(edge.q1, edge.r1));
                 const tileB = gameState.tiles.get(getTileKey(edge.q2, edge.r2));
                 if (!tileA || !tileB) return;
                 const typeA = tileA.type; const typeB = tileB.type; let edgeStrokeColor;
-                const landEdgeColor = '#A05030'; const beachEdgeColor = '#F0E090'; const waterEdgeColor = '#4080C0';
-                if (isLand(typeA) && isLand(typeB)) edgeStrokeColor = landEdgeColor;
-                else if ((isLand(typeA) && typeB === TILE_TYPES.WATER) || (typeA === TILE_TYPES.WATER && isLand(typeB))) edgeStrokeColor = beachEdgeColor;
+                
+                const landEdgeColor = '#A05030'; 
+                const beachEdgeColor = '#F0E090'; 
+                const swampEdgeColor = '#80D040'; 
+                const cliffEdgeColor = '#D0D0C0'; 
+                const waterEdgeColor = '#4080C0';
+
+                if (isLand(typeA) && isLand(typeB)) {
+                    edgeStrokeColor = landEdgeColor;
+                }
+                else if ((isLand(typeA) && typeB === TILE_TYPES.WATER) || (typeA === TILE_TYPES.WATER && isLand(typeB))) {
+                    // Logic for distinct Coastlines
+                    if (useFancyVisuals) {
+                        const landTileType = isLand(typeA) ? typeA : typeB;
+                        
+                        if (landTileType === TILE_TYPES.FOREST) {
+                            edgeStrokeColor = swampEdgeColor;
+                        } else if (landTileType === TILE_TYPES.MOUNTAIN) {
+                            edgeStrokeColor = cliffEdgeColor;
+                        } else {
+                            edgeStrokeColor = beachEdgeColor; // Plains remain standard beach
+                        }
+                    } else {
+                        // Fallback for Simple visuals OR Map Maker Mode
+                        edgeStrokeColor = beachEdgeColor;
+                    }
+                }
                 else if (typeA === TILE_TYPES.WATER && typeB === TILE_TYPES.WATER) edgeStrokeColor = waterEdgeColor;
                 else edgeStrokeColor = '#1a252f';
 
@@ -3392,11 +3972,21 @@ function drawBridge(edge, color = '#8B4513', outlineColor = null, outlineWidth =
 function drawFlags() {
     if (gameState.gameMode === 'arcade') return;
     
+    // --- CUSTOMIZABLE FLAG SIZE ---
+    // Adjust this multiplier to change the size of the flag.
+    // 0.18 = Original small size
+    // 0.25 = Same size as a unit on an edge
+    // 0.30 = Same size as a fortified unit
+    const FLAG_SCALE_FACTOR = 0.21; 
+    // ------------------------------
+
     const renderFlagAt = (player, x, y) => {
         const teamColor = currentDrawingColors[`player${player}`].secondary;
         const flagIconColor = '#F0F0F0'; 
         const flagPoleColor = '#2c3e50';
-        const circleRadius = HEX_SIZE * 0.18;
+        
+        // Calculate size based on the multiplier and current zoom level
+        const circleRadius = (HEX_SIZE * gameState.renderScale) * FLAG_SCALE_FACTOR;
         const flagSize = circleRadius * 1.2; 
 
         ctx.save();
@@ -3455,9 +4045,6 @@ function drawFlags() {
     }
     // 3. MAP MAKER MODE (Standard Preview)
     else if (gameState.mapMakerMode && gameState.gridRadius === 3) {
-        // Standard mode in Map Maker usually sets flags in initializeGrid,
-        // but if we are live editing rotation, we might need to fallback to baseCampPositions edge key
-        // if flags aren't synced yet. However, `updateBaseCampLocations` syncs flags.
         if (gameState.flags) {
              Object.values(gameState.flags).forEach(flag => {
                 const edge = gameState.edges.get(flag.homePosition);
@@ -3797,7 +4384,7 @@ function drawFlags() {
             drawUnitSymbol(ctx, unit, x, y, radiusForSymbol, symbolColor);
         }
 
-        function drawUnits() {
+function drawUnits() {
             const isEffectivelyDragging = gameState.isDragging && !gameState.mapMakerMode;
             const animatedUnitIds = new Set(gameState.activeAnimations.map(a => (a.unit || a.attacker).id));
             const offsetDistance = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
@@ -3830,7 +4417,27 @@ function drawFlags() {
                     const tile = gameState.tiles.get(unit.position);
                     if (tile) {
                         const {x, y} = axialToPixel(tile.q, tile.r);
+                        
+                        // --- VISUAL FIX: Alternate Opacity if covering Flag ---
+                        let alpha = 1.0;
+                        if (gameState.flags && gameState.gridRadius === 4) {
+                            const myFlag = gameState.flags[`p${unit.player}_flag`];
+                            // Check if flag is at base and base is defined as an array (Expansive)
+                            if (myFlag && myFlag.status === 'at_base' && Array.isArray(myFlag.homePosition)) {
+                                const flagPos = calculateBaseCentroid(myFlag.homePosition);
+                                // Check if unit center is on top of the flag center
+                                if (flagPos && distSq({x, y}, flagPos) < 1) {
+                                    const time = Date.now();
+                                    // Pulse opacity full range 0.0 to 1.0
+                                    alpha = (Math.sin(time / 500) + 1) / 2; 
+                                }
+                            }
+                        }
+                        
+                        ctx.save();
+                        ctx.globalAlpha = alpha;
                         drawSingleUnit(ctx, unit, x, y, FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale);
+                        ctx.restore();
                     }
                 }
             });
@@ -3858,7 +4465,6 @@ function drawFlags() {
                 drawSingleUnit(ctx, unit, unitX, unitY, fullRadius);
             }
         }
-
 
 function drawMovementHighlights() {
     const unitForHighlights = gameState.isDragging ? gameState.draggingUnit : gameState.selectedUnit;
@@ -3994,50 +4600,240 @@ function drawMovementHighlights() {
         }
 
 function drawDebugAttackRangeHighlights() {
-            if (gameState.currentActionState !== ACTION_STATES.SELECTING_ATTACK_TARGET) return;
-            if (!gameState.debugAttackRangeHighlights || gameState.debugAttackRangeHighlights.length === 0) return;
+    const currentHexSize = HEX_SIZE * gameState.renderScale;
+    const currentTime = Date.now();
 
-            const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
-            const currentTime = Date.now();
-            const pulseProgress = (currentTime % PULSE_DURATION_MS) / PULSE_DURATION_MS; 
-            const minOpacity = 0.0;
-            const maxOpacity = 0.9;
-            const opacity = minOpacity + (Math.sin(pulseProgress * 2 * Math.PI) + 1) / 2 * (maxOpacity - minOpacity);
+    // --- 1. DEBUG MODE: Show Theoretical Range (RED - Constant) ---
+    if (gameSettings.debugModeEnabled && gameState.selectedUnit) {
+        const unit = gameState.selectedUnit;
+        let theoreticalEdges = new Set();
+        let theoreticalTiles = new Set();
+
+        if (unit.type.attackType === 'melee') {
+            // Melee Edges
+            const edges = getPotentialMeleeAttackEdges(unit);
+            edges.forEach(e => theoreticalEdges.add(e));
+
+            // Melee Tiles (Adjacent Centers) - ONLY if on Edge
+            if (unit.positionType === 'edge') {
+                const [h1, h2] = parseEdgeKey(unit.position);
+                if (!isNaN(h1.q)) theoreticalTiles.add(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) theoreticalTiles.add(getTileKey(h2.q, h2.r));
+            } 
+        } 
+        else if (unit.type.name === 'Archer') {
+            const visibilityData = getVisibleKeysFromUnit(unit);
             
-            ctx.save();
-            ctx.strokeStyle = `rgba(255, 140, 0, ${opacity})`; 
-            ctx.lineWidth = 5; 
+            // Archer Edges: Filter Visible edges based on Range Rules
+            visibilityData.edges.forEach(e => {
+                let isAttackable = true;
+                
+                // Restriction A: Edge Archer
+                if (unit.positionType === 'edge') {
+                    const [h1, h2] = parseEdgeKey(unit.position);
+                    const inA = !isNaN(h1.q) && isEdgePartOfTile(h1.q, h1.r, e);
+                    const inB = !isNaN(h2.q) && isEdgePartOfTile(h2.q, h2.r, e);
+                    if (!inA && !inB) isAttackable = false;
+                }
 
-            gameState.debugAttackRangeHighlights.forEach(edgeKey => {
-                const edge = gameState.edges.get(edgeKey);
-                if (!edge) return;
+                // Restriction B: Fortified Archer (Low Visibility)
+                if (unit.positionType === 'center' && unit.isFortified) {
+                    const sourceTile = gameState.tiles.get(unit.position);
+                    if (sourceTile && getTileVisibility(sourceTile) <= 1) {
+                        if (!isEdgePartOfTile(sourceTile.q, sourceTile.r, e)) {
+                            isAttackable = false;
+                        }
+                    }
+                }
+                
+                if (isAttackable) theoreticalEdges.add(e);
+            });
 
-                const p1_center = axialToPixel(edge.q1, edge.r1);
-                const p2_center = axialToPixel(edge.q2, edge.r2);
+            // Archer Tiles: Can only attack visible tiles with Visibility > 1
+            visibilityData.tiles.forEach(tKey => {
+                const t = gameState.tiles.get(tKey);
+                if (t && getTileVisibility(t) > 1) {
+                    theoreticalTiles.add(tKey);
+                }
+            });
+        }
 
-                const edgeMidX = (p1_center.x + p2_center.x) / 2;
-                const edgeMidY = (p1_center.y + p2_center.y) / 2;
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = `rgba(255, 50, 50, 0.8)`; // Constant Red, high opacity
+        ctx.fillStyle = `rgba(255, 50, 50, 0.3)`;   // Semi-transparent Red for tiles
 
-                let dx_centers = p2_center.x - p1_center.x;
-                let dy_centers = p2_center.y - p1_center.y;
+        // Draw Edges
+        theoreticalEdges.forEach(edgeKey => {
+            const edge = gameState.edges.get(edgeKey);
+            if (!edge) return;
 
-                let perp_dx = -dy_centers;
-                let perp_dy = dx_centers;
+            const p1_center = axialToPixel(edge.q1, edge.r1);
+            const p2_center = axialToPixel(edge.q2, edge.r2);
+            
+            const edgeMidX = (p1_center.x + p2_center.x) / 2;
+            const edgeMidY = (p1_center.y + p2_center.y) / 2;
 
-                const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
-                if (len_perp_vec === 0) return; 
+            let perp_dx = -(p2_center.y - p1_center.y);
+            let perp_dy = p2_center.x - p1_center.x;
+            const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
 
-                const scale = (currentHexSize / 2) * 0.95; 
-                perp_dx = (perp_dx / len_perp_vec) * scale;
-                perp_dy = (perp_dy / len_perp_vec) * scale;
+            if (len_perp_vec > 0) {
+                const scale = (currentHexSize / 2) * 0.9;
+                const dx = (perp_dx / len_perp_vec) * scale;
+                const dy = (perp_dy / len_perp_vec) * scale;
 
                 ctx.beginPath();
-                ctx.moveTo(edgeMidX + perp_dx, edgeMidY + perp_dy);
-                ctx.lineTo(edgeMidX - perp_dx, edgeMidY - perp_dy);
+                ctx.moveTo(edgeMidX + dx, edgeMidY + dy);
+                ctx.lineTo(edgeMidX - dx, edgeMidY - dy);
                 ctx.stroke();
-            });
-            ctx.restore();
+            }
+        });
+
+        // Draw Tile Centers (Targetable Forts)
+        theoreticalTiles.forEach(tileKey => {
+            const tile = gameState.tiles.get(tileKey);
+            if (tile) {
+                const { x, y } = axialToPixel(tile.q, tile.r);
+                
+                ctx.beginPath();
+                const radius = currentHexSize * 0.4;
+                for (let i = 0; i < 6; i++) {
+                    const angle = Math.PI / 180 * (60 * i - 30);
+                    const vx = x + radius * Math.cos(angle);
+                    const vy = y + radius * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+        });
+
+        ctx.restore();
+    }
+
+    // --- 2. GAMEPLAY MODE: Show Valid Targets (ORANGE) ---
+    if (gameState.currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET && gameState.debugAttackRangeHighlights.length > 0) {
+        const pulseProgress = (currentTime % PULSE_DURATION_MS) / PULSE_DURATION_MS; 
+        const opacity = 0.5 + 0.4 * (Math.sin(pulseProgress * 2 * Math.PI) + 1) / 2;
+        
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 140, 0, ${opacity})`; 
+        ctx.lineWidth = 5; 
+
+        gameState.debugAttackRangeHighlights.forEach(edgeKey => {
+            const edge = gameState.edges.get(edgeKey);
+            if (!edge) return;
+
+            const p1_center = axialToPixel(edge.q1, edge.r1);
+            const p2_center = axialToPixel(edge.q2, edge.r2);
+
+            const edgeMidX = (p1_center.x + p2_center.x) / 2;
+            const edgeMidY = (p1_center.y + p2_center.y) / 2;
+
+            let perp_dx = -(p2_center.y - p1_center.y);
+            let perp_dy = p2_center.x - p1_center.x;
+            const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
+
+            if (len_perp_vec > 0) {
+                const scale = (currentHexSize / 2) * 0.95; 
+                const dx = (perp_dx / len_perp_vec) * scale;
+                const dy = (perp_dy / len_perp_vec) * scale;
+
+                ctx.beginPath();
+                ctx.moveTo(edgeMidX + dx, edgeMidY + dy);
+                ctx.lineTo(edgeMidX - dx, edgeMidY - dy);
+                ctx.stroke();
+            }
+        });
+        ctx.restore();
+    }
+}
+
+function drawDebugVisibilityHighlights() {
+    if (!gameSettings.debugModeEnabled) return;
+
+    let visibilityData = null;
+
+    // Prioritize Unit selection, then Base selection
+    if (gameState.selectedUnit) {
+        visibilityData = getVisibleKeysFromUnit(gameState.selectedUnit);
+    } else if (gameState.debugSelectedBasePlayer) {
+        visibilityData = getBaseVisibility(gameState.debugSelectedBasePlayer);
+    }
+
+    if (!visibilityData) return;
+
+    const visibleEdges = visibilityData.edges;
+    const visibleTiles = visibilityData.tiles;
+
+    // Calculate pulsing alpha
+    const currentTime = Date.now();
+    const pulseDuration = 1000;
+    const alpha = 0.3 + 0.4 * (Math.sin(currentTime / pulseDuration * 2 * Math.PI) + 1) / 2; 
+
+    const currentHexSize = HEX_SIZE * gameState.renderScale;
+
+    ctx.save();
+    // Use slightly different color for Base vs Unit to distinguish
+    if (gameState.debugSelectedBasePlayer && !gameState.selectedUnit) {
+        ctx.strokeStyle = `rgba(0, 255, 255, ${alpha + 0.3})`; // Cyan for Base
+        ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
+    } else {
+        ctx.strokeStyle = `rgba(255, 255, 0, ${alpha + 0.3})`; // Yellow for Unit
+        ctx.fillStyle = `rgba(255, 255, 0, ${alpha})`;
+    }
+    ctx.lineWidth = 5;
+
+    // 1. Draw Visible Tile Centers
+    visibleTiles.forEach(tileKey => {
+        const tile = gameState.tiles.get(tileKey);
+        if (tile) {
+            const { x, y } = axialToPixel(tile.q, tile.r);
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = Math.PI / 180 * (60 * i - 30);
+                const vx = x + currentHexSize * 0.6 * Math.cos(angle); 
+                const vy = y + currentHexSize * 0.6 * Math.sin(angle);
+                if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
         }
+    });
+
+    // 2. Draw Visible Edges
+    visibleEdges.forEach(edgeKey => {
+        const edge = gameState.edges.get(edgeKey);
+        if (edge) {
+            const p1_center = axialToPixel(edge.q1, edge.r1);
+            const p2_center = axialToPixel(edge.q2, edge.r2);
+            
+            const edgeMidX = (p1_center.x + p2_center.x) / 2;
+            const edgeMidY = (p1_center.y + p2_center.y) / 2;
+
+            let perp_dx = -(p2_center.y - p1_center.y);
+            let perp_dy = p2_center.x - p1_center.x;
+            const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
+
+            if (len_perp_vec > 0) {
+                const scale = (currentHexSize / 2) * 0.8;
+                const dx = (perp_dx / len_perp_vec) * scale;
+                const dy = (perp_dy / len_perp_vec) * scale;
+
+                ctx.beginPath();
+                ctx.moveTo(edgeMidX + dx, edgeMidY + dy);
+                ctx.lineTo(edgeMidX - dx, edgeMidY - dy);
+                ctx.stroke();
+            }
+        }
+    });
+
+    ctx.restore();
+}
 
 function triggerDamageVisual(targetUnit, attackStatus = 'normal') {
     // Get the unit's screen position and size for the effect
@@ -4497,11 +5293,13 @@ function drawAnimations() {
     gameState.activeAnimations = stillAnimating;
 }
 
-        function gameLoop() {
+            function gameLoop() {
             // --- ARCADE LOGIC ---
             if (gameState.gameMode === 'arcade' && !gameState.gameOver && !gameState.mapMakerMode) {
-                // ... (timer logic unchanged) ...
-                if (gameState.activeAnimations.length === 0) { 
+                // Check if we are waiting for P1 to start the game
+                const waitingForStart = gameState.globalTurnNumber === 1 && gameState.currentPlayer === 1 && !gameState.arcadeGameStartedInteraction;
+
+                if (gameState.activeAnimations.length === 0 && !waitingForStart) { 
                     gameState.arcadeTurnTimer -= 1/60; 
                     if (gameState.arcadeTurnTimer <= 0) {
                         gameState.arcadeTurnTimer = 0;
@@ -4521,7 +5319,8 @@ function drawAnimations() {
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // ... (color transition logic unchanged) ...
+            // ... (rest of function remains unchanged)
+            
             if (gameState.colorTransition.active) {
                 const elapsedTime = Date.now() - gameState.colorTransition.startTime;
                 const progress = Math.min(elapsedTime / COLOR_TRANSITION_DURATION_MS, 1);
@@ -4571,7 +5370,7 @@ function drawAnimations() {
             drawFlags();
             drawBridges();
             drawSupplyLines();
-            
+            drawDebugVisibilityHighlights(); 
             drawDebugAttackRangeHighlights() 
 
             if (!gameState.isDragging) {
@@ -4612,7 +5411,6 @@ function drawAnimations() {
             
             requestAnimationFrame(gameLoop);
         }
-
             // Function to set CSS Variables from the TEAM_COLORS object
             function updateCssVariables() {
                 const root = document.documentElement;
@@ -4666,9 +5464,16 @@ function drawAnimations() {
                 ui.selectedUnitInfoContainer.style.display = 'block';
                 ui.actionInfoContainer.style.display = 'none';
                 ui.actionsPanel.style.display = 'flex';
-                ui.unitName.textContent = `${selectedUnit.type.name} (P${selectedUnit.player})`;
-                ui.unitHP.textContent = selectedUnit.hp; ui.unitMaxHP.textContent = selectedUnit.maxHp;
-                ui.unitMovement.textContent = Math.floor(selectedUnit.currentMove);
+                
+                // UPDATE: Display mutable stats + level
+                const levelStr = selectedUnit.level > 0 ? ` +${selectedUnit.level}` : '';
+                ui.unitName.textContent = `${selectedUnit.type.name}${levelStr} (P${selectedUnit.player})`;
+                
+                // Stats from object
+                ui.unitHP.textContent = selectedUnit.stats.hp; 
+                ui.unitMaxHP.textContent = selectedUnit.stats.maxHp;
+                ui.unitMovement.textContent = Math.floor(selectedUnit.currentMove); // Current move is still valid
+                
                 ui.unitPosition.textContent = selectedUnit.positionType === 'edge' ? `Edge (${selectedUnit.position.substring(0,7)}...)` : `Center (${selectedUnit.position})`;
                 let statusText = "Ready";
                 if (selectedUnit.isCarryingFlag) statusText = "Carrying Flag";
@@ -4697,10 +5502,26 @@ function drawAnimations() {
                         if (!isSelectingFortify) {
                             const edgeCoords = parseEdgeKey(selectedUnit.position);
                             if (edgeCoords && edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
-                                const tile1 = gameState.tiles.get(getTileKey(edgeCoords[0].q, edgeCoords[0].r));
-                                const tile2 = gameState.tiles.get(getTileKey(edgeCoords[1].q, edgeCoords[1].r));
-                                const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null;
-                                const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null;
+                                const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r);
+                                const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
+                                const tile1 = gameState.tiles.get(tile1Key);
+                                const tile2 = gameState.tiles.get(tile2Key);
+
+                                // --- FIX: Check for enemy base tiles here as well ---
+                                const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
+                                const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+                                const enemyBaseTileKeys = new Set();
+                                if (Array.isArray(enemyBaseData)) {
+                                    enemyBaseData.forEach(k => enemyBaseTileKeys.add(k));
+                                } else if (typeof enemyBaseData === 'string') {
+                                    const [h1, h2] = parseEdgeKey(enemyBaseData);
+                                    if (!isNaN(h1.q)) enemyBaseTileKeys.add(getTileKey(h1.q, h1.r));
+                                    if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
+                                }
+                                // ---------------------------------------------------
+
+                                const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key);
+                                const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key);
                                 fortifyDisabledCondition = !(canFortifyTile1 || canFortifyTile2) || selectedUnit.positionType === 'center';
                             } else {
                                 fortifyDisabledCondition = true;
@@ -4746,7 +5567,7 @@ function drawAnimations() {
                 ui.attackButton.textContent = "Attack"; ui.attackButton.classList.remove('selecting');
             }
         }
-        
+
         function showRespawnModal(player) {
             const overlay = document.getElementById('respawnModalOverlay');
             const content = document.getElementById('respawnModalContent');
@@ -4955,9 +5776,7 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
         }
 
 function getMaxUnitsForCurrentMap() {
-    if (gameState.gridRadius === 2) return 2; // Compact/Arcade
-    if (gameState.gridRadius === 4) return 6; // Expansive
-    return 4; // Standard (Radius 3)
+    return MAP_SIZE_UNIT_LIMITS[gameState.gridRadius] || 4;
 }
 
 function getMapMakerBaseCampTileKeys() {
@@ -5040,9 +5859,10 @@ function getEdgeCost(unit, edgeKey) {
     }
 
     const finalCost = baseCost + fortificationPenalty;
-    return (baseCost === 3) ? finalCost : Math.min(finalCost, MAX_MOVEMENT_COST);
+    return Math.min(finalCost, MAX_MOVEMENT_COST);
 }
-        // --- Pathfinding ---
+
+// --- Pathfinding ---
         function getRotationallyAdjacentEdges(currentEdgeKey) {
             const adjacentEdges = new Set(); const [h1, h2] = parseEdgeKey(currentEdgeKey);
             if (isNaN(h1.q) || isNaN(h2.q)) return [];
@@ -5406,16 +6226,37 @@ function getPotentialUnfortifyTargets(unit) {
     if (!unit || !unit.isFortified || unit.positionType !== 'center') return [];
     const fortifiedTile = gameState.tiles.get(unit.position); if (!fortifiedTile) return [];
     
-    const playerHomeFlagEdge = gameState.baseCampPositions[`player${unit.player}`];
+    // Use the generic name as it can be a String or Array
+    const playerBaseData = gameState.baseCampPositions[`player${unit.player}`];
     const validTargets = [];
 
     getNeighbors(fortifiedTile.q, fortifiedTile.r).forEach(neighborCoords => {
         const edgeKey = getEdgeKey(fortifiedTile.q, fortifiedTile.r, neighborCoords.q, neighborCoords.r);
         
-        // Prevent unfortifying onto the player's own home flag tile.
-        if (edgeKey === playerHomeFlagEdge) {
+        // --- FIX: Check restricted base edges for both map types ---
+        let isRestricted = false;
+        
+        if (Array.isArray(playerBaseData)) {
+            // Expansive Mode: Check if edge connects two of our own base tiles
+            // We know one tile is the fortified tile (unit.position)
+            const t1 = unit.position; 
+            const t2 = getTileKey(neighborCoords.q, neighborCoords.r);
+            
+            // If both tiles are in the base camp array, this is an internal edge -> Restricted
+            if (playerBaseData.includes(t1) && playerBaseData.includes(t2)) {
+                isRestricted = true;
+            }
+        } else {
+            // Standard Mode: Check specific edge key string
+            if (edgeKey === playerBaseData) {
+                isRestricted = true;
+            }
+        }
+
+        if (isRestricted) {
             return; // Skip this edge, it's not a valid target.
         }
+        // -----------------------------------------------------------
 
         const edge = gameState.edges.get(edgeKey);
         if (edge && getEdgeCost(unit, edgeKey) !== Infinity) {
@@ -5511,9 +6352,21 @@ function completeFortify(unitToFortify, targetTileKeyToFortify) {
              if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { showInstruction("Unit not on valid edge.", 2000); return; }
 
             const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
-            const enemyBaseEdgeKey = gameState.baseCampPositions[`player${enemyPlayer}`];
-            const [enemy_h1, enemy_h2] = parseEdgeKey(enemyBaseEdgeKey);
-            const enemyBaseTileKeys = new Set([getTileKey(enemy_h1.q, enemy_h1.r), getTileKey(enemy_h2.q, enemy_h2.r)]);
+            
+            // --- FIX: Correctly identify Base Camp tiles for both map types ---
+            const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+            const enemyBaseTileKeys = new Set();
+            
+            if (Array.isArray(enemyBaseData)) {
+                // Expansive Mode: Array of Tile Keys
+                enemyBaseData.forEach(k => enemyBaseTileKeys.add(k));
+            } else if (typeof enemyBaseData === 'string') {
+                // Standard Mode: Edge Key String
+                const [h1, h2] = parseEdgeKey(enemyBaseData);
+                if (!isNaN(h1.q)) enemyBaseTileKeys.add(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
+            }
+            // -----------------------------------------------------------------
 
             const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); 
             const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
@@ -5539,7 +6392,7 @@ function completeFortify(unitToFortify, targetTileKeyToFortify) {
             }
             updateSelectedUnitInfoPanel();
         }
-
+        
 function completeUnfortify(unitToUnfortify, targetEdgeKey) {
     if (!unitToUnfortify || !unitToUnfortify.isFortified || unitToUnfortify.hasPerformedMajorAction) {
         showInstruction("Cannot unfortify now.", 2000); 
@@ -5793,41 +6646,6 @@ function completeBuildBridge(targetEdgeKey) {
             return Array.from(potentialEdges);
         }
 
-        function getPotentialArcherAttackEdges(attackingUnit) {
-            const potentialEdges = new Set();
-            if (!attackingUnit || attackingUnit.type.name !== 'Archer') return Array.from(potentialEdges);
-
-            if (attackingUnit.isFortified && attackingUnit.positionType === 'center') {
-                const attackerTileKey = attackingUnit.position;
-                const attackerTile = gameState.tiles.get(attackerTileKey);
-                if (!attackerTile) return Array.from(potentialEdges);
-                getNeighbors(attackerTile.q, attackerTile.r).forEach(neighborCoords => {
-                    const neighborKey = getTileKey(neighborCoords.q, neighborCoords.r);
-                    if (gameState.tiles.has(neighborKey)) {
-                        potentialEdges.add(getEdgeKey(attackerTile.q, attackerTile.r, neighborCoords.q, neighborCoords.r));
-                    }
-                });
-            } else if (attackingUnit.positionType === 'edge') {
-                const currentUnitEdgeKey = attackingUnit.position;
-                const [H1_coords, H2_coords] = parseEdgeKey(currentUnitEdgeKey);
-                if (isNaN(H1_coords.q) || isNaN(H2_coords.q)) return Array.from(potentialEdges);
-
-                const processHex = (hexCoords) => {
-                    if (gameState.tiles.has(getTileKey(hexCoords.q, hexCoords.r))) {
-                        getNeighbors(hexCoords.q, hexCoords.r).forEach(neighbor_coords => {
-                            if (gameState.tiles.has(getTileKey(neighbor_coords.q, neighbor_coords.r))) {
-                                const edgeToAdd = getEdgeKey(hexCoords.q, hexCoords.r, neighbor_coords.q, neighbor_coords.r);
-                                potentialEdges.add(edgeToAdd); 
-                            }
-                        });
-                    }
-                };
-                processHex(H1_coords);
-                processHex(H2_coords);
-            }
-            return Array.from(potentialEdges);
-        }
-
         function getValidMeleeAttackTargets(attackingUnit) {
             if (!attackingUnit || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) return [];
             const targets = [];
@@ -5869,183 +6687,115 @@ function completeBuildBridge(targetEdgeKey) {
             return targets;
         }
 
-        function canArcherOnEdgeSeeEdge(archerEdgeKey, targetEdgeKey, archerTile1, archerTile2) {
-            let blockedByTile1 = false;
-            if (archerTile1.type === TILE_TYPES.MOUNTAIN) {
-                if (isEdgePartOfTile(archerTile1.q, archerTile1.r, targetEdgeKey) && targetEdgeKey !== archerEdgeKey) {
-                    blockedByTile1 = true;
-                }
-            } else if (archerTile1.type === TILE_TYPES.FOREST) {
-                if (isEdgePartOfTile(archerTile1.q, archerTile1.r, targetEdgeKey) &&
-                    targetEdgeKey !== archerEdgeKey &&
-                    !isEdgeRotationallyAdjacentToEdgeOnTile(archerTile1.q, archerTile1.r, archerEdgeKey, targetEdgeKey)) {
-                    blockedByTile1 = true;
-                }
-            }
-
-            let blockedByTile2 = false;
-            if (archerTile2.type === TILE_TYPES.MOUNTAIN) {
-                if (isEdgePartOfTile(archerTile2.q, archerTile2.r, targetEdgeKey) && targetEdgeKey !== archerEdgeKey) {
-                    blockedByTile2 = true;
-                }
-            } else if (archerTile2.type === TILE_TYPES.FOREST) {
-                if (isEdgePartOfTile(archerTile2.q, archerTile2.r, targetEdgeKey) &&
-                    targetEdgeKey !== archerEdgeKey &&
-                    !isEdgeRotationallyAdjacentToEdgeOnTile(archerTile2.q, archerTile2.r, archerEdgeKey, targetEdgeKey)) {
-                    blockedByTile2 = true;
-                }
-            }
-            return !blockedByTile1 && !blockedByTile2;
-        }
-        
-        function canArcherOnEdgeSeeFortified(archerEdgeKey, targetFortifiedTileKey, archerTile1, archerTile2) {
-            const targetFortifiedTile = gameState.tiles.get(targetFortifiedTileKey);
-            if (!targetFortifiedTile) return false;
-
-            let obstructed = false;
-            if (archerTile1.type === TILE_TYPES.FOREST) {
-                const connectingEdgeKey = getEdgeKey(archerTile1.q, archerTile1.r, targetFortifiedTile.q, targetFortifiedTile.r);
-                if (gameState.edges.has(connectingEdgeKey)) { 
-                    if (!isEdgeRotationallyAdjacentToEdgeOnTile(archerTile1.q, archerTile1.r, archerEdgeKey, connectingEdgeKey)) {
-                        obstructed = true; 
-                    }
-                }
-            }
-
-            if (!obstructed && archerTile2.type === TILE_TYPES.FOREST) {
-                const connectingEdgeKey = getEdgeKey(archerTile2.q, archerTile2.r, targetFortifiedTile.q, targetFortifiedTile.r);
-                 if (gameState.edges.has(connectingEdgeKey)) { 
-                    if (!isEdgeRotationallyAdjacentToEdgeOnTile(archerTile2.q, archerTile2.r, archerEdgeKey, connectingEdgeKey)) {
-                        obstructed = true;
-                    }
-                }
-            }
-            if (obstructed) return false;
-
-            const [archerH1_coords, archerH2_coords] = parseEdgeKey(archerEdgeKey);
-            
-            let isRotationallyValid = false;
-            const connectingEdge1_key = getEdgeKey(archerH1_coords.q, archerH1_coords.r, targetFortifiedTile.q, targetFortifiedTile.r);
-            if (gameState.edges.has(connectingEdge1_key)) { 
-                if (isEdgeRotationallyAdjacentToEdgeOnTile(archerH1_coords.q, archerH1_coords.r, archerEdgeKey, connectingEdge1_key)) {
-                    isRotationallyValid = true;
-                }
-            }
-            
-            if (!isRotationallyValid) { 
-                const connectingEdge2_key = getEdgeKey(archerH2_coords.q, archerH2_coords.r, targetFortifiedTile.q, targetFortifiedTile.r);
-                 if (gameState.edges.has(connectingEdge2_key)) { 
-                    if (isEdgeRotationallyAdjacentToEdgeOnTile(archerH2_coords.q, archerH2_coords.r, archerEdgeKey, connectingEdge2_key)) {
-                        isRotationallyValid = true;
-                    }
-                }
-            }
-            
-            return isRotationallyValid;
-        }
-
-        function canFortifiedArcherSee(attackingUnit, targetInfo) {
-            const archerFortTileKey = attackingUnit.position;
-            const archerFortTile = gameState.tiles.get(archerFortTileKey);
-            if (!archerFortTile) return false;
-
-            if (archerFortTile.type === TILE_TYPES.FOREST) {
-                if (targetInfo.isBridgeTarget || (targetInfo.unit && !targetInfo.unit.isFortified)) {
-                    return isEdgePartOfTile(archerFortTile.q, archerFortTile.r, targetInfo.edgeKey);
-                } else if (targetInfo.unit.isFortified) {
-                    const targetTileKey = targetInfo.tileKeyForTarget;
-                    const targetTile = gameState.tiles.get(targetTileKey);
-                    if (!targetTile) return false;
-                    const isAdjacent = axialDistance(archerFortTile.q, archerFortTile.r, targetTile.q, targetTile.r) === 1;
-                    return isAdjacent && targetTile.type !== TILE_TYPES.FOREST;
-                }
-            }
-
-            if (targetInfo.unit && targetInfo.unit.isFortified) {
-                const targetTile = gameState.tiles.get(targetInfo.tileKeyForTarget);
-                if (targetTile && targetTile.type === TILE_TYPES.FOREST) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        function canEdgeArcherSee(attackingUnit, targetInfo) {
-            const archerEdgeKey = attackingUnit.position;
-            const [archerH1, archerH2] = parseEdgeKey(archerEdgeKey);
-            const archerTile1 = gameState.tiles.get(getTileKey(archerH1.q, archerH1.r));
-            const archerTile2 = gameState.tiles.get(getTileKey(archerH2.q, archerH2.r));
-            if (!archerTile1 || !archerTile2) return false;
-
-            if (targetInfo.isBridgeTarget || (targetInfo.unit && !targetInfo.unit.isFortified)) {
-                return canArcherOnEdgeSeeEdge(archerEdgeKey, targetInfo.edgeKey, archerTile1, archerTile2);
-            }
-            
-            if (targetInfo.unit && targetInfo.unit.isFortified) {
-                const targetTileKey = targetInfo.tileKeyForTarget;
-                const targetTile = gameState.tiles.get(targetTileKey);
-                if (!targetTile) return false;
-
-                if (targetTile.type === TILE_TYPES.FOREST) {
-                    if (!isEdgePartOfTile(targetTile.q, targetTile.r, archerEdgeKey)) {
-                        return false; 
-                    }
-                }
-                
-                const isImmediatelyAdjacentFort = (targetTileKey === getTileKey(archerH1.q, archerH1.r) || targetTileKey === getTileKey(archerH2.q, archerH2.r));
-                if (isImmediatelyAdjacentFort) {
-                    const archerEdge = gameState.edges.get(archerEdgeKey);
-                    const hasMeleeSpotter = archerEdge.units.some(u => u.player === attackingUnit.player && u.type.name === 'Melee');
-                    return hasMeleeSpotter;
-                } else {
-                    return canArcherOnEdgeSeeFortified(archerEdgeKey, targetTileKey, archerTile1, archerTile2);
-                }
-            }
-            
-            return false;
-        }
-
         function getValidArcherAttackTargets(attackingUnit) {
             if (!attackingUnit || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction || attackingUnit.type.name !== 'Archer') {
                 return [];
             }
 
-            const potentialAttackEdges = getPotentialArcherAttackEdges(attackingUnit);
-            const potentialTargetableTiles = new Set();
-            potentialAttackEdges.forEach(edgeKey => {
-                const [c1, c2] = parseEdgeKey(edgeKey);
-                if (!isNaN(c1.q)) potentialTargetableTiles.add(getTileKey(c1.q, c1.r));
-                if (!isNaN(c2.q)) potentialTargetableTiles.add(getTileKey(c2.q, c2.r));
-            });
+            // 1. Calculate all visible keys using the new system (Fog of War)
+            const visibilityData = getVisibleKeysFromUnit(attackingUnit);
+            const visibleEdges = visibilityData.edges;
+            const visibleTiles = visibilityData.tiles;
 
             const potentialTargets = [];
+
+            // Helper to add targets if they are in the visible set
             const addPotentialUnit = (unit, edgeKey = null, tileKey = null) => {
                 if (!potentialTargets.some(t => t.unit && t.unit.id === unit.id)) {
                     potentialTargets.push({ unit: unit, edgeKey: edgeKey, tileKeyForTarget: tileKey, isBridgeTarget: false });
                 }
             };
+            
             const addPotentialBridge = (edgeKey) => {
                 if (!potentialTargets.some(t => t.isBridgeTarget && t.edgeKey === edgeKey)) {
                     potentialTargets.push({ unit: null, edgeKey: edgeKey, tileKeyForTarget: null, isBridgeTarget: true });
                 }
             };
 
-            potentialAttackEdges.forEach(edgeKey => {
+            // --- COMBINED ARMS CHECK ---
+            let hasCombinedArms = false;
+            if (attackingUnit.positionType === 'edge') {
+                const myEdge = gameState.edges.get(attackingUnit.position);
+                if (myEdge) {
+                    hasCombinedArms = myEdge.units.some(u => u.id !== attackingUnit.id && u.player === attackingUnit.player && u.type.attackType === 'melee');
+                }
+            }
+
+            // Pre-calculate Edge Archer context (Side Tiles)
+            let adjTile1Key = null;
+            let adjTile2Key = null;
+            let sideTileH1 = null; 
+            let sideTileH2 = null;
+
+            if (attackingUnit.positionType === 'edge') {
+                const [h1, h2] = parseEdgeKey(attackingUnit.position);
+                if (!isNaN(h1.q)) { adjTile1Key = getTileKey(h1.q, h1.r); sideTileH1 = h1; }
+                if (!isNaN(h2.q)) { adjTile2Key = getTileKey(h2.q, h2.r); sideTileH2 = h2; }
+            }
+
+            // Pre-calculate Fortified Archer context (Source Tile Visibility)
+            let sourceTile = null;
+            let sourceVis = 3;
+            if (attackingUnit.positionType === 'center' && attackingUnit.isFortified) {
+                sourceTile = gameState.tiles.get(attackingUnit.position);
+                if (sourceTile) sourceVis = getTileVisibility(sourceTile);
+            }
+
+            // 2. Scan Visible Edges for Targets
+            visibleEdges.forEach(edgeKey => {
+                // --- ATTACK RANGE FILTER: EDGE ARCHER ---
+                // Can only attack edges belonging to Side Tiles (A/B)
+                if (attackingUnit.positionType === 'edge') {
+                    const inA = sideTileH1 && isEdgePartOfTile(sideTileH1.q, sideTileH1.r, edgeKey);
+                    const inB = sideTileH2 && isEdgePartOfTile(sideTileH2.q, sideTileH2.r, edgeKey);
+                    if (!inA && !inB) return; 
+                }
+
+                // --- ATTACK RANGE FILTER: FORTIFIED ARCHER ---
+                // If fortified in Low Vis (<=1, e.g. Forest), can ONLY attack own tile edges.
+                // If fortified in High Vis (>1, e.g. Plains), can attack "roads leading up" (Neighbors included).
+                if (attackingUnit.positionType === 'center' && attackingUnit.isFortified && sourceTile) {
+                    if (sourceVis <= 1) {
+                        if (!isEdgePartOfTile(sourceTile.q, sourceTile.r, edgeKey)) {
+                            return; // Skip edge if not directly on the fort perimeter
+                        }
+                    }
+                }
+
                 const edge = gameState.edges.get(edgeKey);
                 if (edge) {
+                    // Check for Enemy Units
                     edge.units.forEach(unit => {
                         if (unit.player !== attackingUnit.player) {
                             addPotentialUnit(unit, edgeKey, null);
                         }
                     });
+                    // Check for Bridges
                     if (edge.bridge && edge.bridgeHp > 0) {
                         addPotentialBridge(edgeKey);
                     }
                 }
             });
-            potentialTargetableTiles.forEach(tileKey => {
+
+            // 3. Scan Visible Tiles for Fortified Targets
+            visibleTiles.forEach(tileKey => {
                 const tile = gameState.tiles.get(tileKey);
-                if (tile && tile.fortifiedByPlayer && tile.fortifiedByPlayer !== attackingUnit.player) {
+                if (!tile) return;
+
+                const vis = getTileVisibility(tile);
+                
+                // --- TARGETING RESTRICTION & EXCEPTION ---
+                // Default Rule: Can only target center if Visibility > 1.
+                let visibilityThreshold = 2;
+
+                // Combined Arms Exception: If we have a spotter, we can target adjacent centers with Visibility > 0.
+                if (hasCombinedArms && (tileKey === adjTile1Key || tileKey === adjTile2Key)) {
+                    visibilityThreshold = 1;
+                }
+
+                if (vis < visibilityThreshold) return;
+
+                if (tile.fortifiedByPlayer && tile.fortifiedByPlayer !== attackingUnit.player) {
                     const fortifiedUnit = gameState.units.find(u => u.isFortified && u.position === tileKey);
                     if (fortifiedUnit) {
                         addPotentialUnit(fortifiedUnit, null, tileKey);
@@ -6053,15 +6803,8 @@ function completeBuildBridge(targetEdgeKey) {
                 }
             });
             
-            return potentialTargets.filter(targetInfo => {
-                if (attackingUnit.isFortified) {
-                    return canFortifiedArcherSee(attackingUnit, targetInfo);
-                } else { 
-                    return canEdgeArcherSee(attackingUnit, targetInfo);
-                }
-            });
+            return potentialTargets;
         }
-
 
         function handleAttackAction() {
             if (gameState.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== gameState.playerSide) return;
@@ -6209,7 +6952,9 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
 
     let damageModifier = 0;
     let advantageMessage = "";
-    let baseDamage = attackingUnit.type.attack;
+    
+    // Use mutable stats
+    let baseDamage = attackingUnit.stats.damage;
 
     if (targetUnitInfo.unit) {
         const attackerType = attackingUnit.type;
@@ -6287,7 +7032,6 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                         recalculatePlayerSupplyNetwork(1);
                         recalculatePlayerSupplyNetwork(2);
 
-                        // If the attacker was a Horseman, recalculate its moves now that the bridge is gone.
                         if (attackingUnit.type.name === 'Horseman') {
                             gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
                         }
@@ -6295,20 +7039,15 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                         const [h1, h2] = parseEdgeKey(targetUnitInfo.edgeKey);
                         const tile1 = gameState.tiles.get(getTileKey(h1.q, h1.r));
                         const tile2 = gameState.tiles.get(getTileKey(h2.q, h2.r));
-
                         const isBeach = (tile1 && tile1.type !== TILE_TYPES.WATER) || (tile2 && tile2.type !== TILE_TYPES.WATER);
 
                         [...bridgeEdge.units].forEach(unitOnCollapse => {
                             if (isBeach) {
-                                // On a beach, take 3 damage instead of dying
                                 const fallDamage = 3;
                                 unitOnCollapse.hp -= fallDamage;
                                 logParts.push(`P${unitOnCollapse.player} ${unitOnCollapse.type.name} fell as the bridge collapsed and takes ${fallDamage} damage! HP: ${unitOnCollapse.hp}`);
-                                if (unitOnCollapse.hp <= 0) {
-                                    handleUnitDeath(unitOnCollapse, "bridge_collapse");
-                                }
+                                if (unitOnCollapse.hp <= 0) handleUnitDeath(unitOnCollapse, "bridge_collapse");
                             } else {
-                                // On a Water-Water edge, the unit is instantly destroyed
                                 handleUnitDeath(unitOnCollapse, "bridge_collapse");
                             }
                         });
@@ -6319,11 +7058,16 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                 if (attackingUnit.player !== targetUnit.player) {
                     targetUnit.lastAttackedByHostileOnTurn = gameState.globalTurnNumber;
                 }
+                
                 let actualDamage = baseDamage;
                 let defenseMessage = "";
-                let pierceMessage = "";
 
+                // --- COMBAT CALCULATION UPDATE ---
+                // Using unit.stats.defense directly (removed pierce logic)
+                const targetDefense = targetUnit.stats.defense; 
+                
                 if (targetUnit.isFortified) {
+                    // FORTIFIED LOGIC
                     let hasCombinedArmsPartner = false;
                     const edge = gameState.edges.get(attackingUnit.position);
                     if (edge) {
@@ -6332,21 +7076,32 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                     }
                     if (hasCombinedArmsPartner) {
                         defenseMessage = 'Combined arms negates fortification!';
+                        // If defense is negative, they still take extra damage even if "fortification" is negated.
+                        if (targetDefense < 0) actualDamage -= targetDefense; 
                     } else {
-                        const defenseBonus = targetUnit.type.fortificationBonus || 1;
-                        const pierceValue = attackingUnit.type.defenseNegation || 0;
-                        if (pierceValue > 0) pierceMessage = `${attackingUnit.type.name} pierces ${pierceValue} defense.`;
-                        const effectiveDefense = Math.max(0, defenseBonus - pierceValue);
-                        actualDamage = Math.max(0, baseDamage - effectiveDefense);
-                        if (effectiveDefense > 0) defenseMessage = `Fortification reduced damage by ${effectiveDefense}.`;
+                        // Standard Fortification Defense
+                        actualDamage -= targetDefense;
+                        
+                        if (targetDefense > 0) defenseMessage = `Fortification reduced damage by ${targetDefense}.`;
+                        else if (targetDefense < 0) defenseMessage = `Vulnerable! Taken ${Math.abs(targetDefense)} extra damage.`;
+                    }
+                } else {
+                    // UNFORTIFIED LOGIC
+                    // Negative defense applies to ALL attacks (Vulnerability)
+                    if (targetDefense < 0) {
+                        actualDamage -= targetDefense; // Subtracting negative = Adding damage
+                        defenseMessage = `Vulnerable! Taken ${Math.abs(targetDefense)} extra damage.`;
                     }
                 }
-                if (pierceMessage) logParts.push(pierceMessage);
+                
+                // Enforce Minimum Damage Cap
+                actualDamage = Math.max(1, actualDamage);
+
                 if (defenseMessage) logParts.push(defenseMessage);
 
                 triggerDamageVisual(targetUnit, attackStatus);
 
-                if (attackType === 'Archer' && targetUnitInfo.edgeKey && actualDamage > 0 && !targetUnit.isFortified) {
+                if (attackType === 'Archer' && targetUnitInfo.edgeKey && !targetUnit.isFortified) {
                     const edgeOfTarget = gameState.edges.get(targetUnitInfo.edgeKey);
                     const allEnemyUnitsOnEdge = edgeOfTarget ? edgeOfTarget.units.filter(u => u.player === targetUnit.player) : [];
                     if (allEnemyUnitsOnEdge.length === 2) {
@@ -6374,7 +7129,7 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                     const edgeOfHorseman = gameState.edges.get(targetUnitInfo.edgeKey);
                     const retaliatingArcher = edgeOfHorseman ? edgeOfHorseman.units.find(u => u.player === targetUnit.player && u.type.name === 'Archer') : null;
                     if (retaliatingArcher) {
-                        const retaliationDamage = Math.ceil(retaliatingArcher.type.attack / 2);
+                        const retaliationDamage = Math.ceil(retaliatingArcher.stats.damage / 2);
                         attackingUnit.hp -= retaliationDamage;
                         triggerDamageVisual(attackingUnit, 'normal');
                         logParts.push(`Cavalry Screen! P${retaliatingArcher.player} ${retaliatingArcher.type.name} retaliates for ${retaliationDamage} damage.<br>Attacker HP: ${attackingUnit.hp}/${attackingUnit.maxHp}`);
@@ -6385,10 +7140,7 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
             if (hitAndRunMessage) logParts.push(hitAndRunMessage);
 
             logAction(logParts.join('<br>'), gameState.currentPlayer, 4500);
-
-            // CRITICAL FIX: Update HP display after attack damage
             updateSupplyPointsDisplay();
-
             resetActionSelectionStates();
             updateSelectedUnitInfoPanel();
             if (!gameState.gameOver) checkVictoryCondition();
@@ -6397,19 +7149,10 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
 
     if (gameSettings.animationsEnabled) {
         if (targetUnitInfo.isBridgeTarget) {
-            // Simplified animation logic for bridge targets
             const bridgeEdge = gameState.edges.get(targetUnitInfo.edgeKey);
             if (bridgeEdge) {
                 const targetPos = getEdgeMidpoint(bridgeEdge.q1, bridgeEdge.r1, bridgeEdge.q2, bridgeEdge.r2);
-
-                // Create a temporary "dummy" target unit at the bridge's location for the animation system
-                const dummyTarget = {
-                    isFortified: false,
-                    position: targetUnitInfo.edgeKey,
-                    // A getUnitScreenPosition function that just returns the bridge center
-                    getScreenPosition: () => targetPos
-                };
-                // Override the getUnitScreenPosition function temporarily for the dummy object
+                const dummyTarget = { isFortified: false, position: targetUnitInfo.edgeKey, getScreenPosition: () => targetPos };
                 const originalGetUnitScreenPosition = getUnitScreenPosition;
                 getUnitScreenPosition = (unit) => {
                     if (unit === dummyTarget) return unit.getScreenPosition();
@@ -6417,92 +7160,43 @@ function completeAttack(attackingUnit, targetUnitInfo, attackType) {
                 };
 
                 if (attackingUnit.type.attackType === 'melee') {
-                    animation.type = 'attack_lunge';
-                    animation.duration = 250;
-                    animation.target = dummyTarget;
+                    animation.type = 'attack_lunge'; animation.duration = 250; animation.target = dummyTarget;
                     gameState.activeAnimations.push(animation);
                 } else if (attackingUnit.type.attackType === 'ranged') {
                     animation.targets = [dummyTarget];
                     const startPos = originalGetUnitScreenPosition(attackingUnit);
                     const maxDistance = pointDistance(startPos, targetPos);
                     const travelDuration = maxDistance / PROJECTILE_SPEED_PIXELS_PER_MS;
-
-                    animation.type = 'attack_projectile';
-                    animation.duration = 150 + 250 + travelDuration;
-                    animation.preShotDuration = {
-                        draw: 150,
-                        hold: 250
-                    };
-                    animation.travelDuration = travelDuration;
+                    animation.type = 'attack_projectile'; animation.duration = 150 + 250 + travelDuration;
+                    animation.preShotDuration = { draw: 150, hold: 250 }; animation.travelDuration = travelDuration;
                     gameState.activeAnimations.push(animation);
                 }
-
-                // Restore the original function after the animation is pushed
-                setTimeout(() => {
-                    getUnitScreenPosition = originalGetUnitScreenPosition;
-                }, animation.duration + 50);
-
-            } else {
-                animation.onComplete();
-            }
-
+                setTimeout(() => { getUnitScreenPosition = originalGetUnitScreenPosition; }, animation.duration + 50);
+            } else { animation.onComplete(); }
         } else if (attackingUnit.type.attackType === 'melee') {
-            // --- Original Melee logic ---
-            animation.type = 'attack_lunge';
-            animation.duration = 250;
-            animation.target = targetUnitInfo.unit;
+            animation.type = 'attack_lunge'; animation.duration = 250; animation.target = targetUnitInfo.unit;
             gameState.activeAnimations.push(animation);
         } else if (attackingUnit.type.attackType === 'ranged') {
-            // --- Original Ranged logic ---
-            let targets = [];
-            let maxDistance = 0;
-
+            let targets = []; let maxDistance = 0;
             const edgeOfTarget = targetUnitInfo.edgeKey ? gameState.edges.get(targetUnitInfo.edgeKey) : null;
             const enemyUnitsOnEdge = edgeOfTarget ? edgeOfTarget.units.filter(u => u.player !== attackingUnit.player) : [];
-
-            if (edgeOfTarget && enemyUnitsOnEdge.length === 2 && !targetUnitInfo.unit.isFortified) {
-                targets = enemyUnitsOnEdge;
-            } else {
-                targets.push(targetUnitInfo.unit);
-            }
-
+            if (edgeOfTarget && enemyUnitsOnEdge.length === 2 && !targetUnitInfo.unit.isFortified) { targets = enemyUnitsOnEdge; } else { targets.push(targetUnitInfo.unit); }
             animation.targets = targets;
-
             const startPos = getUnitScreenPosition(attackingUnit);
             if (startPos) {
                 targets.forEach(t => {
                     const targetPos = getUnitScreenPosition(t);
-                    if (targetPos) {
-                        const distance = pointDistance(startPos, targetPos);
-                        if (distance > maxDistance) maxDistance = distance;
-                    }
+                    if (targetPos) { const distance = pointDistance(startPos, targetPos); if (distance > maxDistance) maxDistance = distance; }
                 });
             }
-
             if (maxDistance > 0) {
-                const preShotDrawDuration = 150;
-                const preShotHoldDuration = 250;
-                const travelDuration = maxDistance / PROJECTILE_SPEED_PIXELS_PER_MS;
-
-                animation.type = 'attack_projectile';
-                animation.duration = preShotDrawDuration + preShotHoldDuration + travelDuration;
-                animation.preShotDuration = {
-                    draw: preShotDrawDuration,
-                    hold: preShotHoldDuration
-                };
-                animation.travelDuration = travelDuration;
-
+                const preShotDrawDuration = 150; const preShotHoldDuration = 250; const travelDuration = maxDistance / PROJECTILE_SPEED_PIXELS_PER_MS;
+                animation.type = 'attack_projectile'; animation.duration = preShotDrawDuration + preShotHoldDuration + travelDuration;
+                animation.preShotDuration = { draw: preShotDrawDuration, hold: preShotHoldDuration }; animation.travelDuration = travelDuration;
                 gameState.activeAnimations.push(animation);
-            } else {
-                animation.onComplete();
-            }
-        } else {
-            animation.onComplete();
-        }
-    } else {
-        // Animations are disabled, so execute the result immediately.
-        animation.onComplete();
-    }
+            } else { animation.onComplete(); }
+        } else { animation.onComplete(); }
+    } else { animation.onComplete(); }
 
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
@@ -6514,7 +7208,7 @@ function showSwapClassModal(unit) {
     if (!overlay || !content) return;
 
     content.classList.add('swap-mode');
-    content.querySelector('h3').textContent = "Morph Unit";
+    content.querySelector('h3').textContent = "Swap Unit"; // Updated Text
     content.querySelector('p').textContent = `Select new class for ${unit.type.name}`;
 
     const buttons = content.querySelectorAll('.respawn-button');
@@ -6664,156 +7358,6 @@ function handleForcedSwap() {
             }
             return false;
         }
-
-function handleInteractionStart(x, y, isTouchEvent = false) {
-            if (gameState.fillToolActive) {
-                if (gameState.mapMakerBrush.type !== 'tile') {
-                    showInstruction("Please select a tile type to fill with.", 2000);
-                    return;
-                }
-                const coords = pixelToAxial(x, y);
-                performFloodFill(coords.q, coords.r);
-                return;
-            }
-
-            if (gameState.mapMakerMode) {
-                gameState.isDragging = true;
-                gameState.mapMakerLastPaintedHexKey = null;
-                applyMapMakerBrush(x, y);
-                return;
-            }
-            if (gameState.gameOver) return;
-
-            // --- ARCADE SWAP INTERCEPTION ---
-            if (gameState.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
-                const baseClickRadius = isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS;
-                const clickRadius = baseClickRadius * gameState.renderScale;
-                
-                // Simple finding logic for Swap Click
-                let clickedUnit = null;
-                const edgeUnits = [];
-                gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
-                
-                for (let i = edgeUnits.length - 1; i >= 0; i--) {
-                     const {unit, edge} = edgeUnits[i];
-                     if (unit.player !== gameState.currentPlayer) continue;
-                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                     // (Simplified math from main handler for brevity, full implementation recommended in production)
-                     if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < clickRadius) {
-                         clickedUnit = unit;
-                         break;
-                     }
-                }
-                // Also check fortified units (though rare in arcade)
-                if (!clickedUnit) {
-                    for (const unit of gameState.units) {
-                         if (unit.player === gameState.currentPlayer && unit.isFortified) {
-                             const tile = gameState.tiles.get(unit.position);
-                             if (tile) {
-                                 const {x: tx, y: ty} = axialToPixel(tile.q, tile.r);
-                                 if (Math.sqrt((x - tx)**2 + (y - ty)**2) < clickRadius) {
-                                     clickedUnit = unit;
-                                     break;
-                                 }
-                             }
-                         }
-                    }
-                }
-
-                if (clickedUnit) {
-                    gameState.unitToSwap = clickedUnit;
-                    gameState.swapState = 'selecting_class';
-                    showSwapClassModal(clickedUnit);
-                } else {
-                    showInstruction("You must select a unit to SWAP!", 1500);
-                }
-                return; // Stop standard interaction
-            }
-
-            if (gameState.fillToolActive) {
-                if (gameState.mapMakerBrush.type !== 'tile') {
-                    showInstruction("Please select a tile type to fill with.", 2000);
-                    return;
-                }
-                const coords = pixelToAxial(x, y);
-                performFloodFill(coords.q, coords.r);
-                return;
-            }
-
-            if (gameState.mapMakerMode) {
-                gameState.isDragging = true;
-                gameState.mapMakerLastPaintedHexKey = null;
-                applyMapMakerBrush(x, y);
-                return;
-            }
-            if (gameState.gameOver || gameState.currentActionState !== ACTION_STATES.IDLE && gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED) return;
-
-            dragOperationJustConcluded = false; 
-            clearDebugPath();
-            gameState.dragStartX = x; 
-            gameState.dragStartY = y; 
-            gameState.draggedDistance = 0;
-
-            let unitToDrag = null;
-            
-            // --- FIX: Apply renderScale to click radius ---
-            const baseClickRadius = isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS;
-            const clickRadius = baseClickRadius * gameState.renderScale;
-            // ----------------------------------------------
-
-            const edgeUnits = [];
-            gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
-            
-            for (let i = edgeUnits.length - 1; i >= 0; i--) {
-                 const {unit, edge} = edgeUnits[i];
-                 if (unit.player !== gameState.currentPlayer) continue;
-                if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; 
-                if (unit.isFortified || unit.currentMove < 1) continue;
-                 if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
-                 
-                 const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                 let unitCenterX = mid.x, unitCenterY = mid.y;
-                 const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
-                 const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === unit.id);
-                 if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
-                    const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
-                    const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
-                    let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
-                    let perpX = -dy_val / len, perpY = dx_val / len;
-                    
-                    // --- FIX: Apply renderScale to visual offset calculation ---
-                    unitCenterX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); 
-                    unitCenterY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
-                 }
-                 
-                 if (Math.sqrt((x - unitCenterX)**2 + (y - unitCenterY)**2) < clickRadius) { 
-                     unitToDrag = unit; 
-                     break; 
-                 }
-            }
-
-            if (unitToDrag) {
-                gameState.isDragging = true; 
-                gameState.dragStartTime = Date.now();
-                gameState.draggingUnit = unitToDrag;
-                gameState.dragUnitOriginalPosition = unitToDrag.position; 
-                gameState.dragUnitOriginalType = unitToDrag.positionType;
-                gameState.dragUnitRenderX = x; 
-                gameState.dragUnitRenderY = y;
-                if (!gameState.selectedUnit || gameState.selectedUnit.id !== unitToDrag.id) {
-                    gameState.selectedUnit = unitToDrag;
-                    gameState.currentActionState = ACTION_STATES.UNIT_SELECTED;
-                    updateSelectedUnitInfoPanel();
-                }
-                gameState.currentReachableMoves = getPossibleMoves(unitToDrag);
-                if (unitToDrag.positionType === 'edge') {
-                    const edgeData = gameState.edges.get(unitToDrag.position);
-                    if (edgeData) edgeData.units = edgeData.units.filter(u => u.id !== unitToDrag.id);
-                }
-                canvas.style.cursor = 'grabbing'; 
-            }
-        }
-
     
 function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
     gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
@@ -7125,12 +7669,19 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             }
             if (gameState.gameOver) return;
 
+            // --- ARCADE TIMER TRIGGER ---
+            // Timer starts only after P1 interacts on Turn 1
+            if (gameState.gameMode === 'arcade' && !gameState.arcadeGameStartedInteraction) {
+                gameState.arcadeGameStartedInteraction = true;
+            }
+            // ----------------------------
+
             // --- ARCADE SWAP INTERCEPTION ---
-            // This blocks normal interaction if we are in the 'selecting_unit' phase (Turn 2+)
             if (gameState.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
                 const baseClickRadius = isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS;
                 const clickRadius = baseClickRadius * gameState.renderScale;
                 
+                // Simple finding logic for Swap Click
                 let clickedUnit = null;
                 const edgeUnits = [];
                 gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
@@ -7139,11 +7690,13 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                      const {unit, edge} = edgeUnits[i];
                      if (unit.player !== gameState.currentPlayer) continue;
                      const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                     // (Simplified math from main handler for brevity, full implementation recommended in production)
                      if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < clickRadius) {
                          clickedUnit = unit;
                          break;
                      }
                 }
+                // Also check fortified units (though rare in arcade)
                 if (!clickedUnit) {
                     for (const unit of gameState.units) {
                          if (unit.player === gameState.currentPlayer && unit.isFortified) {
@@ -7166,29 +7719,48 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 } else {
                     showInstruction("You must select a unit to SWAP!", 1500);
                 }
-                return; // Stop standard interaction here
+                return; // Stop standard interaction
             }
 
-            // Standard Interaction continues below...
-            if (gameState.currentActionState !== ACTION_STATES.IDLE && gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED) return;
+            if (gameState.fillToolActive) {
+                if (gameState.mapMakerBrush.type !== 'tile') {
+                    showInstruction("Please select a tile type to fill with.", 2000);
+                    return;
+                }
+                const coords = pixelToAxial(x, y);
+                performFloodFill(coords.q, coords.r);
+                return;
+            }
+
+            if (gameState.mapMakerMode) {
+                gameState.isDragging = true;
+                gameState.mapMakerLastPaintedHexKey = null;
+                applyMapMakerBrush(x, y);
+                return;
+            }
+            if (gameState.gameOver || gameState.currentActionState !== ACTION_STATES.IDLE && gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED) return;
 
             dragOperationJustConcluded = false; 
             clearDebugPath();
-            
             gameState.dragStartX = x; 
             gameState.dragStartY = y; 
             gameState.draggedDistance = 0;
 
             let unitToDrag = null;
-            const clickRadius = (isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS) * gameState.renderScale;
+            
+            // --- FIX: Apply renderScale to click radius ---
+            const baseClickRadius = isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS;
+            const clickRadius = baseClickRadius * gameState.renderScale;
+            // ----------------------------------------------
+
             const edgeUnits = [];
             gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
             
             for (let i = edgeUnits.length - 1; i >= 0; i--) {
                  const {unit, edge} = edgeUnits[i];
                  if (unit.player !== gameState.currentPlayer) continue;
-                 if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; 
-                 if (unit.isFortified || unit.currentMove < 1) continue;
+                if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; 
+                if (unit.isFortified || unit.currentMove < 1) continue;
                  if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
                  
                  const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
@@ -7200,9 +7772,12 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                     const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
                     let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
                     let perpX = -dy_val / len, perpY = dx_val / len;
+                    
+                    // --- FIX: Apply renderScale to visual offset calculation ---
                     unitCenterX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); 
                     unitCenterY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
                  }
+                 
                  if (Math.sqrt((x - unitCenterX)**2 + (y - unitCenterY)**2) < clickRadius) { 
                      unitToDrag = unit; 
                      break; 
@@ -7217,15 +7792,12 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 gameState.dragUnitOriginalType = unitToDrag.positionType;
                 gameState.dragUnitRenderX = x; 
                 gameState.dragUnitRenderY = y;
-                
                 if (!gameState.selectedUnit || gameState.selectedUnit.id !== unitToDrag.id) {
                     gameState.selectedUnit = unitToDrag;
                     gameState.currentActionState = ACTION_STATES.UNIT_SELECTED;
                     updateSelectedUnitInfoPanel();
                 }
-                
                 gameState.currentReachableMoves = getPossibleMoves(unitToDrag);
-                
                 if (unitToDrag.positionType === 'edge') {
                     const edgeData = gameState.edges.get(unitToDrag.position);
                     if (edgeData) edgeData.units = edgeData.units.filter(u => u.id !== unitToDrag.id);
@@ -7360,14 +7932,69 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         function handleTapLogic(x, y) {
             if (gameState.mapMakerMode) return; 
 
-            if (handleActionTargetSelectionClick(x, y)) { /* Action target click handled */ } 
-            else if (handleUnitSelectionClick(x,y)) { /* Unit selection/deselection handled */ }
-            else if (handleMoveClick(x, y)) { /* Click-to-move handled */ } 
-            else if (gameState.selectedUnit) {
-                 gameState.selectedUnit = null; 
-                 gameState.currentReachableMoves.clear();
-                 resetActionSelectionStates(); 
-                 updateSelectedUnitInfoPanel(); 
+            // --- DEBUG: Flag Selection ---
+            if (gameSettings.debugModeEnabled) {
+                let clickedFlagPlayer = null;
+                const checkFlagClick = (player) => {
+                    let flagX, flagY;
+                    const baseData = gameState.baseCampPositions[`player${player}`];
+                    
+                    if (gameState.gridRadius === 4 && Array.isArray(baseData)) {
+                        const pos = calculateBaseCentroid(baseData);
+                        if (pos) { flagX = pos.x; flagY = pos.y; }
+                    } else if (gameState.gridRadius !== 4 && typeof baseData === 'string') {
+                        const edge = gameState.edges.get(baseData);
+                        if (edge) {
+                            const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                            flagX = mid.x; flagY = mid.y;
+                        }
+                    }
+
+                    if (flagX !== undefined) {
+                        const dist = Math.sqrt((x - flagX)**2 + (y - flagY)**2);
+                        if (dist < (HEX_SIZE * gameState.renderScale * 0.5)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                if (checkFlagClick(1)) clickedFlagPlayer = 1;
+                else if (checkFlagClick(2)) clickedFlagPlayer = 2;
+
+                if (clickedFlagPlayer) {
+                    clearSelectionAndDebugState(); // Clear previous selection first
+                    gameState.debugSelectedBasePlayer = clickedFlagPlayer;
+                    showInstruction(`Debug: P${clickedFlagPlayer} Base Selected`, 1500);
+                    // updateSelectedUnitInfoPanel is called in clearSelectionAndDebugState, 
+                    // but we might want to refresh specific debug info here if we add a panel for it later.
+                    return;
+                }
+            }
+            // -----------------------------
+
+            if (handleActionTargetSelectionClick(x, y)) { 
+                // Click was handled by an action (e.g. Attack/Fortify confirmation)
+                // Do not clear selection.
+                return;
+            } 
+            
+            if (handleUnitSelectionClick(x, y)) { 
+                // A unit was selected or clicked.
+                // handleUnitSelectionClick handles its own state setting,
+                // but we ensure debug base selection is gone.
+                gameState.debugSelectedBasePlayer = null; 
+                return;
+            }
+            
+            if (handleMoveClick(x, y)) { 
+                // A move command was issued.
+                return; 
+            } 
+            
+            // If we reached here, the click was on empty space or invalid territory.
+            if (gameState.selectedUnit || gameState.debugSelectedBasePlayer) {
+                 clearSelectionAndDebugState();
             }
         }
 
@@ -7770,6 +8397,7 @@ function triggerConfetti() {
 // ========================================================================
 
 // AI Brain: Gathers and scores all possible actions for a single unit.
+// AI Brain: Gathers and scores all possible actions for a single unit.
 function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     if (unit.hasPerformedMajorAction) return null;
 
@@ -7780,11 +8408,56 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         let score = 50.0;
         if(targetInfo.unit){
             if(targetInfo.unit.isCarryingFlag) score += 200;
-            const predictedDmg = unit.type.attack + (unit.isFortified && unit.type.name === 'Archer' ? 1 : 0);
+            
+            // UPDATE: Use mutable stats for damage calculation
+            let predictedDmg = unit.stats.damage;
+            
+            // Archer Fortification Bonus
+            if (unit.isFortified && unit.type.name === 'Archer') {
+                predictedDmg += 1;
+            }
+            
+            // Advantage/Disadvantage
+            if(unit.type.strengths.includes(targetInfo.unit.type.name)) predictedDmg += 1;
+            if(unit.type.weaknesses.includes(targetInfo.unit.type.name)) predictedDmg -= 1;
+
+            // UPDATE: Account for Target Defense
+            let targetDefense = targetInfo.unit.stats.defense;
+            
+            // Fortification Check
+            if (targetInfo.unit.isFortified) {
+                // Check Combined Arms (Simple check for AI)
+                const hasPartner = allAllies.some(u => 
+                    u.position === unit.position && 
+                    u.id !== unit.id && 
+                    u.type.attackType !== unit.type.attackType
+                );
+                
+                if (hasPartner) {
+                    // Ignore positive defense
+                    if (targetDefense < 0) predictedDmg -= targetDefense; 
+                } else {
+                    // Apply defense
+                    predictedDmg -= targetDefense;
+                }
+            } else {
+                // Not Fortified: Only apply vulnerability
+                if (targetDefense < 0) predictedDmg -= targetDefense;
+            }
+
+            // Min Damage Cap
+            predictedDmg = Math.max(1, predictedDmg);
+
+            // Kill Priority
             if(targetInfo.unit.hp <= predictedDmg) score += 100;
-            if(unit.type.strengths.includes(targetInfo.unit.type.name)) score += 25;
-            if(unit.type.weaknesses.includes(targetInfo.unit.type.name)) score -= 25;
-        } else { score = 5; } // Low score for bridge
+            
+            // Damage Value
+            score += predictedDmg * 10;
+
+        } else { 
+            // Bridge Attack
+            score = 5; 
+        } 
         return score;
     };
 
@@ -7836,6 +8509,8 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
              if (edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
                 [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {
                     const tile = gameState.tiles.get(tileKey);
+                    // Check logic for fortification
+                    // TODO: Check enemy base tiles if necessary (omitted for brevity in AI)
                     if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null) {
                          let score = 5 - unit.fortifyCooldown;
                          if(strategy === 'IRON_WALL' && unit.type.name === 'Pikeman') score += 25;
@@ -7859,10 +8534,17 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     const possibleMoves = getPossibleMoves(unit);
     possibleMoves.forEach((moveData, edgeKey) => {
         const moveScore = scoreMove(edgeKey);
-        const ghostUnit = { ...unit, position: edgeKey, currentMove: unit.currentMove - moveData.cost };
+        
+        // Ghost Unit for calculation: Update position AND Move Points
+        const ghostUnit = { 
+            ...unit, 
+            position: edgeKey, 
+            currentMove: unit.currentMove - moveData.cost,
+            positionType: 'edge' // Assume moving to edge
+        };
 
         // MOVE_AND_ATTACK (for Horseman)
-        if (ghostUnit.type.name === 'Horseman' && ghostUnit.currentMove >= ATTACK_COST) {
+        if (unit.type.canMoveAfterAttack && ghostUnit.currentMove >= ATTACK_COST) {
             const attackTargets = getValidMeleeAttackTargets(ghostUnit);
             if (attackTargets.length > 0) {
                 const bestTarget = attackTargets.sort((a,b) => scoreAttack(b) - scoreAttack(a))[0];
@@ -7881,7 +8563,6 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     possibleActions.sort((a, b) => b.score - a.score);
     return possibleActions[0];
 }
-
 
 // AI Executor: Takes a chosen action and performs it with animations.
 async function executeAIAction(action) {
@@ -8028,8 +8709,28 @@ function checkVictoryCondition() {
         for (const unit of gameState.units) {
             if (unit.isCarryingFlag) {
                 const carrierPlayer = unit.player;
-                const carrierHomeBaseEdge = gameState.baseCampPositions[`player${carrierPlayer}`];
-                if (unit.position === carrierHomeBaseEdge) {
+                const carrierHomeBaseData = gameState.baseCampPositions[`player${carrierPlayer}`];
+                let isHome = false;
+
+                if (Array.isArray(carrierHomeBaseData)) {
+                    // Expansive Mode (Radius 4): Base is a list of tiles.
+                    // Victory condition: Unit is on an edge connecting two of these tiles (Internal Edge).
+                    const [h1, h2] = parseEdgeKey(unit.position);
+                    if (!isNaN(h1.q) && !isNaN(h2.q)) {
+                        const t1 = getTileKey(h1.q, h1.r);
+                        const t2 = getTileKey(h2.q, h2.r);
+                        if (carrierHomeBaseData.includes(t1) && carrierHomeBaseData.includes(t2)) {
+                            isHome = true;
+                        }
+                    }
+                } else {
+                    // Standard Mode (Radius 3): Base is a specific edge key string.
+                    if (unit.position === carrierHomeBaseData) {
+                        isHome = true;
+                    }
+                }
+
+                if (isHome) {
                     victoryText = `Player ${carrierPlayer} captured the flag and wins!`;
                     break;
                 }
@@ -8147,7 +8848,10 @@ function proceedToEndTurn() {
     gameState.units.forEach(unit => {
         if (unit.player === gameState.currentPlayer) {
             unit.hasPerformedMajorAction = false; 
-            let baseMoveForTurn = unit.type.baseMove;
+            
+            // UPDATE: Use unit.stats.speed instead of type.baseMove
+            let baseMoveForTurn = unit.stats.speed;
+            
             if (unit.isCarryingFlag) { baseMoveForTurn -= 1; }
             unit.currentMove = Math.max(0, baseMoveForTurn); 
             
@@ -8169,6 +8873,8 @@ function proceedToEndTurn() {
             }
         }
     });
+    
+// ... rest of function
     
     handleRespawnQueue();
     applyStartOfTurnZoCDamage(); 
@@ -8603,15 +9309,18 @@ function hideNewMapModal() {
         setTimeout(() => {
             modal.style.display = 'none';
             // After the modal is hidden, reset it to the default view
-            // so it opens correctly the next time.
-            showDefaultNewMapView();
-        }, 300); // The timeout matches the modal's hide transition.
+            showDefaultNewMapView(); // This will reset width to 400px
+        }, 300); 
     }
 }
 
 function showSelectMapView() {
     const modalContent = document.querySelector('#newMapModal .modal-content');
     if (!modalContent) return;
+
+    // --- FIX: Tighter width (was 700px) ---
+    modalContent.style.maxWidth = '600px'; 
+    // -------------------------------------
 
     modalContent.querySelector('h3').style.display = 'none';
     document.getElementById('newMapOptionsContainer').style.display = 'none';
@@ -8626,11 +9335,13 @@ function showSelectMapView() {
         title.style.cssText = "font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;";
         
         const presetContainer = document.createElement('div');
-        presetContainer.style.cssText = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px;";
+        // Flex row, centered, wrapping allowed but shouldn't happen with this width
+        presetContainer.style.cssText = "display: flex; flex-direction: row; gap: 10px; margin-bottom: 25px; justify-content: center; flex-wrap: wrap;";
 
         const createPresetCard = (mapData) => {
             const wrapper = document.createElement('div');
-            wrapper.style.cssText = "cursor: pointer; border: 2px solid #4a6075; border-radius: 8px; padding: 10px; transition: border-color 0.2s; display: flex; flex-direction: column; align-items: center; gap: 5px; background-color: var(--bg-color);";
+            // Reduced padding slightly inside the card
+            wrapper.style.cssText = "cursor: pointer; border: 2px solid #4a6075; border-radius: 8px; padding: 8px; transition: border-color 0.2s; display: flex; flex-direction: column; align-items: center; gap: 5px; background-color: var(--bg-color); min-width: 150px;";
             wrapper.onclick = () => {
                 hideAllModals();
                 loadPresetMap(mapData);
@@ -8655,11 +9366,16 @@ function showSelectMapView() {
             return wrapper;
         };
 
-        presetContainer.appendChild(createPresetCard(PRESET_MAP_1));
-        presetContainer.appendChild(createPresetCard(PRESET_MAP_2));
+        presetContainer.appendChild(createPresetCard(PRESET_MAP_2)); // Alpha Grounds
+        presetContainer.appendChild(createPresetCard(PRESET_MAP_1)); // River Fork
+        presetContainer.appendChild(createPresetCard(PRESET_MAP_3)); // Volcano Island
 
         const buttonsContainer = document.createElement('div');
         buttonsContainer.className = 'modal-buttons';
+        // --- FIX: Center align buttons and reduce gap ---
+        buttonsContainer.style.justifyContent = 'center'; 
+        buttonsContainer.style.gap = '20px';
+        // ------------------------------------------------
 
         const backButton = document.createElement('button');
         backButton.className = 'action-button action-button-cancel';
@@ -8690,6 +9406,10 @@ function showDefaultNewMapView() {
     const modalContent = document.querySelector('#newMapModal .modal-content');
     if (!modalContent) return;
     
+    // --- FIX: Reset modal width to default ---
+    modalContent.style.maxWidth = '400px';
+    // ----------------------------------------
+
     const selectMapView = document.getElementById('selectMapView');
     if (selectMapView) {
         selectMapView.style.display = 'none';
@@ -8701,19 +9421,39 @@ function showDefaultNewMapView() {
 
 function renderMapPreview(canvas, mapData) {
     const ctx = canvas.getContext('2d');
-    const radius = 3;
-    const size = 8; // Small hex size for preview
+    
+    // --- FIX: Dynamic sizing based on map radius ---
+    const radius = mapData.radius || 3;
+    const size = radius === 4 ? 6 : 8; // Smaller hexes for larger maps
+    
     const width = canvas.width;
     const height = canvas.height;
     ctx.clearRect(0, 0, width, height);
 
-    const baseCamps = [
-        ...parseEdgeKey(mapData.baseCampPositions.player1),
-        ...parseEdgeKey(mapData.baseCampPositions.player2)
-    ].map(c => getTileKey(c.q, c.r));
+    // --- FIX: Normalize Base Camp Data (Handle Array vs String) ---
+    const p1BaseTiles = new Set();
+    const p2BaseTiles = new Set();
+
+    const addBaseTiles = (baseData, set) => {
+        if (!baseData) return;
+        if (Array.isArray(baseData)) {
+            baseData.forEach(k => set.add(k));
+        } else if (typeof baseData === 'string') {
+            const [h1, h2] = parseEdgeKey(baseData);
+            if (!isNaN(h1.q)) set.add(getTileKey(h1.q, h1.r));
+            if (!isNaN(h2.q)) set.add(getTileKey(h2.q, h2.r));
+        }
+    };
+
+    addBaseTiles(mapData.baseCampPositions.player1, p1BaseTiles);
+    addBaseTiles(mapData.baseCampPositions.player2, p2BaseTiles);
+    // -------------------------------------------------------------
 
     mapData.tiles.forEach((tileType, key) => {
         const [q, r] = key.split(',').map(Number);
+        
+        // Calculate centered position based on radius
+        // (Simple scaling, assuming 0,0 is center of canvas)
         const x = size * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r) + width / 2;
         const y = size * (3 / 2 * r) + height / 2;
         
@@ -8727,14 +9467,18 @@ function renderMapPreview(canvas, mapData) {
         ctx.closePath();
         
         let fillColor;
-        if (baseCamps.includes(key)) {
-            const isP1Base = parseEdgeKey(mapData.baseCampPositions.player1).some(c => getTileKey(c.q, c.r) === key);
-            fillColor = isP1Base ? TEAM_COLORS.player1.primary : TEAM_COLORS.player2.primary;
+        if (p1BaseTiles.has(key)) {
+            fillColor = TEAM_COLORS.player1.primary;
+        } else if (p2BaseTiles.has(key)) {
+            fillColor = TEAM_COLORS.player2.primary;
         } else {
-             switch (tileType) {
-                case TILE_TYPES.MOUNTAIN: fillColor = '#808080'; break;
-                case TILE_TYPES.FOREST: fillColor = '#208020'; break;
-                case TILE_TYPES.WATER: fillColor = '#80C0E0'; break;
+             // Handle object format (Expansive map JSON) or direct type
+             const type = tileType.name ? tileType.name.toUpperCase() : (tileType.type ? tileType.type.name.toUpperCase() : 'PLAINS');
+             
+             switch (type) {
+                case 'MOUNTAIN': fillColor = '#808080'; break;
+                case 'FOREST': fillColor = '#208020'; break;
+                case 'WATER': fillColor = '#80C0E0'; break;
                 default: fillColor = '#90E090'; break;
             }
         }
@@ -8868,90 +9612,74 @@ function rehydrateGameState() {
         // 1. Restore Tiles
         if (Array.isArray(gameState.tiles)) {
             gameState.tiles = new Map(gameState.tiles);
-        } else if (typeof gameState.tiles === 'object' && gameState.tiles !== null) {
-            gameState.tiles = new Map(Object.entries(gameState.tiles));
         } else {
-            console.warn("gameState.tiles is invalid type:", typeof gameState.tiles);
-            gameState.tiles = new Map();
+            gameState.tiles = new Map(Object.entries(gameState.tiles || {}));
         }
-        console.log(`Restored ${gameState.tiles.size} tiles.`);
 
         // 2. Restore Edges
         if (Array.isArray(gameState.edges)) {
             gameState.edges = new Map(gameState.edges);
-        } else if (typeof gameState.edges === 'object' && gameState.edges !== null) {
-            gameState.edges = new Map(Object.entries(gameState.edges));
         } else {
-            console.warn("gameState.edges is invalid type:", typeof gameState.edges);
-            gameState.edges = new Map();
+            gameState.edges = new Map(Object.entries(gameState.edges || {}));
         }
-        console.log(`Restored ${gameState.edges.size} edges.`);
 
         // 3. Restore Reachable Moves
-        if (gameState.currentReachableMoves) {
-            if (Array.isArray(gameState.currentReachableMoves)) {
-                gameState.currentReachableMoves = new Map(gameState.currentReachableMoves);
-            } else {
-                gameState.currentReachableMoves = new Map();
-            }
+        if (Array.isArray(gameState.currentReachableMoves)) {
+            gameState.currentReachableMoves = new Map(gameState.currentReachableMoves);
         } else {
             gameState.currentReachableMoves = new Map();
         }
 
-        // --- FIX: Restore Global Color State ---
+        // 4. Restore Global Color State
         if (gameState.playerColorSelections) {
             const p1Theme = COLOR_THEMES[gameState.playerColorSelections.player1];
             const p2Theme = COLOR_THEMES[gameState.playerColorSelections.player2];
             if (p1Theme && p2Theme) {
-                // Update Global TEAM_COLORS
                 TEAM_COLORS.player1 = { ...p1Theme.player1 };
                 TEAM_COLORS.player2 = { ...p2Theme.player2 };
-                
-                // Update immediate drawing colors
                 currentDrawingColors.player1 = { ...TEAM_COLORS.player1 };
                 currentDrawingColors.player2 = { ...TEAM_COLORS.player2 };
-                
-                // Update CSS Variables
                 updateCssVariables();
-                console.log("Restored Color Themes.");
             }
         }
-        // ---------------------------------------
 
-        // 4. Link Types
-        let typeLinkCount = 0;
-        for (const tile of gameState.tiles.values()) {
-            if (tile.type && tile.type.name) {
-                tile.type = TILE_TYPES[tile.type.name.toUpperCase()];
-                if (!tile.type) console.warn("Unknown Tile Type:", tile.type.name);
-            }
-        }
-        for (const unit of gameState.units) {
-            if (unit.type && unit.type.name) {
-                unit.type = UNIT_TYPES[unit.type.name.toUpperCase()];
-                typeLinkCount++;
-                if (!unit.type) console.warn("Unknown Unit Type:", unit.type.name);
-            }
-        }
-        console.log(`Re-linked types for ${typeLinkCount} units.`);
+        // 5. Restore Unit Logic (Getters & Stats)
+        gameState.units.forEach(unit => {
+            // Re-attach 'type' getter
+            Object.defineProperty(unit, 'type', {
+                get: function() { return UNIT_TYPES[this.typeId]; },
+                configurable: true
+            });
 
-        // 5. Re-link Units to Edges
+            // Re-attach legacy 'hp'/'maxHp' getters/setters for compatibility
+            Object.defineProperty(unit, 'hp', {
+                get: function() { return this.stats.hp; },
+                set: function(val) { this.stats.hp = val; },
+                configurable: true
+            });
+            Object.defineProperty(unit, 'maxHp', {
+                get: function() { return this.stats.maxHp; },
+                set: function(val) { this.stats.maxHp = val; },
+                configurable: true
+            });
+
+            // Ensure Linkage
+            if (!unit.typeId && unit.typeName) unit.typeId = unit.typeName;
+            if (!unit.type) console.warn("Unknown Unit Type ID:", unit.typeId);
+        });
+
+        // 6. Re-link Units to Edges
         for (const edge of gameState.edges.values()) {
             edge.units = [];
         }
-        let unitsPlaced = 0;
-        for (const unit of gameState.units) {
+        gameState.units.forEach(unit => {
             if (unit.positionType === 'edge') {
                 const edge = gameState.edges.get(unit.position);
                 if (edge) {
                     edge.units.push(unit);
-                    unitsPlaced++;
-                } else {
-                    console.warn(`Unit ${unit.id} on invalid edge: ${unit.position}`);
                 }
             }
-        }
-        console.log(`Placed ${unitsPlaced} units onto edges.`);
+        });
 
     } catch (err) {
         console.error("[Rehydrate] Error:", err);
@@ -8962,11 +9690,12 @@ function rehydrateGameState() {
 function createMapDataObject() {
     const mapData = {
         saveVersion: BUILD_VERSION,
-        radius: gameState.gridRadius, // ADDED THIS LINE
+        radius: gameState.gridRadius,
         tiles: Array.from(gameState.tiles.entries()),
         units: gameState.units.map(u => ({
             player: u.player,
-            typeName: u.type.name,
+            // --- FIX: Save Uppercase Type Name ---
+            typeName: u.type.name.toUpperCase(), 
             position: u.position
         })),
         baseCampPositions: gameState.baseCampPositions
@@ -8975,28 +9704,14 @@ function createMapDataObject() {
 }
 
 function attemptLegacyConversion(data) {
-    console.groupCollapsed(`[Converter] Checking Save (v: ${data.saveVersion})...`);
-    
-    // 1. Version Check
-    if (data.saveVersion === BUILD_VERSION) {
-        console.log("Version match. No conversion needed.");
-        console.groupEnd();
-        return data;
-    }
-
-    console.warn(`Version Mismatch! Input: ${data.saveVersion || "None"} vs Current: ${BUILD_VERSION}`);
+    console.groupCollapsed(`[Converter] Checking Save (v: ${data.saveVersion || "Old"})...`);
     
     // We attempt conversion on anything that looks like a save file
     const converted = { ...data };
+    converted.saveVersion = BUILD_VERSION; // Update version tag
 
-    // 2. Update Version
-    converted.saveVersion = BUILD_VERSION;
-
-    // 3. Default Game Mode & Radius
-    if (!converted.gameMode) {
-        console.log("Injecting default gameMode: local");
-        converted.gameMode = 'local';
-    }
+    // 1. Default Game Mode & Radius
+    if (!converted.gameMode) converted.gameMode = 'local';
     if (!converted.gridRadius) {
         let maxDist = 0;
         const tilesIter = Array.isArray(converted.tiles) ? converted.tiles : Object.entries(converted.tiles || {});
@@ -9006,28 +9721,51 @@ function attemptLegacyConversion(data) {
             if (dist > maxDist) maxDist = dist;
         });
         converted.gridRadius = maxDist || 3;
-        console.log(`Inferred Grid Radius: ${converted.gridRadius}`);
     }
 
-    // 4. Game State Normalization
+    // 2. State Normalization
     if (converted.currentPlayer === undefined) converted.currentPlayer = 1;
     if (converted.globalTurnNumber === undefined) converted.globalTurnNumber = 1;
-    if (!converted.supplyPoints) converted.supplyPoints = { player1: 10, player2: 10 };
-    if (!converted.respawnQueue) converted.respawnQueue = { player1: [], player2: [] };
-    if (!converted.actionLog) converted.actionLog = [];
-    if (!converted.playerActionTaken) converted.playerActionTaken = { player1: false, player2: false };
+    if (!converted.playerColorSelections) converted.playerColorSelections = { player1: 2, player2: 2 };
+    if (!converted.colorTransition) converted.colorTransition = { active: false, startTime: 0, from: {}, to: {} };
 
-    // --- FIX: Color System Normalization ---
-    if (!converted.playerColorSelections) {
-        converted.playerColorSelections = { player1: 2, player2: 2 }; // Default Theme 3
-    }
-    if (!converted.colorTransition) {
-        converted.colorTransition = { active: false, startTime: 0, from: {}, to: {} };
-    }
-    // ---------------------------------------
+    // 3. UNIT CONVERSION (The Fix for 0 Movement)
+    if (Array.isArray(converted.units)) {
+        converted.units = converted.units.map(u => {
+            // Determine Type
+            let tName = u.typeName || u.typeId || (u.type ? u.type.name : 'MELEE');
+            tName = tName.toUpperCase();
+            // Validate Type
+            const template = UNIT_TYPES[tName] || UNIT_TYPES.MELEE;
+            
+            // Build new 'stats' object if missing
+            if (!u.stats) {
+                console.log(`[Converter] Upgrading unit ${u.id} to new Stats system.`);
+                u.stats = {
+                    hp: u.hp !== undefined ? u.hp : template.hp,
+                    maxHp: u.maxHp !== undefined ? u.maxHp : template.hp,
+                    // Map old 'baseMove' or template 'speed'
+                    speed: (u.type && u.type.baseMove) ? u.type.baseMove : template.speed,
+                    damage: (u.type && u.type.damage) ? u.type.damage : template.damage,
+                    defense: (u.type && u.type.fortificationBonus) ? u.type.fortificationBonus : template.defense,
+                    range: template.attackType === 'ranged' ? 2 : 1
+                };
+            }
 
-    // 5. Normalize Tiles
-    console.log("Normalizing Tiles...");
+            // Ensure TypeID is set
+            u.typeId = tName;
+            
+            // Ensure essential flags exist
+            if (u.turnsFortifiedAtBase === undefined) u.turnsFortifiedAtBase = 0;
+            if (u.fortifyCooldown === undefined) u.fortifyCooldown = 0;
+            if (u.level === undefined) u.level = 0;
+            if (!u.upgrades) u.upgrades = { health: 0, speed: 0, damage: 0, defense: 0 };
+
+            return u;
+        });
+    }
+
+    // 4. Tile Normalization (Re-hydrating objects)
     let tileEntries = [];
     if (Array.isArray(converted.tiles)) {
         tileEntries = converted.tiles;
@@ -9037,72 +9775,33 @@ function attemptLegacyConversion(data) {
 
     converted.tiles = tileEntries.map(([key, value]) => {
         let tileObj = value;
+        // Handle raw string types (Old saves)
         if (typeof value === 'string') {
             const [q, r] = key.split(',').map(Number);
             tileObj = { q, r, type: TILE_TYPES[value] || TILE_TYPES.PLAINS };
         } else {
+            // Re-link Tile Type Object
             let typeName = 'PLAINS';
             if (typeof tileObj.type === 'string') typeName = tileObj.type;
             else if (tileObj.type && tileObj.type.name) typeName = tileObj.type.name;
             tileObj.type = TILE_TYPES[typeName.toUpperCase()] || TILE_TYPES.PLAINS;
         }
+        // Ensure coords
         if (tileObj.q === undefined) {
             const [q, r] = key.split(',').map(Number);
             tileObj.q = q; tileObj.r = r;
         }
         if (tileObj.isBaseCampTile === undefined) tileObj.isBaseCampTile = false; 
         if (tileObj.fortifiedByPlayer === undefined) tileObj.fortifiedByPlayer = null;
+        
+        // Add Visibility property if missing (B29 feature)
+        if (tileObj.type.visibility === undefined) {
+             const freshType = TILE_TYPES[tileObj.type.name.toUpperCase()];
+             tileObj.type.visibility = freshType ? freshType.visibility : 3;
+        }
+
         return [key, tileObj];
     });
-
-    // 6. Normalize Base Camps
-    if (!converted.baseCampPositions) {
-        converted.baseCampPositions = { player1: null, player2: null };
-        if (converted.gridRadius === 3) {
-            converted.baseCampPositions.player1 = DEFAULT_FLAG_HOME_POSITIONS.player1;
-            converted.baseCampPositions.player2 = DEFAULT_FLAG_HOME_POSITIONS.player2;
-        }
-    }
-
-    // 7. Apply isBaseCampTile Flag
-    const setFlag = (baseData) => {
-        if (!baseData) return;
-        const tilesToFlag = [];
-        if (Array.isArray(baseData)) tilesToFlag.push(...baseData);
-        else if (typeof baseData === 'string') {
-            const [h1, h2] = parseEdgeKey(baseData);
-            if (!isNaN(h1.q)) tilesToFlag.push(getTileKey(h1.q, h1.r));
-            if (!isNaN(h2.q)) tilesToFlag.push(getTileKey(h2.q, h2.r));
-        }
-        tilesToFlag.forEach(targetKey => {
-            const entry = converted.tiles.find(t => t[0] === targetKey);
-            if (entry) {
-                entry[1].isBaseCampTile = true;
-                entry[1].type = TILE_TYPES.PLAINS;
-            }
-        });
-    };
-    setFlag(converted.baseCampPositions.player1);
-    setFlag(converted.baseCampPositions.player2);
-
-    // 8. Normalize Units
-    if (Array.isArray(converted.units)) {
-        converted.units = converted.units.map(u => {
-            let tName = u.typeName || (u.type ? u.type.name : 'MELEE');
-            tName = tName.toUpperCase();
-            if (!UNIT_TYPES[tName]) tName = 'MELEE';
-            if (u.turnsFortifiedAtBase === undefined) u.turnsFortifiedAtBase = 0;
-            if (u.fortifyCooldown === undefined) u.fortifyCooldown = 0;
-            if (u.supplyLine === undefined) u.supplyLine = null;
-            return { ...u, typeName: tName };
-        });
-    }
-
-    // 9. Normalize Edges
-    if (converted.edges && !Array.isArray(converted.edges)) {
-        console.log("Converting Edges Object to Array...");
-        converted.edges = Object.entries(converted.edges);
-    }
 
     console.log("Conversion Complete.");
     console.groupEnd();
@@ -9128,7 +9827,7 @@ function loadMapFromDataObject(mapData) {
         enterMapMakerMode();
     }
 
-    // 1. Determine Radius (Already normalized by converter, but safe to check)
+    // 1. Determine Radius
     let loadedRadius = mapData.radius || 3;
 
     // 2. Resize
@@ -9139,40 +9838,84 @@ function loadMapFromDataObject(mapData) {
     gameState.tiles.clear();
     gameState.edges.forEach(edge => edge.units = []);
 
-    // Load tiles (Converter ensures 'type' is correct object)
+    // Load tiles
     mapData.tiles.forEach(([key, tile]) => {
-        gameState.tiles.set(key, tile);
+        const rehydratedTile = { ...tile,
+            type: TILE_TYPES[tile.type.name.toUpperCase()]
+        };
+        gameState.tiles.set(key, rehydratedTile);
     });
 
     // Load units
     mapData.units.forEach(unitInfo => {
-        const newUnit = createUnit(unitInfo.player, UNIT_TYPES[unitInfo.typeName], unitInfo.position);
-        gameState.units.push(newUnit);
-        const edge = gameState.edges.get(unitInfo.position);
-        if (edge) edge.units.push(newUnit);
+        // --- FIX: Ensure typeName is uppercase for lookup ---
+        const typeKey = (unitInfo.typeName || "").toUpperCase();
+        const unitType = UNIT_TYPES[typeKey];
+        
+        if (unitType) {
+            const newUnit = createUnit(unitInfo.player, unitType, unitInfo.position);
+            gameState.units.push(newUnit);
+            const edge = gameState.edges.get(unitInfo.position);
+            if (edge) {
+                edge.units.push(newUnit);
+            }
+        } else {
+            console.warn(`Skipped unknown unit type: ${unitInfo.typeName}`);
+        }
     });
 
-    // 4. Restore Base Camps
+    // 4. Restore Base Camp Logic & UI
     gameState.baseCampPositions = mapData.baseCampPositions;
     gameState.flags.p1_flag.homePosition = mapData.baseCampPositions.player1;
     gameState.flags.p2_flag.homePosition = mapData.baseCampPositions.player2;
 
-    // Sync Slider logic
+    // --- SYNC FLAGS TO TILES ---
+    const setBaseFlags = (baseData) => {
+        if (!baseData) return;
+        if (Array.isArray(baseData)) {
+            // Expansive: Array of tile keys
+            baseData.forEach(k => {
+                const tile = gameState.tiles.get(k);
+                if (tile) { 
+                    tile.type = TILE_TYPES.PLAINS; 
+                    tile.isBaseCampTile = true; 
+                }
+            });
+        } else if (typeof baseData === 'string') {
+            // Standard: Edge key string
+            const [h1, h2] = parseEdgeKey(baseData);
+            [getTileKey(h1.q, h1.r), getTileKey(h2.q, h2.r)].forEach(k => {
+                const tile = gameState.tiles.get(k);
+                if (tile) { 
+                    tile.type = TILE_TYPES.PLAINS; 
+                    tile.isBaseCampTile = true; 
+                }
+            });
+        }
+    };
+    setBaseFlags(gameState.baseCampPositions.player1);
+    setBaseFlags(gameState.baseCampPositions.player2);
+    // ---------------------------
+
+    // Determine the correct slider value (Standard Map Only)
     const sliderToRotations = [3, 2, 1, 0, -1, -2];
     let matchingSliderValue = '3'; 
-    if (mapData.baseCampPositions.player1) {
+
+    if (mapData.baseCampPositions.player1 && typeof mapData.baseCampPositions.player1 === 'string') {
         for (let i = 0; i < sliderToRotations.length; i++) {
             const rotations = sliderToRotations[i];
             const p1_default = parseEdgeKey(DEFAULT_FLAG_HOME_POSITIONS.player1);
             const p1_h1_rotated = rotateAxial(p1_default[0].q, p1_default[0].r, rotations);
             const p1_h2_rotated = rotateAxial(p1_default[1].q, p1_default[1].r, rotations);
             const testEdgeKey = getEdgeKey(p1_h1_rotated.q, p1_h1_rotated.r, p1_h2_rotated.q, p1_h2_rotated.r);
+
             if (testEdgeKey === mapData.baseCampPositions.player1) {
                 matchingSliderValue = i.toString();
                 break; 
             }
         }
     }
+
     const bcSlider = document.getElementById('baseCampSlider');
     if (bcSlider) bcSlider.value = matchingSliderValue;
 
@@ -9683,10 +10426,17 @@ function updateMainButtonsForTestMode(isTesting) {
 
 // --- MAP MAKER FUNCTIONS ---
 
-function enterMapMakerMode() {
+function enterMapMakerMode() {  
     console.log("Entering Map Maker mode.");
     gameState.mapMakerMode = true;
+    clearSelectionAndDebugState();
+    
+    // --- FIX: Clear all gameplay selection states to prevent visual artifacts ---
     gameState.selectedUnit = null;
+    gameState.currentReachableMoves.clear();
+    resetActionSelectionStates();
+    // ---------------------------------------------------------------------------
+
     gameState.playerActionTaken.player1 = false;
     gameState.playerActionTaken.player2 = false;
 
@@ -10328,6 +11078,7 @@ function resizeMapGrid(newRadius) {
         gameState.renderScale = 1.3; 
         gameState.renderOffset = { x: 0, y: 0 }; 
         gameState.baseCampPositions = { player1: null, player2: null };
+        gameState.flags = null; // Explicitly clear flags for Arcade
     } else { 
         gameState.gameMode = 'local'; 
         if (newRadius === 4) {
@@ -10337,6 +11088,14 @@ function resizeMapGrid(newRadius) {
             gameState.renderScale = 1.0;
         }
         gameState.renderOffset = { x: 0, y: 0 };
+
+        // --- FIX: Re-initialize flags object if missing (e.g. coming from Arcade) ---
+        if (!gameState.flags) {
+            gameState.flags = {
+                'p1_flag': { id: 'p1_flag', player: 1, homePosition: null, status: 'at_base', carrierId: null },
+                'p2_flag': { id: 'p2_flag', player: 2, homePosition: null, status: 'at_base', carrierId: null }
+            };
+        }
     }
 
     // Rebuild Controls (Adds/Removes Base Camp Buttons based on radius)
@@ -10429,9 +11188,10 @@ function eraseAt(x, y) {
 }
 
 function clearMapForMaker() {
-    // Clear tiles back to plains
+    // Clear tiles back to plains and unlock them
     gameState.tiles.forEach(tile => {
         tile.type = TILE_TYPES.PLAINS;
+        tile.isBaseCampTile = false; // Reset the lock flag
     });
 
     // Clear all units
@@ -10439,6 +11199,22 @@ function clearMapForMaker() {
     gameState.edges.forEach(edge => {
         edge.units = [];
     });
+
+    // Reset Base Camp Data
+    if (gameState.gridRadius === 3) {
+        // For Standard maps (R=3), re-apply the slider position to restore the fixed base camps
+        const sliderEl = document.getElementById('baseCampSlider');
+        if (sliderEl) {
+            updateBaseCampLocations(sliderEl.value);
+        }
+    } else {
+        // For Expansive (R=4) and Compact (R=2), fully clear the base camp data
+        gameState.baseCampPositions = { player1: null, player2: null };
+        if (gameState.flags) {
+             gameState.flags.p1_flag.homePosition = null;
+             gameState.flags.p2_flag.homePosition = null;
+        }
+    }
 
     showInstruction('Map Cleared!', 2000);
     autoSaveMap(); // Autosave the cleared state
@@ -10813,6 +11589,9 @@ function applyMapMakerBrush(x, y) {
         });
 
         window.onload = function () {
+            // --- Initialize Debug Console System Immediately ---
+            setupDebugConsoleSystem();
+
             document.getElementById('saveGameButton').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Game`;
             document.getElementById('loadGameButton').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> Load Game`;
             document.getElementById('buildVersionDisplay').textContent = `FortHex Build ${BUILD_VERSION}`;
@@ -10860,6 +11639,7 @@ function applyMapMakerBrush(x, y) {
             });
 
             document.getElementById('gameMenuTrigger').addEventListener('click', () => {
+                clearSelectionAndDebugState(); // Clear state when opening menu
                 const modal = document.getElementById('gameMenuModal');
                 document.getElementById('mainMenuContent').style.display = 'block';
                 document.getElementById('singleplayerMenuContent').style.display = 'none';
@@ -10885,7 +11665,7 @@ function applyMapMakerBrush(x, y) {
             document.getElementById('playAsBlueButton').addEventListener('click', () => startSingleplayerGame(1));
             document.getElementById('playAsRedButton').addEventListener('click', () => startSingleplayerGame(2));
 
-document.getElementById('localMultiplayerButton').addEventListener('click', () => {
+            document.getElementById('localMultiplayerButton').addEventListener('click', () => {
                 // First, completely exit the map maker mode, which restores the UI.
                 exitMapMakerMode(); 
                 
@@ -10940,6 +11720,7 @@ document.getElementById('localMultiplayerButton').addEventListener('click', () =
             const gameMenuModal = document.getElementById('gameMenuModal');
 
             settingsButton.addEventListener('click', () => {
+                clearSelectionAndDebugState();
                 if (gameMenuModal) {
                     gameMenuModal.classList.remove('modal-visible');
                     setTimeout(() => { gameMenuModal.style.display = 'none'; }, 300);
@@ -11024,8 +11805,7 @@ document.getElementById('localMultiplayerButton').addEventListener('click', () =
                 gameWrapper.style.transform = `scale(${gameSettings.uiScale})`;
             }
 
-            loadSettings(); 
-
+            // Sync settings logic
             animationsCheckbox.checked = gameSettings.animationsEnabled;
             passTurnCheckbox.checked = gameSettings.passTurnConfirmationEnabled;
             fancyVisualsCheckbox.checked = gameSettings.fancyVisualsEnabled;
@@ -11058,6 +11838,39 @@ document.getElementById('localMultiplayerButton').addEventListener('click', () =
                 applyUiScale(); 
                 saveSettings(); 
             });
+
+            // --- Debug Mode Toggle ---
+            const debugModeCheckbox = document.getElementById('settingDebugMode');
+            debugModeCheckbox.checked = gameSettings.debugModeEnabled;
+            
+            // Set initial console visibility based on loaded settings
+            const consoleModal = document.getElementById('debugConsoleModal');
+            if (gameSettings.debugModeEnabled) {
+                consoleModal.style.display = 'flex';
+                // Reset position to top-right default on load
+                consoleModal.style.top = '10px';
+                consoleModal.style.right = '10px';
+                consoleModal.style.left = 'auto';
+            } else {
+                consoleModal.style.display = 'none';
+            }
+
+            debugModeCheckbox.addEventListener('change', (e) => {
+                gameSettings.debugModeEnabled = e.target.checked;
+                saveSettings();
+                if (!gameSettings.debugModeEnabled) {
+                    clearSelectionAndDebugState(); 
+                    consoleModal.style.display = 'none';
+                } else {
+                    consoleModal.style.display = 'flex';
+                    // Reset position to top-right
+                    consoleModal.style.top = '10px';
+                    consoleModal.style.right = '10px';
+                    consoleModal.style.left = 'auto';
+                }
+                console.log(`Debug Mode: ${gameSettings.debugModeEnabled ? 'ON' : 'OFF'}`);
+            });
+            // ------------------------
 
             const customConfirmModalOverlay = document.getElementById('customConfirmModal');
             customConfirmModalOverlay.addEventListener('click', (event) => {
@@ -11394,9 +12207,10 @@ document.querySelectorAll('.swap-choice').forEach(btn => {
 });
         
         }
+
     </script>
           
-<div id="buildVersionDisplay">FortHex Build B28//3</div>
+<div id="buildVersionDisplay">FortHex Indev B29</div>
 <div id="confettiContainer"></div>
 
 <div id="victoryInteractionBlocker" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1999; display: none; background-color: rgba(44, 62, 80, 0.4); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); transition: background-color 0.5s ease, backdrop-filter 0.5s ease;"></div>
@@ -11416,6 +12230,15 @@ document.querySelectorAll('.swap-choice').forEach(btn => {
             <div id="color-options" class="color-options-container"><div class="color-option-circle" data-theme-index="0" style="background-color: rgb(64, 96, 224);" data-player="1"></div><div class="color-option-circle" data-theme-index="1" style="background-color: rgb(64, 80, 208);" data-player="1"></div><div class="color-option-circle active" data-theme-index="2" style="background-color: rgb(64, 64, 192);" data-player="1"></div><div class="color-option-circle" data-theme-index="3" style="background-color: rgb(64, 48, 176);" data-player="1"></div><div class="color-option-circle" data-theme-index="4" style="background-color: rgb(64, 32, 160);" data-player="1"></div></div>
         </div>
     </div>
+</div>
+
+<!-- DEBUG CONSOLE MODAL -->
+<div id="debugConsoleModal">
+    <div id="debugConsoleHeader">
+        <span>Dev Console (Alt+C)</span>
+        <button id="debugConsoleCloseBtn">×</button>
+    </div>
+    <div id="debugConsoleContent"></div>
 </div>
 
 </body></html>
