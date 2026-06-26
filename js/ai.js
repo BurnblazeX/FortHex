@@ -104,7 +104,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             possibleActions.push({ type: 'ATTACK_ONLY', unit, targetInfo, score: scoreAttack(targetInfo) });
         });
         // FORTIFY_ONLY
-        if (unit.type.canFortify) {
+        if (unit.stats.defense > 0) {
              const edgeCoords = parseEdgeKey(unit.position);
              if (edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
                 [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {

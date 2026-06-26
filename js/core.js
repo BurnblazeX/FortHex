@@ -317,6 +317,23 @@
             return [{q: q1, r: r1}, {q: q2, r: r2}];
         }
 
+        function getBaseCampTiles(baseData) {
+            let tiles = [];
+            if (!baseData) return tiles;
+
+            if (Array.isArray(baseData)) {
+                // Expansive Maps (R=4) use an array of tile keys
+                tiles = [...baseData];
+            } else if (typeof baseData === 'string') {
+                // Standard Maps (R=3) use a string representing the Flag's edge
+                const [h1, h2] = parseEdgeKey(baseData);
+                if (!isNaN(h1.q)) tiles.push(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) tiles.push(getTileKey(h2.q, h2.r));
+            }
+    
+            return tiles;
+        }
+        
         function isInternalBaseEdge(edgeKey) {
             // Checks if an edge is between two tiles of the SAME base camp
             const [h1, h2] = parseEdgeKey(edgeKey);
@@ -1965,29 +1982,46 @@
         }
 
         function performSwap(unit, newType) {
-            const oldRatio = unit.hp / unit.maxHp;
-            let newHp = Math.floor(newType.hp * oldRatio);
-            if (newHp < 1) newHp = 1; 
-
-            const oldType = unit.type.name;
+    // 1. Calculate HP ratio using the new stats object
+    const oldRatio = unit.stats.hp / unit.stats.maxHp;
     
-            // Update counts
-            gameState.unitCounts[`player${unit.player}`][oldType]--;
-            gameState.unitCounts[`player${unit.player}`][newType.name]++;
+    // Ensure we get the correct uppercase key (e.g., "HORSEMAN")
+    const newTypeKey = newType.typeName ? newType.typeName.toUpperCase() : newType.name.toUpperCase();
+    const template = UNIT_TYPES[newTypeKey];
 
-            unit.type = newType;
-            unit.maxHp = newType.hp;
-            unit.hp = newHp;
-    
-            triggerDamageVisual(unit, 'normal');
-            logAction(`P${unit.player} morphed ${oldType} into ${newType.name}.`, unit.player);
+    let newHp = Math.floor(template.hp * oldRatio);
+    if (newHp < 1) newHp = 1; 
 
-            gameState.swapState = 'complete';
-            gameState.unitToSwap = null;
+    const oldType = unit.type.name;
+
+    // 2. Update global counts
+    gameState.unitCounts[`player${unit.player}`][oldType]--;
+    gameState.unitCounts[`player${unit.player}`][template.name]++;
+
+    // --- 3. B29 FIX: Update typeId and stats object ---
+    unit.typeId = newTypeKey; 
     
-            updateSupplyPointsDisplay();
-            showInstruction("Swap complete! Turn begins.", 2000);
-        }
+    // Reset base stats to the new class
+    unit.stats.maxHp = template.hp;
+    unit.stats.hp = newHp;
+    unit.stats.speed = template.speed;
+    unit.stats.damage = template.damage;
+    unit.stats.defense = template.defense;
+    unit.stats.range = template.attackType === 'ranged' ? 2 : 1;
+    
+    // Sync their Movement Points to the new speed
+    unit.currentMove = unit.stats.speed;
+    // ---------------------------------------------------
+
+    triggerDamageVisual(unit, 'normal');
+    logAction(`P${unit.player} morphed ${oldType} into ${template.name}.`, unit.player);
+
+    gameState.swapState = 'complete';
+    gameState.unitToSwap = null;
+
+    updateSupplyPointsDisplay();
+    showInstruction("Swap complete! Turn begins.", 2000);
+}
 
         function handleForcedSwap() {
             if (gameState.gameMode !== 'arcade') return;
@@ -1998,10 +2032,10 @@
             const victim = myUnits[Math.floor(Math.random() * myUnits.length)];
             const allTypes = Object.values(UNIT_TYPES);
             const validTypes = allTypes.filter(t => {
-                if (t.name === victim.type.name) return false;
-                if (victim.isFortified && t.name === 'Horseman') return false;
-                return true;
-            });
+            if (t.name === victim.type.name) return false;
+            if (victim.isFortified && t.defense <= 0) return false;
+            return true;
+        });
     
             const newType = validTypes[Math.floor(Math.random() * validTypes.length)];
     

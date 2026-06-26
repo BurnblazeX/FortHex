@@ -111,19 +111,6 @@
             }
         }
 
-        function getPenaltyPipsCount(unit, stat) {
-            let penalizingStat = null;
-            for (const [key, val] of Object.entries(UPGRADE_CONSTANTS.PAIRS)) {
-                if (val === stat) { penalizingStat = key; break; }
-            }
-            if (!penalizingStat) return 0;
-    
-            const upgradeCount = unit.upgrades[penalizingStat] || 0;
-            if (upgradeCount === 3) return 2;
-            if (upgradeCount === 2) return 1;
-            return 0;
-        }
-
         function updateSelectedUnitInfoPanel() {
             // Prevent UI updates in Map Maker mode to avoid artifacts over the palette
             if (gameState.mapMakerMode) return;
@@ -150,7 +137,7 @@
                 const canAttack = selectedUnit.currentMove >= ATTACK_COST && !selectedUnit.hasPerformedMajorAction;
 
                 // --- Fortify / Unfortify Button Logic ---
-                if (selectedUnit.type.canFortify) {
+                if (selectedUnit.stats.defense > 0) {
                     ui.fortifyUnfortifyButton.style.display = 'inline-block';
                     const isSelectingFortify = currentActionState === ACTION_STATES.SELECTING_FORTIFY_TILE;
                     const isSelectingUnfortify = currentActionState === ACTION_STATES.SELECTING_UNFORTIFY_EDGE;
@@ -294,8 +281,10 @@
             const recruitView = document.getElementById('tabViewRecruit');
             if (recruitView) { recruitView.classList.add('active'); recruitView.style.display = 'flex'; }
             
-            document.getElementById('promoteUnitList').style.display = 'flex';
-            document.getElementById('promoteStatSelection').style.display = 'none';
+            const promoteList = document.getElementById('promoteUnitList');
+            const promoteStatSel = document.getElementById('promoteStatSelection');
+            if (promoteList) promoteList.style.display = 'flex';
+            if (promoteStatSel) promoteStatSel.style.display = 'none';
             content.className = `modal-content modal-p${player}`;
 
             const armySize = gameState.units.filter(u => u.player === player).length;
@@ -511,44 +500,56 @@
         }
 
         function showSwapClassModal(unit) {
-            const overlay = document.getElementById('respawnModalOverlay');
-            const content = document.getElementById('respawnModalContent');
-            if (!overlay || !content) return;
+    const overlay = document.getElementById('respawnModalOverlay');
+    const content = document.getElementById('respawnModalContent');
+    if (!overlay || !content) return;
 
-            content.classList.add('swap-mode');
-            content.querySelector('h3').textContent = "Swap Unit"; // Updated Text
-            content.querySelector('p').textContent = `Select new class for ${unit.type.name}`;
+    content.classList.add('swap-mode');
 
-            const buttons = content.querySelectorAll('.respawn-button');
-            buttons.forEach(btn => {
-                const typeName = btn.dataset.unitType; // e.g., "MELEE"
-                const type = UNIT_TYPES[typeName];
-        
-        // --- FIX: Inject the SVG icon ---
-        btn.innerHTML = UNIT_SVGS[typeName];
-        // -------------------------------
+    // 1. Completely rebuild the HTML specifically for Swapping, bypassing the tab system
+    content.innerHTML = `
+        <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 10px;">Swap Unit</h3>
+        <p style="margin-bottom: 20px;">Select new class for ${unit.type.name}</p>
+        <div id="respawnChoices" style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+            <button class="respawn-button" data-unit-type="MELEE" title="Melee"></button>
+            <button class="respawn-button" data-unit-type="ARCHER" title="Archer"></button>
+            <button class="respawn-button" data-unit-type="PIKEMAN" title="Pikeman"></button>
+            <button class="respawn-button" data-unit-type="HORSEMAN" title="Horseman"></button>
+        </div>
+    `;
+
+    // 2. Setup the buttons
+    const buttons = content.querySelectorAll('.respawn-button');
+    buttons.forEach(btn => {
+        const typeName = btn.dataset.unitType; 
+        const type = UNIT_TYPES[typeName];
+
+        // Inject the PNG image instead of the old SVG
+        btn.innerHTML = `<img src="assets/units/${type.name}.png" alt="${type.name}" style="width: 40px; height: 40px; object-fit: contain;">`;
 
         let isValid = true;
 
+        // Cannot swap into the same class
         if (type.name === unit.type.name) isValid = false;
-        if (unit.isFortified && type.name === 'Horseman') isValid = false;
+        
+        // Cannot swap a fortified unit into a class with 0 or less defense (like Horseman)
+        if (unit.isFortified && type.defense <= 0) isValid = false;
 
         btn.disabled = !isValid;
         
-        // Remove old listeners to be safe
-        btn.onclick = null;
+        // Handle the swap click
+        btn.onclick = (e) => {
+            e.stopPropagation(); // Prevent bubbling
+            performSwap(unit, type); // Now correctly calls this from core.js
+            hideRespawnModal();
+        };
+    });
 
-                btn.onclick = (e) => {
-                    e.stopPropagation(); // Prevent bubbling
-                    performSwap(unit, type);
-                    hideRespawnModal();
-                    btn.onclick = null; 
-                };
-            });
+    overlay.style.display = 'flex';
+    setTimeout(() => overlay.classList.add('modal-visible'), 10);
+}
 
-            overlay.style.display = 'flex';
-            setTimeout(() => overlay.classList.add('modal-visible'), 10);
-        }
+        
 
         function hideAllModals() {
             document.querySelectorAll('.modal-overlay').forEach(modal => {
@@ -1117,43 +1118,43 @@ function showDefaultNewMapView() {
 }
 
 function getUnitCardHTML(unit) {
-    // Generate the CSS classes for empty/filled/penalized pips
-    const genPips = (upgrades, penalties) => {
+    // --- NEW LOGIC: 1st upgrade is Gold, 2nd & 3rd are Red ---
+    const genPips = (upgrades) => {
         let html = '';
         for(let i = 0; i < 3; i++) {
             let cls = '';
-            if (i < penalties) cls = 'pip-penalty';
-            else if (i < penalties + upgrades) cls = 'pip-filled';
+            if (i < upgrades) {
+                // i === 0 is the 1st pip. i === 1 or 2 are the 2nd/3rd pips.
+                cls = (i === 0) ? 'pip-filled' : 'pip-penalty';
+            }
             html += `<div class="${cls}"></div>`;
         }
         return html;
     };
 
+    // We simply pull the number of upgrades for each stat directly.
     const atkUp = unit.upgrades.damage || 0;
-    const atkPen = getPenaltyPipsCount(unit, 'damage');
     const defUp = unit.upgrades.defense || 0;
-    const defPen = getPenaltyPipsCount(unit, 'defense');
     const spdUp = unit.upgrades.speed || 0;
-    const spdPen = getPenaltyPipsCount(unit, 'speed');
     const hpUp = unit.upgrades.health || 0;
-    const hpPen = getPenaltyPipsCount(unit, 'health');
 
-    const teamColor = unit.player === 1 ? TEAM_COLORS.player1.primary : TEAM_COLORS.player2.primary;
+    const teamPrimary = unit.player === 1 ? TEAM_COLORS.player1.primary : TEAM_COLORS.player2.primary;
+    const teamAccent = unit.player === 1 ? TEAM_COLORS.player1.accent : TEAM_COLORS.player2.accent;
     const borderColor = unit.level > 0 ? PALETTE.YELLOW_GOLD : '#FFF';
     
-    // --- FIX: Level Display Logic ---
+    // Level Badge Colors
     const levelText = unit.level > 0 ? `+${unit.level}` : '0';
     const levelBg = unit.level > 0 ? PALETTE.YELLOW_GOLD : '#F0F0F0'; 
-    const levelTextColor = '#000'; // Black text looks best on both gold and white
+    const levelTextColor = '#000'; 
 
     return `
         <!-- Top Bar -->
-        <div class="card-name-bar" style="background-color: ${teamColor}; border-color: ${borderColor};">${unit.type.name}</div>
+        <div class="card-name-bar" style="background-color: ${teamAccent}; border-color: ${teamPrimary};">${unit.type.name}</div>
         <div class="card-level-circle" style="background-color: ${levelBg}; border-color: ${borderColor}; color: ${levelTextColor};">${levelText}</div>
         
         <!-- Portrait Overlay -->
         <div class="card-portrait-wrapper">
-            <div class="card-portrait-circle" style="background-color: ${teamColor}; border-color: ${borderColor};">
+            <div class="card-portrait-circle" style="background-color: ${teamPrimary}; border-color: ${borderColor};">
                 <img src="assets/units/${unit.type.name}.png" alt="${unit.type.name}">
             </div>
         </div>
@@ -1161,20 +1162,20 @@ function getUnitCardHTML(unit) {
         <!-- Attack Row -->
         <img src="assets/icons/attack.png" class="card-icon c-ic-atk" alt="Atk">
         <div class="card-val c-val-atk">${unit.stats.damage}</div>
-        <div class="card-pips-row c-pips-atk">${genPips(atkUp, atkPen)}</div>
+        <div class="card-pips-row c-pips-atk">${genPips(atkUp)}</div>
 
         <!-- Defense Row -->
         <img src="assets/icons/defense.png" class="card-icon c-ic-def" alt="Def">
         <div class="card-val c-val-def">${unit.stats.defense}</div>
-        <div class="card-pips-row c-pips-def">${genPips(defUp, defPen)}</div>
+        <div class="card-pips-row c-pips-def">${genPips(defUp)}</div>
 
         <!-- Speed Row -->
         <img src="assets/icons/speed.png" class="card-icon c-ic-spd" alt="Spd">
         <div class="card-val c-val-spd">${unit.stats.speed}</div>
-        <div class="card-pips-row c-pips-spd">${genPips(spdUp, spdPen)}</div>
+        <div class="card-pips-row c-pips-spd">${genPips(spdUp)}</div>
 
         <!-- HP Column & Value -->
-        <div class="card-pips-col">${genPips(hpUp, hpPen)}</div>
+        <div class="card-pips-col">${genPips(hpUp)}</div>
         <img src="assets/icons/health.png" class="card-icon c-ic-hp" alt="HP">
         <div class="card-val c-val-hp">${unit.stats.maxHp}</div>
     `;

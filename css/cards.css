@@ -1,11 +1,6 @@
-/* ==========================================================================
-   UNIT CARD STYLES (v6 - Absolute Template Overlay)
-   ========================================================================== */
+
 .unit-card {
-    /* ==============================================================
-       CONTROL PANEL: ADJUST POSITIONS, SCALES, AND FONTS HERE!
-       EVERY ELEMENT IS COMPLETELY INDIVIDUALIZED.
-       ============================================================== */
+
     --card-width: 220px;
     --card-height: 310px;
 
@@ -19,7 +14,7 @@
     --level-top: 26px;             
     --level-left: 25px;            
     --level-size: 30px;            
-    --level-font-size: 1.2em;      
+    --level-font-size: 1em;      
 
     /* 2. Portrait Area */
     --portrait-box-top: 60px;
@@ -44,19 +39,19 @@
     --val-hp-top: 263px;     --val-hp-left: 176px;     --val-hp-width: 28px;     --val-hp-height: 28px;     --val-hp-font-size: 1em;
 
     /* 5. Pip Empty Slots (The dark pills) */
-    --pips-atk-top: 199px;   --pips-atk-left: 77px;
-    --pips-def-top: 234px;   --pips-def-left: 77px;
-    --pips-spd-top: 269px;   --pips-spd-left: 77px;
+    --pips-atk-top: 196px;   --pips-atk-left: 76px;
+    --pips-def-top: 230px;   --pips-def-left: 76px;
+    --pips-spd-top: 263px;   --pips-spd-left: 76px;
     
-    --pips-hp-top: 198px;    --pips-hp-left: 148px;
+    --pips-hp-top: 196px;    --pips-hp-left: 149px;
 
     --pip-horizontal-gap: 4px;     /* Gap between Atk/Def/Spd pips */
-    --pip-vertical-gap: 6px;       /* Gap between HP pips */
+    --pip-vertical-gap: 3px;       /* Gap between HP pips */
     
-    --pip-v-width: 12px;           /* Left side pip width */
-    --pip-v-height: 26px;          /* Left side pip height */
-    --pip-h-width: 54px;           /* HP side pip width */
-    --pip-h-height: 12px;          /* HP side pip height */
+    --pip-v-width: 17px;           /* Left side pip width */
+    --pip-v-height: 29px;          /* Left side pip height */
+    --pip-h-width: 56px;           /* HP side pip width */
+    --pip-h-height: 18px;          /* HP side pip height */
     /* ============================================================== */
 
     position: relative;
@@ -111,6 +106,7 @@
     align-items: center;
     justify-content: center;
     z-index: 10;
+    padding-bottom: 2px;                                                                                                                                         
 }
 
 /* --- 2. Portrait Area (No Canvas!) --- */

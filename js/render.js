@@ -684,166 +684,55 @@
     });
 }
 
-        function drawSword(ctx, centerX, centerY, symbolDisplayRadius, symbolColor) {
-            const scale = symbolDisplayRadius * 0.75; 
-            // --- VISUAL ADJUSTMENT: Shift sword down slightly to center it ---
-            const yOffset = scale * 0.1; 
+const UNIT_IMAGE_CONFIG = {
+    MELEE:    { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
+    ARCHER:   { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
+    PIKEMAN:  { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
+    HORSEMAN: { widthScale: 0.66, heightScale: 0.66, offsetX: 0, offsetY: -2 }, 
+    DEFAULT:  { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 }
+};
 
-            ctx.strokeStyle = symbolColor;
-            ctx.fillStyle = symbolColor;
-            ctx.lineWidth = Math.max(1.5, symbolDisplayRadius * 0.08);
-            ctx.lineJoin = 'round';
-            
-            const pommelRadius = scale * 0.15;
-            // Apply offset to pommel
-            const pommelY = centerY + scale * 0.55 + yOffset;
-            
-            ctx.beginPath();
-            ctx.arc(centerX, pommelY, pommelRadius, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.lineCap = 'round';
-            
-            const guardWidth = scale * 0.75;
-            // Apply offset to guard (rest of sword is derived from this)
-            const guardY = centerY + scale * 0.2 + yOffset;
-            const guardThickness = scale * 0.15;
-            
-            ctx.beginPath();
-            ctx.moveTo(centerX - guardWidth / 2, guardY);
-            ctx.lineTo(centerX + guardWidth / 2, guardY);
-            const oldWidth = ctx.lineWidth;
-            ctx.lineWidth = guardThickness;
-            ctx.stroke();
-            ctx.lineWidth = oldWidth;
-            ctx.lineCap = 'butt';
-            
-            // --- Draw the Hilt (Handle) ---
-            const hiltWidth = scale * 0.18;
-            const hiltHeight = pommelY - guardY; 
-            ctx.beginPath();
-            ctx.rect(centerX - hiltWidth / 2, guardY, hiltWidth, hiltHeight);
-            ctx.fill();
+function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
+    const typeKey = unit.typeId || unit.type.name.toUpperCase();
+    const img = IMAGE_ASSETS.map_units[typeKey];
 
-            const bladeWidth = scale * 0.22;
-            const bladeHeight = scale * 0.9;
-            const bladeY = guardY - bladeHeight;
-            ctx.beginPath();
-            ctx.rect(centerX - bladeWidth / 2, bladeY, bladeWidth, bladeHeight);
-            ctx.fill();
-            const tipBaseY = bladeY;
-            const tipHeight = scale * 0.35;
-            const tipTopY = tipBaseY - tipHeight;
-            const tipWidth = bladeWidth * 1.1;
-            ctx.beginPath();
-            ctx.moveTo(centerX, tipTopY); 
-            ctx.lineTo(centerX - tipWidth / 2, tipBaseY); 
-            ctx.lineTo(centerX + tipWidth / 2, tipBaseY); 
-            ctx.closePath();
-            ctx.fill();
+    const config = UNIT_IMAGE_CONFIG[typeKey] || UNIT_IMAGE_CONFIG.DEFAULT;
+
+    const baseDiameter = radius * 2;
+    const finalWidth = baseDiameter * config.widthScale;
+    const finalHeight = baseDiameter * config.heightScale;
+
+    if (img && img.complete && img.naturalHeight !== 0) {
+        ctx.save();
+        
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        if (symbolColor === PALETTE.YELLOW_GOLD) {
+            ctx.shadowColor = PALETTE.YELLOW_GOLD;
+            ctx.shadowBlur = 12;
+        } 
+        else if (symbolColor === PALETTE.BLACK_INK || symbolColor === '#000') {
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 2; 
         }
 
-        function drawArrow(ctx, centerX, centerY, symbolDisplayRadius, symbolColor) {
-            const scale = symbolDisplayRadius * 1.0; 
-            ctx.fillStyle = symbolColor;
-            ctx.strokeStyle = symbolColor; 
-            ctx.lineWidth = Math.max(1.0, symbolDisplayRadius * 0.05);
-            ctx.lineJoin = 'round';
-            ctx.beginPath();
-            const tipY = centerY - scale * 0.7;
-            ctx.moveTo(centerX, tipY);
-            const headBaseY = centerY - scale * 0.4;
-            const headWidth = scale * 0.4;
-            ctx.lineTo(centerX - headWidth / 2, headBaseY); 
-            const shaftWidth = scale * 0.15;
-            const shaftTopY = centerY - scale * 0.35;
-            ctx.lineTo(centerX - shaftWidth / 2, headBaseY);
-            ctx.lineTo(centerX - shaftWidth / 2, shaftTopY);
-            const fletchTopY = centerY + scale * 0.2;
-            const fletchBottomY = centerY + scale * 0.7;
-            const fletchWidth = scale * 0.5;
-            ctx.lineTo(centerX - shaftWidth / 2, fletchTopY); 
-            ctx.lineTo(centerX - fletchWidth / 2, fletchBottomY); 
-            ctx.lineTo(centerX, centerY + scale * 0.55); 
-            ctx.lineTo(centerX + fletchWidth / 2, fletchBottomY); 
-            ctx.lineTo(centerX + shaftWidth / 2, fletchTopY);
-            ctx.lineTo(centerX + shaftWidth / 2, shaftTopY);
-            ctx.lineTo(centerX + shaftWidth / 2, headBaseY);
-            ctx.lineTo(centerX + headWidth / 2, headBaseY);
-            ctx.closePath();
-            ctx.fill();
-        }
+        const drawX = (x - finalWidth / 2) + config.offsetX;
+        const drawY = (y - finalHeight / 2) + config.offsetY;
 
-        function drawPikemanSymbol(ctx, centerX, centerY, symbolDisplayRadius, symbolColor) {
-            const scale = symbolDisplayRadius * 0.9; 
-            ctx.strokeStyle = symbolColor;
-            ctx.fillStyle = symbolColor;
-            ctx.lineWidth = Math.max(1.0, symbolDisplayRadius * 0.05);
-            ctx.lineJoin = 'round';
-            ctx.beginPath();
-            const shaftWidth = scale * 0.12;
-            const shaftBottomY = centerY + scale * 0.75;
-            ctx.moveTo(centerX - shaftWidth / 2, shaftBottomY);
-            const axeBottomY = centerY + scale * 0.05;
-            ctx.lineTo(centerX - shaftWidth / 2, axeBottomY);
-            const axeTopY = centerY - scale * 0.35;
-            ctx.quadraticCurveTo(
-                centerX - scale * 0.6, 
-                centerY - scale * 0.15,
-                centerX - shaftWidth / 2, axeTopY 
-            );
-            const spearBaseY = centerY - scale * 0.5;
-            ctx.lineTo(centerX - shaftWidth / 2, spearBaseY);
-            const spearTipY = centerY - scale * 0.8;
-            ctx.lineTo(centerX, spearTipY); 
-            ctx.lineTo(centerX + shaftWidth / 2, spearBaseY); 
-            const spikeTopY = centerY - scale * 0.3;
-            ctx.lineTo(centerX + shaftWidth / 2, spikeTopY);
-            const spikePointX = centerX + scale * 0.35;
-            const spikeMidY = centerY - scale * 0.2;
-            const spikeBottomY = centerY - scale * 0.1;
-            ctx.lineTo(spikePointX, spikeMidY); 
-            ctx.lineTo(centerX + shaftWidth / 2, spikeBottomY); 
-            ctx.lineTo(centerX + shaftWidth / 2, shaftBottomY);
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        function drawHorsemanSymbol(ctx, centerX, centerY, symbolDisplayRadius, symbolColor) {
-            const scale = symbolDisplayRadius * 1.0;
-            ctx.fillStyle = symbolColor;
-            ctx.beginPath();
-            ctx.moveTo(centerX - scale * 0.3, centerY + scale * 0.5);
-            ctx.lineTo(centerX + scale * 0.3, centerY + scale * 0.5);
-            ctx.lineTo(centerX + scale * 0.3, centerY + scale * 0.15);
-            ctx.lineTo(centerX + scale * 0.15, centerY - scale * 0.05);
-            ctx.lineTo(centerX + scale * 0.45, centerY - scale * 0.15);
-            ctx.lineTo(centerX + scale * 0.45, centerY - scale * 0.35);
-            ctx.lineTo(centerX + scale * 0.1, centerY - scale * 0.35);
-            ctx.lineTo(centerX - scale * 0.1, centerY - scale * 0.6);
-            ctx.lineTo(centerX - scale * 0.2, centerY - scale * 0.4);
-            ctx.lineTo(centerX - scale * 0.3, centerY + scale * 0.1);
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
-            const symbolDisplaySize = Math.max(1, radius);
-            if (unit.type.symbol === 'M') {
-                drawSword(ctx, x, y, symbolDisplaySize, symbolColor);
-            } else if (unit.type.symbol === 'A') {
-                drawArrow(ctx, x, y, symbolDisplaySize, symbolColor);
-            } else if (unit.type.symbol === 'P') {
-                drawPikemanSymbol(ctx, x, y, symbolDisplaySize, symbolColor);
-            } else if (unit.type.symbol === 'H') {
-                drawHorsemanSymbol(ctx, x, y, symbolDisplaySize, symbolColor);
-            } else { 
-                ctx.fillStyle = symbolColor;
-                ctx.font = `bold ${symbolDisplaySize * 1.5}px 'Exo 2'`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(unit.type.symbol, x, y);
-            }
-        }
+        ctx.drawImage(img, drawX, drawY, finalWidth, finalHeight);
+        
+        ctx.restore();
+    } else {
+        const symbolDisplaySize = Math.max(1, radius);
+        ctx.fillStyle = symbolColor || '#FFF';
+        ctx.font = `bold ${symbolDisplaySize * 1.5}px 'Exo 2'`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(unit.type.symbol, x, y);
+    }
+}
 
         function drawSingleUnit(ctx, unit, x, y, radius, overrideSymbolColor = null, isPalette = false) {
 
@@ -1823,14 +1712,22 @@
             gameState.activeAnimations = stillAnimating;
         }
 
+        let lastFrameTime = Date.now();
+
         function gameLoop() {
+            // --- DELTA TIME CALCULATION ---
+            const currentTime = Date.now();
+            const deltaTime = (currentTime - lastFrameTime) / 1000; // Time passed in seconds
+            lastFrameTime = currentTime;
             // --- ARCADE LOGIC ---
-            if (gameState.gameMode === 'arcade' && !gameState.gameOver && !gameState.mapMakerMode) {
+        if (gameState.gameMode === 'arcade' && !gameState.gameOver && !gameState.mapMakerMode) {
                 // Check if we are waiting for P1 to start the game
                 const waitingForStart = gameState.globalTurnNumber === 1 && gameState.currentPlayer === 1 && !gameState.arcadeGameStartedInteraction;
 
                 if (gameState.activeAnimations.length === 0 && !waitingForStart) { 
-                    gameState.arcadeTurnTimer -= 1/60; 
+                    // Use deltaTime instead of hardcoded 1/60
+                    gameState.arcadeTurnTimer -= deltaTime; 
+            
                     if (gameState.arcadeTurnTimer <= 0) {
                         gameState.arcadeTurnTimer = 0;
                         if (gameState.globalTurnNumber >= 2 && gameState.swapState !== 'complete') {
@@ -1848,9 +1745,7 @@
             }
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // ... (rest of function remains unchanged)
-            
+
             if (gameState.colorTransition.active) {
                 const elapsedTime = Date.now() - gameState.colorTransition.startTime;
                 const progress = Math.min(elapsedTime / COLOR_TRANSITION_DURATION_MS, 1);
