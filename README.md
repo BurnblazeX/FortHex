@@ -1,0 +1,2 @@
+## FortHex
+FortHex is a Turn-based strategy game played on a hexboard. Unlike most other Hexboard games, the units do not usually stay in the middle of the tile, instead stay on the tile edges, which we consider to be roads or pathways. The signature feature is fortifying, which is an action that if the unit takes, it moves to the center of one of its adjacent tiles and "Fortifies" the tile. That has many bonuses, at the cost of mobility. 
