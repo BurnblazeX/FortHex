@@ -1,0 +1,272 @@
+
+.unit-card {
+
+    --card-width: 225px;
+    --card-height: 307.5px;
+
+    /* 1. Name Plate & Level Circle */
+    --nameplate-top: 26px;         
+    --nameplate-left: 25px;        
+    --nameplate-width: 170px;      
+    --nameplate-height: 30px;      
+    --nameplate-font-size: 1em;  
+
+    --level-top: 26px;             
+    --level-left: 25px;            
+    --level-size: 30px;            
+    --level-font-size: 1em;      
+
+    /* 2. Portrait Area */
+    --portrait-box-top: 60px;
+    --portrait-box-left: 17px;
+    --portrait-box-width: 186px;
+    --portrait-box-height: 125px;
+    --portrait-circle-size: 100px; 
+    --portrait-icon-size: 60px;    
+
+    /* 3. Stat Icons (The PNGs) */
+    --icon-atk-top: 200px;   --icon-atk-left: 24px;    --icon-atk-width: 18px;   --icon-atk-height: 18px;
+    --icon-def-top: 232px;   --icon-def-left: 23px;    --icon-def-width: 20px;   --icon-def-height: 20px;
+    --icon-spd-top: 266px;   --icon-spd-left: 22px;    --icon-spd-width: 21px;   --icon-spd-height: 21px;
+    
+    --icon-hp-top: 265px;    --icon-hp-left: 156px;    --icon-hp-width: 20px;    --icon-hp-height: 20px;
+
+    /* 4. Stat Numbers */
+    --val-atk-top: 195px;    --val-atk-left: 45px;     --val-atk-width: 28px;    --val-atk-height: 28px;    --val-atk-font-size: 1em;
+    --val-def-top: 228px;    --val-def-left: 45px;     --val-def-width: 28px;    --val-def-height: 28px;    --val-def-font-size: 1em;
+    --val-spd-top: 261px;    --val-spd-left: 45px;     --val-spd-width: 28px;    --val-spd-height: 28px;    --val-spd-font-size: 1em;
+    
+    --val-hp-top: 260px;     --val-hp-left: 179px;     --val-hp-width: 28px;     --val-hp-height: 28px;     --val-hp-font-size: 1em;
+
+    /* 5. Pip Empty Slots (The dark pills) */
+    --pips-atk-top: 194px;   --pips-atk-left: 78px;
+    --pips-def-top: 228px;   --pips-def-left: 78px;
+    --pips-spd-top: 261px;   --pips-spd-left: 78px;
+    
+    --pips-hp-top: 194px;    --pips-hp-left: 150px;
+
+    --pip-horizontal-gap: 4px;     /* Gap between Atk/Def/Spd pips */
+    --pip-vertical-gap: 3px;       /* Gap between HP pips */
+    
+    --pip-v-width: 17px;           /* Left side pip width */
+    --pip-v-height: 29px;          /* Left side pip height */
+    --pip-h-width: 56px;           /* HP side pip width */
+    --pip-h-height: 18px;          /* HP side pip height */
+    /* ============================================================== */
+
+    position: relative;
+    width: var(--card-width);
+    height: var(--card-height);
+    background-image: url('../assets/ui/card-template.png');
+    background-size: cover;
+    background-position: center;
+    border-radius: 12px;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+    font-family: 'Exo 2', sans-serif;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    user-select: none;
+    margin: 0 auto;
+}
+
+/* Force all immediate children to be absolutely positioned overlay elements */
+.unit-card > * {
+    position: absolute;
+    box-sizing: border-box;
+}
+
+/* --- 1. Top Bar --- */
+.card-name-bar {
+    top: var(--nameplate-top);
+    left: var(--nameplate-left);
+    width: var(--nameplate-width);
+    height: var(--nameplate-height);
+    border-radius: calc(var(--nameplate-height) / 2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: var(--nameplate-font-size);
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    border: 2px solid; 
+    padding-left: 15px; /* Offset for circle overlap */
+}
+
+.card-level-circle {
+    top: var(--level-top);
+    left: var(--level-left);
+    width: var(--level-size);
+    height: var(--level-size);
+    border-radius: 50%;
+    border: 2px solid;
+    font-weight: bold;
+    font-size: var(--level-font-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    padding-bottom: 2px;                                                                                                                                         
+}
+
+/* --- 2. Portrait Area (No Canvas!) --- */
+.card-portrait-wrapper {
+    top: var(--portrait-box-top);
+    left: var(--portrait-box-left);
+    width: var(--portrait-box-width);
+    height: var(--portrait-box-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-portrait-circle {
+    position: relative;
+    width: var(--portrait-circle-size);
+    height: var(--portrait-circle-size);
+    border-radius: 50%;
+    border: 4px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-portrait-circle img {
+    position: relative;
+    width: var(--portrait-icon-size);
+    height: var(--portrait-icon-size);
+    object-fit: contain;
+}
+
+/* --- 3. Stat Icons (The PNGs: Sword, Shield, Dash, Cross) --- */
+.card-icon {
+    object-fit: contain;
+}
+.c-ic-atk { top: var(--icon-atk-top); left: var(--icon-atk-left); width: var(--icon-atk-width); height: var(--icon-atk-height); }
+.c-ic-def { top: var(--icon-def-top); left: var(--icon-def-left); width: var(--icon-def-width); height: var(--icon-def-height); }
+.c-ic-spd { top: var(--icon-spd-top); left: var(--icon-spd-left); width: var(--icon-spd-width); height: var(--icon-spd-height); }
+.c-ic-hp  { top: var(--icon-hp-top);  left: var(--icon-hp-left);  width: var(--icon-hp-width);  height: var(--icon-hp-height);  }
+
+/* --- 4. Stat Values (Colored Boxes) --- */
+.card-val {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
+}
+.c-val-atk { top: var(--val-atk-top); left: var(--val-atk-left); width: var(--val-atk-width); height: var(--val-atk-height); font-size: var(--val-atk-font-size); }
+.c-val-def { top: var(--val-def-top); left: var(--val-def-left); width: var(--val-def-width); height: var(--val-def-height); font-size: var(--val-def-font-size); }
+.c-val-spd { top: var(--val-spd-top); left: var(--val-spd-left); width: var(--val-spd-width); height: var(--val-spd-height); font-size: var(--val-spd-font-size); }
+.c-val-hp  { top: var(--val-hp-top);  left: var(--val-hp-left);  width: var(--val-hp-width);  height: var(--val-hp-height);  font-size: var(--val-hp-font-size);  }
+
+/* --- 5. Pip Containers (Dark Slots) --- */
+.card-pips-row {
+    display: flex;
+    gap: var(--pip-horizontal-gap);
+}
+.c-pips-atk { top: var(--pips-atk-top); left: var(--pips-atk-left); }
+.c-pips-def { top: var(--pips-def-top); left: var(--pips-def-left); }
+.c-pips-spd { top: var(--pips-spd-top); left: var(--pips-spd-left); }
+
+.card-pips-col {
+    display: flex;
+    flex-direction: column-reverse; /* Builds HP pips from bottom to top */
+    gap: var(--pip-vertical-gap);
+    top: var(--pips-hp-top);
+    left: var(--pips-hp-left);
+}
+
+/* Pip Sizing */
+.card-pips-row > div {
+    position: relative;
+    width: var(--pip-v-width);
+    height: var(--pip-v-height);
+    border-radius: 6px;
+    background-color: transparent; /* Lets template show through when empty */
+}
+.card-pips-col > div {
+    position: relative;
+    width: var(--pip-h-width);
+    height: var(--pip-h-height);
+    border-radius: 6px;
+    background-color: transparent;
+}
+
+/* Pip Fill Colors */
+.pip-filled {
+    background-color: #FFC020 !important;
+    box-shadow: inset 0 0 3px rgba(0,0,0,0.5);
+}
+.pip-penalty {
+    background-color: #E04030 !important;
+    box-shadow: inset 0 0 3px rgba(0,0,0,0.5);
+}
+
+/* ==========================================================================
+   INTERACTIVE GRID SCALING (For Modals)
+   ========================================================================== */
+.unit-card.interactive {
+    transform: scale(0.85); /* Shrinks the card perfectly for the modal grid */
+    margin: -15px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.unit-card.interactive:hover {
+    transform: scale(0.85) translateY(-10px);
+    box-shadow: 0 15px 25px rgba(0,0,0,0.6);
+    z-index: 10;
+}
+.unit-card.selected {
+    outline: 4px solid #FFC020;
+    outline-offset: -4px;
+    border-radius: 12px;
+}
+
+/* ==========================================================================
+   CARD BACK (For Caps/Limits)
+   ========================================================================== */
+.card-back {
+    width: 225px;
+    height: 307.5px;
+    background-image: url('../assets/ui/card-back.png');
+    background-size: cover;
+    background-position: center;
+    border-radius: 12px;
+    flex: 0 0 225px; 
+    box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+    transform: scale(0.85); 
+    margin: -15px;
+}
+
+/* ==========================================================================
+   UPGRADE PIPS (PULSING & INTERACTIVE)
+   ========================================================================== */
+@keyframes pipPulseAnim {
+    0% { opacity: 0.25; box-shadow: 0 0 0px transparent; }
+    50% { opacity: 0.75; box-shadow: 0 0 6px rgba(255, 255, 255, 0.3); }
+    100% { opacity: 0.25; box-shadow: 0 0 0px transparent; }
+}
+
+.pip-upgrade-target {
+    cursor: pointer;
+    animation: pipPulseAnim 1.2s infinite ease-in-out;
+    z-index: 20; 
+    pointer-events: auto;
+    position: relative; 
+}
+
+.pip-upgrade-target:hover {
+    opacity: 1 !important;
+    transform: scale(1.15); 
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
+    z-index: 30;
+}
+
+.card-pips-row, .card-pips-col {
+    pointer-events: none; 
+}
+.card-pips-row > div, .card-pips-col > div {
+    pointer-events: auto; 
+}
