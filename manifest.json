@@ -1,0 +1,22 @@
+{
+  "name": "FortHex",
+  "short_name": "FortHex",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#304050",
+  "theme_color": "#FFC020",
+  "icons": [
+    {
+      "src": "assets/ui/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/ui/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

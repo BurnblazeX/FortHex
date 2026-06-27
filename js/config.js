@@ -86,7 +86,7 @@ const THEME = {
 
         // Visual/Interaction Constants
         const UNIT_DRAW_SIZE_ON_EDGE = HEX_SIZE * 0.25; 
-        const FORTIFIED_UNIT_DRAW_SIZE = UNIT_DRAW_SIZE_ON_EDGE * 1.2; 
+        const FORTIFIED_UNIT_DRAW_SIZE = UNIT_DRAW_SIZE_ON_EDGE * 1.25; 
         const HIGHLIGHT_CLICK_RADIUS = HEX_SIZE * 0.35; 
         const UNIT_CLICK_RADIUS = HEX_SIZE * 0.3;       
         const BRIDGE_CLICK_TOLERANCE = HEX_SIZE * 0.15; 

@@ -1,8 +1,8 @@
 
 .unit-card {
 
-    --card-width: 220px;
-    --card-height: 310px;
+    --card-width: 225px;
+    --card-height: 307.5px;
 
     /* 1. Name Plate & Level Circle */
     --nameplate-top: 26px;         
@@ -25,25 +25,25 @@
     --portrait-icon-size: 60px;    
 
     /* 3. Stat Icons (The PNGs) */
-    --icon-atk-top: 202px;   --icon-atk-left: 21px;    --icon-atk-width: 18px;   --icon-atk-height: 18px;
-    --icon-def-top: 234px;   --icon-def-left: 20px;    --icon-def-width: 20px;   --icon-def-height: 20px;
-    --icon-spd-top: 268px;   --icon-spd-left: 19px;    --icon-spd-width: 21px;   --icon-spd-height: 21px;
+    --icon-atk-top: 200px;   --icon-atk-left: 24px;    --icon-atk-width: 18px;   --icon-atk-height: 18px;
+    --icon-def-top: 232px;   --icon-def-left: 23px;    --icon-def-width: 20px;   --icon-def-height: 20px;
+    --icon-spd-top: 266px;   --icon-spd-left: 22px;    --icon-spd-width: 21px;   --icon-spd-height: 21px;
     
-    --icon-hp-top: 267px;    --icon-hp-left: 154px;    --icon-hp-width: 20px;    --icon-hp-height: 20px;
+    --icon-hp-top: 265px;    --icon-hp-left: 156px;    --icon-hp-width: 20px;    --icon-hp-height: 20px;
 
     /* 4. Stat Numbers */
-    --val-atk-top: 196px;    --val-atk-left: 42px;     --val-atk-width: 28px;    --val-atk-height: 28px;    --val-atk-font-size: 1em;
-    --val-def-top: 230px;    --val-def-left: 42px;     --val-def-width: 28px;    --val-def-height: 28px;    --val-def-font-size: 1em;
-    --val-spd-top: 263px;    --val-spd-left: 42px;     --val-spd-width: 28px;    --val-spd-height: 28px;    --val-spd-font-size: 1em;
+    --val-atk-top: 195px;    --val-atk-left: 45px;     --val-atk-width: 28px;    --val-atk-height: 28px;    --val-atk-font-size: 1em;
+    --val-def-top: 228px;    --val-def-left: 45px;     --val-def-width: 28px;    --val-def-height: 28px;    --val-def-font-size: 1em;
+    --val-spd-top: 261px;    --val-spd-left: 45px;     --val-spd-width: 28px;    --val-spd-height: 28px;    --val-spd-font-size: 1em;
     
-    --val-hp-top: 263px;     --val-hp-left: 176px;     --val-hp-width: 28px;     --val-hp-height: 28px;     --val-hp-font-size: 1em;
+    --val-hp-top: 260px;     --val-hp-left: 179px;     --val-hp-width: 28px;     --val-hp-height: 28px;     --val-hp-font-size: 1em;
 
     /* 5. Pip Empty Slots (The dark pills) */
-    --pips-atk-top: 196px;   --pips-atk-left: 76px;
-    --pips-def-top: 230px;   --pips-def-left: 76px;
-    --pips-spd-top: 263px;   --pips-spd-left: 76px;
+    --pips-atk-top: 194px;   --pips-atk-left: 78px;
+    --pips-def-top: 228px;   --pips-def-left: 78px;
+    --pips-spd-top: 261px;   --pips-spd-left: 78px;
     
-    --pips-hp-top: 196px;    --pips-hp-left: 149px;
+    --pips-hp-top: 194px;    --pips-hp-left: 150px;
 
     --pip-horizontal-gap: 4px;     /* Gap between Atk/Def/Spd pips */
     --pip-vertical-gap: 3px;       /* Gap between HP pips */
@@ -228,13 +228,13 @@
    CARD BACK (For Caps/Limits)
    ========================================================================== */
 .card-back {
-    width: 220px;
-    height: 310px;
+    width: 225px;
+    height: 307.5px;
     background-image: url('../assets/ui/card-back.png');
     background-size: cover;
     background-position: center;
     border-radius: 12px;
-    flex: 0 0 220px;
+    flex: 0 0 225px; 
     box-shadow: 0 6px 12px rgba(0,0,0,0.3);
     transform: scale(0.85); 
     margin: -15px;

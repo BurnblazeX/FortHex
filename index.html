@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FortHex</title>
     
-    <!-- High-Res Favicon -->
-    <link rel="icon" href="assets/ui/favicon.png">
-    
+    <!-- High-Res Favicon & PWA Manifest -->
+    <link rel="icon" type="image/png" href="assets/ui/favicon.png?v=2">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;700&family=Geostar&display=swap" rel="stylesheet">
@@ -139,12 +142,15 @@
             <!-- RIGHT PANEL -->
             <div id="rightPanel" class="ui-panel">
                 <h2 id="turnDisplay">Player 1's Turn</h2>
-                <hr id="gameplayDivider" style="width: 100%; border-color: #4a6075; margin-top: 15px; margin-bottom: 15px;">
-                <div id="actionsPanel" class="actions-panel" style="display: none;">
-                    <h3>Actions</h3>
-                    <button id="fortifyUnfortifyButton" class="action-button">Fortify</button>
-                    <button id="buildBridgeButton" class="action-button">Build Bridge</button>
-                    <button id="attackButton" class="action-button">Attack</button>
+                <hr id="gameplayDivider" style="width: 100%; border-color: #4a6075; margin-top: 36px; margin-bottom: 10px;">
+                <div id="actionsPanel" class="actions-panel">
+                <h3 class="action-info-header">Actions</h3>
+                
+                <div class="action-buttons-grid">
+                        <button id="attackButton" class="action-button" disabled>Attack</button>
+                        <button id="fortifyUnfortifyButton" class="action-button" disabled>Fortify</button>
+                        <button id="buildBridgeButton" class="action-button span-two" disabled>Build Bridge</button>
+                    </div>
                 </div>
                 <div id="bottomButtonsParent" class="buttons-container">
                     <div id="testButtonContainer" style="display: none; width: 100%;">

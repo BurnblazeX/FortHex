@@ -112,115 +112,122 @@
         }
 
         function updateSelectedUnitInfoPanel() {
-            // Prevent UI updates in Map Maker mode to avoid artifacts over the palette
-            if (gameState.mapMakerMode) return;
+    if (gameState.mapMakerMode) return;
+    
+    const { selectedUnit, currentActionState } = gameState;
+
+    if (currentActionState !== ACTION_STATES.SELECTING_ATTACK_TARGET) {
+        gameState.debugAttackRangeHighlights = [];
+    }
+    
+    if (selectedUnit && !gameState.isDragging) {
+        // Show Card Panel, Hide Logs
+        ui.selectedUnitInfoContainer.style.display = 'flex';
+        ui.actionInfoContainer.style.display = 'none';
+        
+        renderUnitCard(selectedUnit);
+
+        const canPerformMajorAction = !selectedUnit.hasPerformedMajorAction;
+        const canAttack = selectedUnit.currentMove >= ATTACK_COST && !selectedUnit.hasPerformedMajorAction;
+
+        // --- Fortify / Unfortify Button Logic ---
+        if (selectedUnit.stats.defense > 0) {
+            const isSelectingFortify = currentActionState === ACTION_STATES.SELECTING_FORTIFY_TILE;
+            const isSelectingUnfortify = currentActionState === ACTION_STATES.SELECTING_UNFORTIFY_EDGE;
+            const canAffordFortify = selectedUnit.currentMove >= FORTIFY_UNFORTIFY_COST;
             
-            const { selectedUnit, currentActionState } = gameState;
+            let fortifyDisabledCondition = false;
+            if (selectedUnit.isFortified) { 
+                if (!isSelectingUnfortify) {
+                   fortifyDisabledCondition = getPotentialUnfortifyTargets(selectedUnit).length === 0;
+                }
+                updateActionButtonState(ui.fortifyUnfortifyButton, "Unfortify", "Cancel Unfortify", isSelectingUnfortify, canPerformMajorAction && canAffordFortify, fortifyDisabledCondition);
+            } else { 
+                if (!isSelectingFortify) {
+                    const edgeCoords = parseEdgeKey(selectedUnit.position);
+                    if (edgeCoords && edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
+                        const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r);
+                        const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
+                        const tile1 = gameState.tiles.get(tile1Key);
+                        const tile2 = gameState.tiles.get(tile2Key);
 
-            // Clear debug highlights if we aren't actively selecting targets
-            if (currentActionState !== ACTION_STATES.SELECTING_ATTACK_TARGET) {
-                gameState.debugAttackRangeHighlights = [];
+                        const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
+                        const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+                        const enemyBaseTileKeys = new Set();
+                        if (Array.isArray(enemyBaseData)) {
+                            enemyBaseData.forEach(k => enemyBaseTileKeys.add(k));
+                        } else if (typeof enemyBaseData === 'string') {
+                            const [h1, h2] = parseEdgeKey(enemyBaseData);
+                            if (!isNaN(h1.q)) enemyBaseTileKeys.add(getTileKey(h1.q, h1.r));
+                            if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
+                        }
+
+                        const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key);
+                        const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key);
+                        fortifyDisabledCondition = !(canFortifyTile1 || canFortifyTile2) || selectedUnit.positionType === 'center';
+                    } else {
+                        fortifyDisabledCondition = true;
+                    }
+                }
+                updateActionButtonState(ui.fortifyUnfortifyButton, "Fortify", "Cancel Fortify", isSelectingFortify, canPerformMajorAction && canAffordFortify, fortifyDisabledCondition);
             }
-            
-            if (selectedUnit && !gameState.isDragging) {
-                // Show Card Panel, Hide Logs
-                ui.selectedUnitInfoContainer.style.display = 'block';
-                ui.actionInfoContainer.style.display = 'none';
-                ui.actionsPanel.style.display = 'flex';
-                
-                // --- NEW: Render the Unit Card ---
-                // This replaces setting ui.unitName.textContent, etc.
-                renderUnitCard(selectedUnit);
-                // --------------------------------
-
-                const canPerformMajorAction = !selectedUnit.hasPerformedMajorAction;
-                const canAttack = selectedUnit.currentMove >= ATTACK_COST && !selectedUnit.hasPerformedMajorAction;
-
-                // --- Fortify / Unfortify Button Logic ---
-                if (selectedUnit.stats.defense > 0) {
-                    ui.fortifyUnfortifyButton.style.display = 'inline-block';
-                    const isSelectingFortify = currentActionState === ACTION_STATES.SELECTING_FORTIFY_TILE;
-                    const isSelectingUnfortify = currentActionState === ACTION_STATES.SELECTING_UNFORTIFY_EDGE;
-                    const canAffordFortify = selectedUnit.currentMove >= FORTIFY_UNFORTIFY_COST;
-                    
-                    let fortifyDisabledCondition = false;
-                    if (selectedUnit.isFortified) { // Unfortify logic
-                        if (!isSelectingUnfortify) {
-                           fortifyDisabledCondition = getPotentialUnfortifyTargets(selectedUnit).length === 0;
-                        }
-                        updateActionButtonState(ui.fortifyUnfortifyButton, "Unfortify", "Cancel Unfortify", isSelectingUnfortify, canPerformMajorAction && canAffordFortify, fortifyDisabledCondition);
-                    } else { // Fortify logic
-                        if (!isSelectingFortify) {
-                            const edgeCoords = parseEdgeKey(selectedUnit.position);
-                            if (edgeCoords && edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
-                                const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r);
-                                const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
-                                const tile1 = gameState.tiles.get(tile1Key);
-                                const tile2 = gameState.tiles.get(tile2Key);
-
-                                // Check for enemy base tiles (Standard or Expansive)
-                                const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
-                                const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
-                                const enemyBaseTileKeys = new Set();
-                                if (Array.isArray(enemyBaseData)) {
-                                    enemyBaseData.forEach(k => enemyBaseTileKeys.add(k));
-                                } else if (typeof enemyBaseData === 'string') {
-                                    const [h1, h2] = parseEdgeKey(enemyBaseData);
-                                    if (!isNaN(h1.q)) enemyBaseTileKeys.add(getTileKey(h1.q, h1.r));
-                                    if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
-                                }
-
-                                const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key);
-                                const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key);
-                                fortifyDisabledCondition = !(canFortifyTile1 || canFortifyTile2) || selectedUnit.positionType === 'center';
-                            } else {
-                                fortifyDisabledCondition = true;
-                            }
-                        }
-                        updateActionButtonState(ui.fortifyUnfortifyButton, "Fortify", "Cancel Fortify", isSelectingFortify, canPerformMajorAction && canAffordFortify, fortifyDisabledCondition);
-                    }
-                } else {
-                    ui.fortifyUnfortifyButton.style.display = 'none';
-                }
-
-                // --- Build Bridge Button Logic ---
-                ui.buildBridgeButton.style.display = selectedUnit.type.canBuildBridge ? 'inline-block' : 'none';
-                if (selectedUnit.type.canBuildBridge) {
-                    const isSelectingBridge = currentActionState === ACTION_STATES.SELECTING_BRIDGE_EDGE;
-                    let bridgeDisabledCondition = selectedUnit.isFortified;
-                    if (!isSelectingBridge && !bridgeDisabledCondition) {
-                        bridgeDisabledCondition = getPotentialBridgeTargets(selectedUnit).length === 0;
-                    }
-                    const canAffordBridge = selectedUnit.currentMove >= BUILD_BRIDGE_COST;
-                    updateActionButtonState(ui.buildBridgeButton, "Build Bridge", "Cancel Bridge", isSelectingBridge, canPerformMajorAction && canAffordBridge, bridgeDisabledCondition);
-                }
-
-                // --- Attack Button Logic ---
-                ui.attackButton.style.display = selectedUnit.type.attackType ? 'inline-block' : 'none';
-                if (selectedUnit.type.attackType) {
-                    const isSelectingAttack = currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET;
-                    let attackDisabledCondition = false;
-                    if (!isSelectingAttack) {
-                        if (selectedUnit.type.attackType === 'melee') {
-                            attackDisabledCondition = getValidMeleeAttackTargets(selectedUnit).length === 0;
-                        } else if (selectedUnit.type.attackType === 'ranged') {
-                            attackDisabledCondition = getValidArcherAttackTargets(selectedUnit).length === 0;
-                        }
-                    }
-                    updateActionButtonState(ui.attackButton, "Attack", "Cancel Attack", isSelectingAttack, canAttack, attackDisabledCondition);
-                }
-            } else if (!gameState.isDragging) {
-                // Hide Card Panel, Show Logs
-                ui.selectedUnitInfoContainer.style.display = 'none';
-                ui.actionInfoContainer.style.display = 'block';
-                ui.actionsPanel.style.display = 'none';
-                
-                resetActionSelectionStates();
-                ui.fortifyUnfortifyButton.textContent = "Fortify"; ui.fortifyUnfortifyButton.classList.remove('selecting');
-                ui.buildBridgeButton.textContent = "Build Bridge"; ui.buildBridgeButton.classList.remove('selecting');
-                ui.attackButton.textContent = "Attack"; ui.attackButton.classList.remove('selecting');
-            }
+        } else {
+            // Unit lacks defense stat, persistently disable the button
+            updateActionButtonState(ui.fortifyUnfortifyButton, "Fortify", "Cancel", false, false, true);
         }
+
+        // --- Build Bridge Button Logic ---
+        if (selectedUnit.type.canBuildBridge) {
+            const isSelectingBridge = currentActionState === ACTION_STATES.SELECTING_BRIDGE_EDGE;
+            let bridgeDisabledCondition = selectedUnit.isFortified;
+            if (!isSelectingBridge && !bridgeDisabledCondition) {
+                bridgeDisabledCondition = getPotentialBridgeTargets(selectedUnit).length === 0;
+            }
+            const canAffordBridge = selectedUnit.currentMove >= BUILD_BRIDGE_COST;
+            updateActionButtonState(ui.buildBridgeButton, "Build Bridge", "Cancel Bridge", isSelectingBridge, canPerformMajorAction && canAffordBridge, bridgeDisabledCondition);
+        } else {
+            // Unit cannot build bridges, persistently disable the button
+            updateActionButtonState(ui.buildBridgeButton, "Build Bridge", "Cancel", false, false, true);
+        }
+
+        // --- Attack Button Logic ---
+        if (selectedUnit.type.attackType) {
+            const isSelectingAttack = currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET;
+            let attackDisabledCondition = false;
+            if (!isSelectingAttack) {
+                if (selectedUnit.type.attackType === 'melee') {
+                    attackDisabledCondition = getValidMeleeAttackTargets(selectedUnit).length === 0;
+                } else if (selectedUnit.type.attackType === 'ranged') {
+                    attackDisabledCondition = getValidArcherAttackTargets(selectedUnit).length === 0;
+                }
+            }
+            updateActionButtonState(ui.attackButton, "Attack", "Cancel Attack", isSelectingAttack, canAttack, attackDisabledCondition);
+        } else {
+            // Unit cannot attack, persistently disable the button
+            updateActionButtonState(ui.attackButton, "Attack", "Cancel", false, false, true);
+        }
+
+    } else if (!gameState.isDragging) {
+        // Hide Card Panel, Show Logs
+        ui.selectedUnitInfoContainer.style.display = 'none';
+        ui.actionInfoContainer.style.display = 'block';
+        
+        resetActionSelectionStates();
+        
+        // Force reset and disable all buttons instead of hiding them
+        ui.fortifyUnfortifyButton.textContent = "Fortify"; 
+        ui.fortifyUnfortifyButton.classList.remove('selecting'); 
+        ui.fortifyUnfortifyButton.disabled = true;
+
+        ui.buildBridgeButton.textContent = "Build Bridge"; 
+        ui.buildBridgeButton.classList.remove('selecting'); 
+        ui.buildBridgeButton.disabled = true;
+
+        ui.attackButton.textContent = "Attack"; 
+        ui.attackButton.classList.remove('selecting'); 
+        ui.attackButton.disabled = true;
+    }
+}
 
         function showRespawnModal(player) {
             const overlay = document.getElementById('respawnModalOverlay');

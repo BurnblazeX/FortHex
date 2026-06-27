@@ -684,6 +684,36 @@
     });
 }
 
+// --- TINTED IMAGE CACHE ---
+// Prevents the canvas from running expensive tint operations every frame.
+const TINTED_IMAGE_CACHE = {};
+
+function getTintedImage(img, color) {
+    if (!img || !img.complete || img.naturalWidth === 0) return img;
+    
+    // Create a unique key (e.g., "assets/units/Melee_unit.png_#FFC020")
+    const cacheKey = img.src + '_' + color;
+    if (TINTED_IMAGE_CACHE[cacheKey]) return TINTED_IMAGE_CACHE[cacheKey];
+
+    // Create a temporary, invisible off-screen canvas
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = img.naturalWidth;
+    tempCanvas.height = img.naturalHeight;
+    const tCtx = tempCanvas.getContext('2d');
+    
+    // Draw original image
+    tCtx.drawImage(img, 0, 0);
+    
+    // 'source-in' tells the canvas to ONLY paint where pixels already exist!
+    tCtx.globalCompositeOperation = 'source-in';
+    tCtx.fillStyle = color;
+    tCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+    // Save to cache and return
+    TINTED_IMAGE_CACHE[cacheKey] = tempCanvas;
+    return tempCanvas;
+}
+
 const UNIT_IMAGE_CONFIG = {
     MELEE:    { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
     ARCHER:   { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
@@ -694,7 +724,9 @@ const UNIT_IMAGE_CONFIG = {
 
 function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
     const typeKey = unit.typeId || unit.type.name.toUpperCase();
-    const img = IMAGE_ASSETS.map_units[typeKey];
+    
+    // Uses the low-res map assets
+    const img = IMAGE_ASSETS.map_units[typeKey]; 
 
     const config = UNIT_IMAGE_CONFIG[typeKey] || UNIT_IMAGE_CONFIG.DEFAULT;
 
@@ -708,20 +740,24 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         
+        // --- VISUAL FEEDBACK: Shadows & Glows ---
         if (symbolColor === PALETTE.YELLOW_GOLD) {
             ctx.shadowColor = PALETTE.YELLOW_GOLD;
             ctx.shadowBlur = 12;
         } 
-        else if (symbolColor === PALETTE.BLACK_INK || symbolColor === '#000') {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            ctx.shadowBlur = 8;
-            ctx.shadowOffsetY = 2; 
+
+
+        // --- APPLY THE TINT ---
+        let imageToDraw = img;
+        // If the color isn't standard white, grab the tinted version from our cache!
+        if (symbolColor === PALETTE.YELLOW_GOLD || symbolColor === PALETTE.BLACK_INK || symbolColor === '#000') {
+            imageToDraw = getTintedImage(img, symbolColor);
         }
 
         const drawX = (x - finalWidth / 2) + config.offsetX;
         const drawY = (y - finalHeight / 2) + config.offsetY;
 
-        ctx.drawImage(img, drawX, drawY, finalWidth, finalHeight);
+        ctx.drawImage(imageToDraw, drawX, drawY, finalWidth, finalHeight);
         
         ctx.restore();
     } else {
@@ -778,16 +814,11 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             let symbolColor = overrideSymbolColor;
             
             if (!symbolColor) {
-                if (unit.isFortified && !isPalette) {
-                    // Fortified units use dark symbols on the colored background
-                    symbolColor = PALETTE.BLACK_INK; 
+                // Gold priority for Veterans, otherwise standard White
+                if (unit.level > 0 && !isPalette) {
+                    symbolColor = PALETTE.YELLOW_GOLD;
                 } else {
-                    // Edge units use colored symbols
-                    if (unit.level > 0 && !isPalette) {
-                        symbolColor = PALETTE.YELLOW_GOLD; // Veteran Status
-                    } else {
-                        symbolColor = PALETTE.WHITE_OFF;   // Standard
-                    }
+                    symbolColor = PALETTE.WHITE_OFF;
                 }
             }
 
@@ -1595,8 +1626,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                      drawSingleUnit(ctx, anim.unit, currentX, currentY, fortifyDrawRadius);
                  } 
                  else {
-                     const newSymbolColor = '#000';
-                     drawSingleUnit(ctx, anim.unit, endPos.x, endPos.y, fortifyDrawRadius, newSymbolColor);
+                     drawSingleUnit(ctx, anim.unit, endPos.x, endPos.y, fortifyDrawRadius, null);
                      let ringPhaseProgress = (progress - travelPhaseDuration) / (1 - travelPhaseDuration);
                      const easedRingProgress = Math.pow(ringPhaseProgress, 2);
                      const ringOpacity = easedRingProgress;
@@ -1622,7 +1652,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                  const [q, r] = anim.startTileKey.split(',').map(Number);
                  const unfortifyStartPos = axialToPixel(q, r);
                 if (progress < collapsePhaseDuration) {
-                    drawSingleUnit(ctx, anim.unit, unfortifyStartPos.x, unfortifyStartPos.y, fortifyDrawRadius, '#000');
+                    drawSingleUnit(ctx, anim.unit, unfortifyStartPos.x, unfortifyStartPos.y, fortifyDrawRadius, null);
                     let phaseProgress = progress / collapsePhaseDuration;
                     const easedProgress = Math.pow(phaseProgress, 2);
                     const ringOpacity = 1.0 - easedProgress;

@@ -333,6 +333,14 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
    ACTION LOG & QUEUES
    ========================================================================== */
 .unit-info-container { width: 100%; }
+#selectedUnitInfoContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1; 
+}
+
 .unit-info-container p { font-size: 1em; margin: 4px 0; }
 
 .action-info-header {
@@ -341,7 +349,7 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
     color: #FFC020;
     width: 100%;
     text-align: center;
-    font-weight: bold;
+    font-weight: normal;
 }
 
 #actionInfoContainer {
@@ -446,10 +454,31 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
 .respawn-timer { font-weight: bold; color: #FFC020; }
 
 .actions-panel {
-    display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start; 
+    width: 100%;
+    flex-grow: 1; 
+    padding-top: 10px; 
 }
-.actions-panel h3 {
-    font-size: 1.em; color: #FFC020; width: 100%; text-align: center;
+
+.action-buttons-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    gap: 12px;
+    width: 100%;
+    max-width: 260px; /* Keeps the buttons from stretching too wide */
+}
+
+.action-buttons-grid .action-button {
+    margin: 0;
+    width: 100%;
+    padding: 12px 10px; /* Taller buttons for a better click target */
+}
+
+.action-buttons-grid .span-two {
+    grid-column: span 2; /* Forces the Bridge button to span the bottom row */
 }
 
 /* ==========================================================================
