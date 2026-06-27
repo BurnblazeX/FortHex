@@ -79,7 +79,7 @@
     <div id="messageBox" class="message-box" style="display: block;">Project Hexblade Loaded. Player 1's Turn.</div>
     <div id="victoryMessage" class="victory-message" style="display: none;"></div>
     
-    <div id="buildVersionDisplay">FortHex Indev B29</div>
+    <div id="buildVersionDisplay">FortHex B29</div>
     <div id="confettiContainer"></div>
     <div id="victoryInteractionBlocker" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1999; display: none; background-color: rgba(44, 62, 80, 0.4); backdrop-filter: blur(3px); transition: background-color 0.5s ease, backdrop-filter 0.5s ease;"></div>
 
@@ -142,7 +142,7 @@
             <!-- RIGHT PANEL -->
             <div id="rightPanel" class="ui-panel">
                 <h2 id="turnDisplay">Player 1's Turn</h2>
-                <hr id="gameplayDivider" style="width: 100%; border-color: #4a6075; margin-top: 36px; margin-bottom: 10px;">
+                <hr id="gameplayDivider" style="width: 100%; border-color: #4a6075; margin-top: 26px; margin-bottom: 10px;">
                 <div id="actionsPanel" class="actions-panel">
                 <h3 class="action-info-header">Actions</h3>
                 
@@ -261,6 +261,36 @@
             <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px; text-align: center;">Changelog</h3>
             <div id="changelogList" style="max-height: 50vh; overflow-y: auto; padding-right: 15px;">
 
+                <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B29: The Units Update</h4>
+<ul style="list-style-type: none; padding-left: 0;">
+    <!-- Features -->
+    <li style="margin-bottom: 15px;">
+        <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+            <li><strong>Veteran System:</strong> Units can now be Promoted up to Level 3. Instead of recruiting a new unit, you can spend a Reinforcement charge to upgrade an existing unit's Health (+2 HP), Speed (+1 MP), Attack (+1 Atk), or Defense (+1 Def).</li>
+            <li><strong>Trade-off Mechanic:</strong> Upgrading a specific stat multiple times applies a permanent penalty to a paired stat (e.g., heavily upgrading Health lowers Speed) to maintain unit balance.</li>
+            <li><strong>Unit Cards UI:</strong> Added a Unit Card overlay to the left panel and selection menus. It displays the unit's portrait, level, active stats, and upgrade progress.</li>
+            <li><strong>Asset Overhaul:</strong> Replaced the old vector (SVG) unit symbols with PNGs. Added a Level of Detail (LOD) system to separate board tokens from the higher-resolution UI card art.</li>
+        </ul>
+    </li>
+    <!-- Improvements -->
+    <li style="margin-bottom: 15px;">
+        <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+            <li><strong>Dynamic Fortification:</strong> The ability to fortify is no longer restricted to specific unit classes. Any unit with a Defense stat of 1 or higher can now fortify.</li>
+            <li><strong>Archer Rebalance:</strong> The Archer's base damage has been reduced to 2, but fortifying now grants a +2 Attack buff. Additionally, Archers now gain increased range when fortified on Plains tiles.</li>
+            <li><strong>Action Panel Layout:</strong> The right-side Action Panel is now a permanent 2-column grid. Buttons (Attack, Fortify, Build Bridge) disable and gray out when unavailable instead of hiding, keeping the UI layout consistent during gameplay.</li>
+            <li><strong>Deployment Menu:</strong> Combined the Respawn menu into a tabbed interface ("Reinforce" and "Promote"). The menu now enforces a fixed class order and uses empty card placeholders for unavailable classes.</li>
+            <li><strong>Engine Modularization:</strong> Transitioned the codebase from a single monolithic file into multiple dedicated scripts and stylesheets to improve maintainability and future development.</li>
+            <li><strong>Save Engine Updates:</strong> Save files now correctly track individual unit levels, customized stats, and penalty modifiers across sessions.</li>
+            <li><strong>Client Adjustments:</strong> Removed the legacy "Download HTML" button, as the new multi-file structure is no longer compatible with a single-file download.</li>
+            <li><strong>Favicon:</strong> New Favicon and Logo for improved clarity on darker backgrounds.</li>
+        </ul>
+    </li>
+    <p style="font-style: italic; font-size: 0.9em; color: #bdc3c7; text-align: center; margin-top: 15px;">...and much, much more I am forgetting right now.</p>
+</ul>
+<hr style="border-color: #4a6075; margin: 20px 0;">
+
                 <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 3: (The Patch so big, it could be its own update)</h4>
                 <li style="margin-bottom: 15px;">
                     <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
@@ -297,14 +327,118 @@
                 <hr style="border-color: #4a6075; margin: 20px 0;">
 
                 <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 2</h4>
-                <ul style="list-style-type: none; padding-left: 0;">
-                    <li style="margin-bottom: 15px;">
-                        <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
-                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
-                            <li><strong>Map Maker Fill Tool:</strong> Added a new "Fill" (paint bucket) tool to the Options panel, allowing for rapid painting of large, contiguous areas of terrain.</li>
-                        </ul>
-                    </li>
-                </ul>
+            <ul style="list-style-type: none; padding-left: 0;">
+                <!-- Features -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Map Maker Fill Tool:</strong> Added a new "Fill" (paint bucket) tool to the Options panel, allowing for rapid painting of large, contiguous areas of terrain.</li>
+                    </ul>
+                </li>
+                <!-- Improvements -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Left Panel Layout Overhaul:</strong> The left UI panel no longer stretches. The Action Log is now a fixed-height, scrollable area, and the Reinforcements list is correctly anchored to the bottom.</li>
+                        <li><strong>Action Log Polish:</strong> Added dynamic fade-out effects to the top and bottom of the Action Log to clearly indicate scrollable content.</li>
+                        <li><strong>Action Log Functionality:</strong> Increased the log's capacity from 10 to 25 entries and inverted the display order to show the most recent actions at the top.</li>
+                        <li><strong>Map Maker Palette:</strong> Slightly reduced the size of unit icons in the palette for a cleaner look and better panel spacing.</li>
+                        <li><strong>Visual Consistency:</strong> Adjusted the color of Water tiles to be consistent between the 'Fancy' and 'Simple' rendering modes.</li>
+                    </ul>
+                </li>
+                <!-- Fixes -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li>Fixed a critical bug in the Map Maker where placing a Mountain or Water tile would incorrectly remove units from adjacent valid edges (like beaches).</li>
+                    </ul>
+                </li>
+            </ul>
+            <hr style="border-color: #4a6075; margin: 20px 0;">
+
+            <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 1</h4>
+            <ul style="list-style-type: none; padding-left: 0;">
+                <!-- Features -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Map Maker "Test Map" Feature:</strong> Added a button to the editor to instantly test custom maps in a sandboxed gameplay session. The editor state is saved and perfectly restored upon exiting the test.</li>
+                    </ul>
+                </li>
+                <!-- Improvements -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Supply Lines Over Bridges:</strong> Supply lines can now correctly pathfind across built bridges.</li>
+                        <li><strong>Editor UI Polish:</strong> Added a white canvas border, dividers to panels, and improved spacing and layout for a cleaner, more professional look.</li>
+                        <li><strong>Visuals:</strong> Adjusted rendering order to ensure units and animations always appear correctly on top of bridges. Updated the UI theme to a brighter white.</li>
+                    </ul>
+                </li>
+                <!-- Fixes -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                    <p style="font-style: italic; font-size: 0.85em; color: #bdc3c7; margin-top: 5px; margin-bottom: 5px; padding-left: 20px;">(Note: Most fixes are compared to the in-development version, addressing bugs introduced during the B28//3 development cycle.)</p>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li>Fixed a critical bug where returning to Local Multiplayer from Singleplayer would not reset the game state correctly.</li>
+                        <li><strong>Map Maker Fixes:</strong> Resolved bugs preventing unit placement on beaches, allowing enemy units on the same edge, and incorrect visual selection in the unit palette.</li>
+                        <li>Added validation to the "Test Map" feature to require units for both players before starting a test.</li>
+                    </ul>
+                </li>
+            </ul>
+            <hr style="border-color: #4a6075; margin: 20px 0;">
+
+            <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28: The Editor Update</h4>
+            <ul style="list-style-type: none; padding-left: 0;">
+                <!-- Features -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Custom Map Maker:</strong> A full-featured editor to create, save, and share battlefields, complete with a tile/unit palette and a base camp rotation slider.</li>
+                        <li><strong>New Map File System (.fhmap):</strong> Save and load custom maps with a new lightweight file format, including autosave support for the editor.</li>
+                    </ul>
+                </li>
+                <!-- Improvements -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Traversable Beaches:</strong> Edges between Land and Water are now playable terrain with a movement cost of 3, and can be bridged by Melee units.</li>
+                        <li><strong>Visual & UI Overhaul:</strong> Added pulsating bridge highlights, modernized the Settings checkboxes with a new green square style, and applied consistent colors and 'X' close buttons to all modals.</li>
+                        <li><strong>Quality of Life:</strong> Implemented a "Return to Game" button for the editor, improved click detection for bridge building, and added extensive validation rules for map creation.</li>
+                    </ul>
+                </li>
+                <!-- Fixes -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                    <p style="font-style: italic; font-size: 0.85em; color: #bdc3c7; margin-top: 5px; margin-bottom: 5px; padding-left: 20px;">(Note: Most fixes are compared to the in-development version, addressing bugs introduced during the B28 development cycle.)</p>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li>Fixed critical bugs preventing units from regaining movement points, healing, and achieving a Capture the Flag victory.</li>
+                        <li>Resolved a crash when generating a new map, and fixed a visual bug causing duplicated units on generated maps.</li>
+                        <li>Fixed an animation bug allowing units to move while building a bridge.</li>
+                        <li>Corrected several UI layout and styling issues in the Map Maker interface.</li>
+                    </ul>
+                </li>
+            </ul>
+            <hr style="border-color: #4a6075; margin: 20px 0;">
+
+            <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B27: The Color Update</h4>
+            <ul style="list-style-type: none; padding-left: 0;">
+                <!-- Features -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Team Color Customizer:</strong> Added a slide-out drawer to change between 5 distinct color themes for each player, with choices saved to the browser.</li>
+                        <li><strong>Changelog System:</strong> Implemented this changelog modal to keep track of updates.</li>
+                    </ul>
+                </li>
+                <!-- Improvements -->
+                <li style="margin-bottom: 15px;">
+                    <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Complete Color System Overhaul:</strong> Unified all team and UI colors into a central, consistent system.</li>
+                        <li><strong>Smooth Visual Transitions:</strong> All UI elements, units, and in-game highlights now transition their colors smoothly when a new theme is selected.</li>
+                    </ul>
+                </li>
+            </ul>
             </div>
             <button id="changelogBackButton" class="action-button action-button-cancel" style="margin-top: 30px; width: 100%;">Back</button>
         </div>

@@ -460,15 +460,17 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
     justify-content: flex-start; 
     width: 100%;
     flex-grow: 1; 
-    padding-top: 10px; 
 }
 
 .action-buttons-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    grid-template-columns: 1fr 1fr; 
     gap: 12px;
     width: 100%;
-    max-width: 260px; /* Keeps the buttons from stretching too wide */
+    max-width: 260px; 
+    
+    margin-top: auto;
+    margin-bottom: auto;
 }
 
 .action-buttons-grid .action-button {
