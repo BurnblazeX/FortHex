@@ -1149,6 +1149,9 @@
             const currentEdge = gameState.edges.get(unitToFortify.position);
             if (currentEdge) currentEdge.units = currentEdge.units.filter(u => u.id !== unitToFortify.id);
             unitToFortify.isFortified = true; unitToFortify.fortifiedTileKey = targetTileKeyToFortify;
+            if (unitToFortify.typeId === 'ARCHER') {
+                unitToFortify.stats.damage += 2;
+            }
             unitToFortify.positionType = 'center'; unitToFortify.position = targetTileKeyToFortify;
             unitToFortify.currentMove -= FORTIFY_UNFORTIFY_COST; unitToFortify.hasPerformedMajorAction = true;
             targetTileObject.fortifiedByPlayer = fortifyingPlayer;
@@ -1273,6 +1276,9 @@
             unitToUnfortify.fortifyCooldown = unitToUnfortify.turnsFortified * 5; 
 
             unitToUnfortify.isFortified = false;
+            if (unitToUnfortify.typeId === 'ARCHER') {
+                unitToUnfortify.stats.damage -= 2;
+            }
             unitToUnfortify.turnsFortifiedAtBase = 0;
             unitToUnfortify.turnsFortified = 0;      
             unitToUnfortify.supplyLine = null;
@@ -1675,12 +1681,6 @@
     }
     baseDamage += damageModifier;
 
-    let fortifiedArcherMsg = "";
-    if (attackType === 'Archer' && attackingUnit.isFortified) {
-        baseDamage += 1;
-        fortifiedArcherMsg = `Fortified Archer +1 Attack.`;
-    }
-
     let attackStatus = 'normal';
     if (advantageMessage === "Advantage!") {
         attackStatus = 'advantage';
@@ -1722,8 +1722,7 @@
             // --- PREPARE LOGS & LEDGER DATA ---
             let logParts = [];
             let ledgerModifiers = []; 
-            
-            if (fortifiedArcherMsg) { logParts.push(fortifiedArcherMsg); ledgerModifiers.push("FORTIFIED_POSITION"); }
+
             if (advantageMessage === "Advantage!") { logParts.push(advantageMessage); ledgerModifiers.push("ADVANTAGE"); }
             else if (advantageMessage === "Disadvantage!") { logParts.push(advantageMessage); ledgerModifiers.push("DISADVANTAGE"); }
 
@@ -2006,6 +2005,9 @@
     unit.stats.hp = newHp;
     unit.stats.speed = template.speed;
     unit.stats.damage = template.damage;
+    if (unit.isFortified && newTypeKey === 'ARCHER') {
+        unit.stats.damage += 2;
+    }
     unit.stats.defense = template.defense;
     unit.stats.range = template.attackType === 'ranged' ? 2 : 1;
     

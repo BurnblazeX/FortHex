@@ -687,8 +687,8 @@
 const UNIT_IMAGE_CONFIG = {
     MELEE:    { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
     ARCHER:   { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
-    PIKEMAN:  { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
-    HORSEMAN: { widthScale: 0.66, heightScale: 0.66, offsetX: 0, offsetY: -2 }, 
+    PIKEMAN:  { widthScale: 0.75, heightScale: 0.7, offsetX: 0, offsetY: 0 },
+    HORSEMAN: { widthScale: 0.66, heightScale: 0.66, offsetX: 0, offsetY: 0 }, 
     DEFAULT:  { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 }
 };
 
