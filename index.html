@@ -476,37 +476,37 @@
 
     <!-- Respawn / Recruit Modal -->
     <div id="respawnModalOverlay" class="modal-overlay">
-        <div id="respawnModalContent" class="modal-content" style="max-width: 600px; min-height: 400px; display: flex; flex-direction: column;">
+        <div id="respawnModalContent" class="modal-content" style="max-width: 950px; min-height: 450px; display: flex; flex-direction: column;">
+            
             <div id="respawnTabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #4a6075; padding-bottom: 0;">
                 <button class="tab-button active" data-tab="recruit">Reinforce</button>
                 <button class="tab-button" data-tab="promote">Promote</button>
             </div>
 
             <div id="tabViewRecruit" class="tab-view active">
-                <p>Choose a unit to deploy at your base.</p>
-                <div id="respawnChoices">
-                    <!-- Note: Images will be loaded dynamically via JS or place default PNGs here -->
-                    <button id="respawnMelee" class="respawn-button" data-unit-type="MELEE" title="Melee"><img src="assets/units/Melee.png" alt="Melee"></button>
-                    <button id="respawnArcher" class="respawn-button" data-unit-type="ARCHER" title="Archer"><img src="assets/units/Archer.png" alt="Archer"></button>
-                    <button id="respawnPikeman" class="respawn-button" data-unit-type="PIKEMAN" title="Pikeman"><img src="assets/units/Pikeman.png" alt="Pikeman"></button>
-                    <button id="respawnHorseman" class="respawn-button" data-unit-type="HORSEMAN" title="Horseman"><img src="assets/units/Horseman.png" alt="Horseman"></button>
+                <p style="margin-bottom: 15px;">Choose a unit to deploy at your base.</p>
+                <div id="respawnChoices" style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; width: 100%;">
+                    <!-- Populated by JS -->
                 </div>
             </div>
 
-            <div id="tabViewPromote" class="tab-view" style="display: none;">
-                <div id="promoteUnitList" class="promote-grid"></div>
-                <div id="promoteStatSelection" style="display: none; flex-direction: column; align-items: center; gap: 15px;">
-                    <button id="promoteBackBtn" class="action-button action-button-cancel" style="align-self: flex-start; padding: 5px 10px; font-size: 0.9em;">&lt; Back</button>
-                    <div id="promoteCardContainer" style="width: 240px;"></div>
-                    <p style="color: #FFC020; font-size: 0.9em;">Select a stat to upgrade:</p>
-                    <div class="upgrade-buttons-container">
-                        <button class="action-button upgrade-btn" data-stat="health"><span class="btn-icon">✚</span> Vitality (+2 HP)</button>
-                        <button class="action-button upgrade-btn" data-stat="speed"><span class="btn-icon">🪶</span> Speed (+1 MP)</button>
-                        <button class="action-button upgrade-btn" data-stat="damage"><span class="btn-icon">⚔️</span> Damage (+1 Atk)</button>
-                        <button class="action-button upgrade-btn" data-stat="defense"><span class="btn-icon">🛡️</span> Defense (+1 Def)</button>
+            <div id="tabViewPromote" class="tab-view" style="display: none; width: 100%;">
+                <p id="promoteInstructionText" style="margin-bottom: 15px;">Select a unit to upgrade.</p>
+                <div id="promoteUnitList" style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; width: 100%;">
+                    <!-- Populated by JS -->
+                </div>
+                
+                <div id="promoteStatSelection" style="display: none; flex-direction: column; align-items: center; width: 100%;">
+                    <!-- Tight Header Row -->
+                    <div style="display: flex; align-items: center; justify-content: center; width: 100%; position: relative; margin-bottom: 15px;">
+                        <button id="promoteBackBtn" class="action-button action-button-cancel" style="padding: 5px 15px; margin: 0; position: absolute; left: 0;">&lt; Back</button>
+                        <p style="color: #FFC020; font-size: 1.1em; font-weight: bold; margin: 0;">Click a pulsing pip to upgrade a stat:</p>
                     </div>
+                    <!-- Scaled Card -->
+                    <div id="promoteCardContainer" style="transform: scale(1.15); margin: 25px 0;"></div>
                 </div>
             </div>
+
         </div>
     </div>
 

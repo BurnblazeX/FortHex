@@ -230,29 +230,28 @@
             
             // --- AUTO-REPAIR HTML ---
             if (!document.getElementById('tabViewRecruit')) {
-                // INCREASED WIDTH to 950px to fit 4 cards in a row
                 content.style.cssText = "max-width: 950px; min-height: 450px; display: flex; flex-direction: column;";
                 content.innerHTML = `
                     <div id="respawnTabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #4a6075; padding-bottom: 0;">
                         <button class="tab-button active" data-tab="recruit">Reinforce</button>
                         <button class="tab-button" data-tab="promote">Promote</button>
                     </div>
+                    
                     <div id="tabViewRecruit" class="tab-view">
                         <p style="margin-bottom: 15px;">Choose a unit to deploy at your base.</p>
-                        <div id="respawnChoices" class="respawn-card-grid"></div>
+                        <div id="respawnChoices" style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; width: 100%;"></div>
                     </div>
-                    <div id="tabViewPromote" class="tab-view" style="display: none;">
-                        <div id="promoteUnitList" class="respawn-card-grid"></div>
-                        <div id="promoteStatSelection" style="display: none; flex-direction: column; align-items: center; gap: 15px; width: 100%;">
-                            <button id="promoteBackBtn" class="action-button action-button-cancel" style="align-self: flex-start; padding: 5px 10px; font-size: 0.9em;">&lt; Back</button>
-                            <div id="promoteCardContainer" style="width: 240px;"></div>
-                            <p style="color: #FFC020; font-size: 0.9em;">Select a stat to upgrade:</p>
-                            <div class="upgrade-buttons-container">
-                                <button class="action-button upgrade-btn" data-stat="health"><span class="btn-icon">✚</span> Vitality (+2 HP)</button>
-                                <button class="action-button upgrade-btn" data-stat="speed"><span class="btn-icon">🪶</span> Speed (+1 MP)</button>
-                                <button class="action-button upgrade-btn" data-stat="damage"><span class="btn-icon">⚔️</span> Damage (+1 Atk)</button>
-                                <button class="action-button upgrade-btn" data-stat="defense"><span class="btn-icon">🛡️</span> Defense (+1 Def)</button>
+                    
+                    <div id="tabViewPromote" class="tab-view" style="display: none; width: 100%;">
+                        <p id="promoteInstructionText" style="margin-bottom: 15px;">Select a unit to upgrade.</p>
+                        <div id="promoteUnitList" style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; width: 100%;"></div>
+                        
+                        <div id="promoteStatSelection" style="display: none; flex-direction: column; align-items: center; width: 100%;">
+                            <div style="display: flex; align-items: center; justify-content: center; width: 100%; position: relative; margin-bottom: 15px;">
+                                <button id="promoteBackBtn" class="action-button action-button-cancel" style="padding: 5px 15px; margin: 0; position: absolute; left: 0;">&lt; Back</button>
+                                <p style="color: #FFC020; font-size: 1.1em; font-weight: bold; margin: 0;">Click a pulsing pip to upgrade a stat:</p>
                             </div>
+                            <div id="promoteCardContainer" style="transform: scale(1.15); margin: 25px 0;"></div>
                         </div>
                     </div>
                 `;
@@ -262,9 +261,18 @@
                         document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
                         document.querySelectorAll('.tab-view').forEach(v => { v.classList.remove('active'); v.style.display = 'none'; });
+                        
                         const tabName = btn.dataset.tab;
                         const targetView = document.getElementById(tabName === 'recruit' ? 'tabViewRecruit' : 'tabViewPromote');
                         targetView.classList.add('active');
+                        
+                        // Safety reset: Always show the list when clicking the Promote tab
+                        if (tabName === 'promote') {
+                            document.getElementById('promoteInstructionText').style.display = 'block';
+                            document.getElementById('promoteUnitList').style.display = 'flex';
+                            document.getElementById('promoteStatSelection').style.display = 'none';
+                        }
+                        
                         targetView.style.display = 'flex';
                     });
                 });
@@ -319,24 +327,26 @@
             promoteContainer.innerHTML = '';
             
             const aliveUnits = gameState.units.filter(u => u.player === player);
+            const classOrder = ['Melee', 'Archer', 'Pikeman', 'Horseman'];
             
-            if (aliveUnits.length === 0) {
-                promoteContainer.innerHTML = '<p style="width:100%;">No veterans available to promote.</p>';
-            } else {
-                const typeSortMap = { 'Melee': 1, 'Archer': 2, 'Pikeman': 3, 'Horseman': 4 };
-                aliveUnits.sort((a, b) => typeSortMap[a.type.name] - typeSortMap[b.type.name]);
-
-                aliveUnits.forEach(unit => {
-                    if (unit.level >= 3) {
-                        promoteContainer.appendChild(createCardBackDOM());
-                    } else {
+            // Strictly enforce the Melee -> Archer -> Pike -> Horse order
+            classOrder.forEach(className => {
+                // Find all alive units of this class that are NOT max level
+                const eligibleUnits = aliveUnits.filter(u => u.type.name === className && u.level < 3);
+                
+                if (eligibleUnits.length > 0) {
+                    // Render all eligible units of this class
+                    eligibleUnits.forEach(unit => {
                         const card = createUnitCardDOM(unit, () => {
                             showPromoteSelection(unit);
                         });
                         promoteContainer.appendChild(card);
-                    }
-                });
-            }
+                    });
+                } else {
+                    // If no eligible units exist for this class, render the Card Back!
+                    promoteContainer.appendChild(createCardBackDOM());
+                }
+            });
 
             overlay.style.display = 'flex';
             setTimeout(() => overlay.classList.add('modal-visible'), 10);
@@ -938,53 +948,40 @@
         }
 
         function showPromoteSelection(unit) {
-            // Switch view
-            document.getElementById('promoteUnitList').style.display = 'none';
-            document.getElementById('promoteStatSelection').style.display = 'flex';
-            
-            // Render Card
-            const container = document.getElementById('promoteCardContainer');
-            container.innerHTML = ''; // Clear old
-            
-            // Using the new modular V5 Card Generator
-            const canvasId = `promoteCardCanvas_${Math.random().toString(36).substr(2, 9)}`;
-            
-            // Inject new DOM
-            container.innerHTML = `
-                <div class="unit-card interactive" style="margin:0; cursor:default;">
-                    ${getUnitCardHTML(unit, canvasId)}
-                </div>
-            `;
-            
-            // Draw Portrait
-            setTimeout(() => {
-                const canvas = container.querySelector(`#${canvasId}`);
-                if (canvas) {
-                    canvas.width = 160; canvas.height = 160; 
-                    drawCardPortrait(canvas.getContext('2d'), unit, canvas.width, canvas.height);
-                }
-            }, 0);
-            
-            // Setup Upgrade Buttons
-            document.querySelectorAll('.upgrade-btn').forEach(btn => {
-                const stat = btn.dataset.stat;
-                // Disable if maxed? No, trade-offs allow pushing past soft limits, but Level 3 is hard cap.
-                // applyUnitUpgrade handles logic.
-                btn.onclick = () => {
-                    const success = applyUnitUpgrade(unit, stat);
-                    if (success) {
-                        consumeRespawnCharge(unit.player);
-                        hideRespawnModal();
-                    }
-                };
-            });
-            
-            // Back Button
-            document.getElementById('promoteBackBtn').onclick = () => {
-                document.getElementById('promoteUnitList').style.display = 'grid';
-                document.getElementById('promoteStatSelection').style.display = 'none';
-            };
-        }
+    // Safely Switch view
+    const instructionText = document.getElementById('promoteInstructionText');
+    if (instructionText) instructionText.style.display = 'none';
+    
+    document.getElementById('promoteUnitList').style.display = 'none';
+    document.getElementById('promoteStatSelection').style.display = 'flex';
+    
+    // Render the Card (Passing TRUE to enable Upgrade Mode pips)
+    const container = document.getElementById('promoteCardContainer');
+    container.innerHTML = `
+        <div class="unit-card" style="margin: 0 auto; cursor: default; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            ${getUnitCardHTML(unit, true)}
+        </div>
+    `;
+    
+    // Attach Listeners DIRECTLY to the pulsing pips!
+    container.querySelectorAll('.pip-upgrade-target').forEach(pip => {
+        pip.addEventListener('click', (e) => {
+            const stat = e.target.dataset.upgradeStat;
+            const success = applyUnitUpgrade(unit, stat);
+            if (success) {
+                consumeRespawnCharge(unit.player);
+                hideRespawnModal();
+            }
+        });
+    });
+    
+    // Back Button
+    document.getElementById('promoteBackBtn').onclick = () => {
+        if (instructionText) instructionText.style.display = 'block';
+        document.getElementById('promoteUnitList').style.display = 'flex'; 
+        document.getElementById('promoteStatSelection').style.display = 'none';
+    };
+}
         
         function consumeRespawnCharge(player) {
             const queueKey = `player${player}`;
@@ -1117,22 +1114,27 @@ function showDefaultNewMapView() {
     document.getElementById('newMapOptionsContainer').style.display = 'flex';
 }
 
-function getUnitCardHTML(unit) {
-    // --- NEW LOGIC: 1st upgrade is Gold, 2nd & 3rd are Red ---
-    const genPips = (upgrades) => {
+function getUnitCardHTML(unit, isUpgradeMode = false) {
+    const genPips = (upgrades, statName) => {
         let html = '';
         for(let i = 0; i < 3; i++) {
             let cls = '';
+            let extra = '';
+            
             if (i < upgrades) {
-                // i === 0 is the 1st pip. i === 1 or 2 are the 2nd/3rd pips.
+                // Already upgraded pips
                 cls = (i === 0) ? 'pip-filled' : 'pip-penalty';
+            } else if (isUpgradeMode && i === upgrades && upgrades < 3) {
+                // The NEXT available upgrade pip (Interactive)
+                cls = (i === 0) ? 'pip-filled pip-upgrade-target' : 'pip-penalty pip-upgrade-target';
+                extra = `data-upgrade-stat="${statName}" title="Upgrade ${statName}"`;
             }
-            html += `<div class="${cls}"></div>`;
+            
+            html += `<div class="${cls}" ${extra}></div>`;
         }
         return html;
     };
 
-    // We simply pull the number of upgrades for each stat directly.
     const atkUp = unit.upgrades.damage || 0;
     const defUp = unit.upgrades.defense || 0;
     const spdUp = unit.upgrades.speed || 0;
@@ -1142,41 +1144,34 @@ function getUnitCardHTML(unit) {
     const teamAccent = unit.player === 1 ? TEAM_COLORS.player1.accent : TEAM_COLORS.player2.accent;
     const borderColor = unit.level > 0 ? PALETTE.YELLOW_GOLD : '#FFF';
     
-    // Level Badge Colors
     const levelText = unit.level > 0 ? `+${unit.level}` : '0';
     const levelBg = unit.level > 0 ? PALETTE.YELLOW_GOLD : '#F0F0F0'; 
     const levelTextColor = '#000'; 
 
     return `
-        <!-- Top Bar -->
         <div class="card-name-bar" style="background-color: ${teamAccent}; border-color: ${teamPrimary};">${unit.type.name}</div>
         <div class="card-level-circle" style="background-color: ${levelBg}; border-color: ${borderColor}; color: ${levelTextColor};">${levelText}</div>
         
-        <!-- Portrait Overlay -->
         <div class="card-portrait-wrapper">
             <div class="card-portrait-circle" style="background-color: ${teamPrimary}; border-color: ${borderColor};">
                 <img src="assets/units/${unit.type.name}.png" alt="${unit.type.name}">
             </div>
         </div>
 
-        <!-- Attack Row -->
-        <img src="assets/icons/attack.png" class="card-icon c-ic-atk" alt="Atk">
+        <img src="assets/icons/Attack.png" class="card-icon c-ic-atk" alt="Atk">
         <div class="card-val c-val-atk">${unit.stats.damage}</div>
-        <div class="card-pips-row c-pips-atk">${genPips(atkUp)}</div>
+        <div class="card-pips-row c-pips-atk">${genPips(atkUp, 'damage')}</div>
 
-        <!-- Defense Row -->
-        <img src="assets/icons/defense.png" class="card-icon c-ic-def" alt="Def">
+        <img src="assets/icons/Defense.png" class="card-icon c-ic-def" alt="Def">
         <div class="card-val c-val-def">${unit.stats.defense}</div>
-        <div class="card-pips-row c-pips-def">${genPips(defUp)}</div>
+        <div class="card-pips-row c-pips-def">${genPips(defUp, 'defense')}</div>
 
-        <!-- Speed Row -->
-        <img src="assets/icons/speed.png" class="card-icon c-ic-spd" alt="Spd">
+        <img src="assets/icons/Speed.png" class="card-icon c-ic-spd" alt="Spd">
         <div class="card-val c-val-spd">${unit.stats.speed}</div>
-        <div class="card-pips-row c-pips-spd">${genPips(spdUp)}</div>
+        <div class="card-pips-row c-pips-spd">${genPips(spdUp, 'speed')}</div>
 
-        <!-- HP Column & Value -->
-        <div class="card-pips-col">${genPips(hpUp)}</div>
-        <img src="assets/icons/health.png" class="card-icon c-ic-hp" alt="HP">
+        <div class="card-pips-col">${genPips(hpUp, 'health')}</div>
+        <img src="assets/icons/Health.png" class="card-icon c-ic-hp" alt="HP">
         <div class="card-val c-val-hp">${unit.stats.maxHp}</div>
     `;
 }

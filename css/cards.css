@@ -236,7 +236,37 @@
     border-radius: 12px;
     flex: 0 0 220px;
     box-shadow: 0 6px 12px rgba(0,0,0,0.3);
-    opacity: 0.8;
     transform: scale(0.85); 
     margin: -15px;
+}
+
+/* ==========================================================================
+   UPGRADE PIPS (PULSING & INTERACTIVE)
+   ========================================================================== */
+@keyframes pipPulseAnim {
+    0% { opacity: 0.25; box-shadow: 0 0 0px transparent; }
+    50% { opacity: 0.75; box-shadow: 0 0 6px rgba(255, 255, 255, 0.3); }
+    100% { opacity: 0.25; box-shadow: 0 0 0px transparent; }
+}
+
+.pip-upgrade-target {
+    cursor: pointer;
+    animation: pipPulseAnim 1.2s infinite ease-in-out;
+    z-index: 20; 
+    pointer-events: auto;
+    position: relative; 
+}
+
+.pip-upgrade-target:hover {
+    opacity: 1 !important;
+    transform: scale(1.15); 
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
+    z-index: 30;
+}
+
+.card-pips-row, .card-pips-col {
+    pointer-events: none; 
+}
+.card-pips-row > div, .card-pips-col > div {
+    pointer-events: auto; 
 }
