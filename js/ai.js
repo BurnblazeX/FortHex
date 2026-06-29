@@ -1,98 +1,181 @@
+// --- AI Helper: Get Center Pixel of a Base ---
+function getBaseCenter(baseData) {
+    if (!baseData) return null;
+    if (Array.isArray(baseData)) {
+        return calculateBaseCentroid(baseData);
+    } else if (typeof baseData === 'string') {
+        const edge = gameState.edges.get(baseData);
+        if (edge) return getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+    }
+    return null;
+}
+
+// --- AI Reinforcements System ---
+async function handleAIReinforcements() {
+    const player = gameState.currentPlayer;
+    const queueKey = `player${player}`;
+    let queue = gameState.respawnQueue[queueKey];
+    
+    while (queue && queue.length > 0 && queue[0].turnsRemaining <= 0) {
+        console.log(`[AI] Processing Reinforcements for Player ${player}...`);
+        const armySize = gameState.units.filter(u => u.player === player).length;
+        const maxUnits = getMaxUnitsForCurrentMap();
+        let actionTaken = false;
+
+        const promotableUnits = gameState.units.filter(u => u.player === player && u.level < 3);
+        
+        // AI Logic: Promote if army is full, or 30% chance to promote anyway if units are available
+        const shouldPromote = (armySize >= maxUnits) || (promotableUnits.length > 0 && Math.random() < 0.3);
+
+        if (shouldPromote && promotableUnits.length > 0) {
+            // Pick a random eligible unit
+            const targetUnit = promotableUnits[Math.floor(Math.random() * promotableUnits.length)];
+            
+            // Smart stat selection based on class
+            let statPool = ['health', 'defense', 'damage', 'speed'];
+            if (targetUnit.type.name === 'Archer') statPool = ['damage', 'speed'];
+            if (targetUnit.type.name === 'Pikeman') statPool = ['health', 'defense'];
+            if (targetUnit.type.name === 'Horseman') statPool = ['speed', 'damage'];
+            
+            const statToUpgrade = statPool[Math.floor(Math.random() * statPool.length)];
+            
+            console.log(`[AI] Promoted ${targetUnit.type.name} (+${statToUpgrade})`);
+            applyUnitUpgrade(targetUnit, statToUpgrade);
+            consumeRespawnCharge(player);
+            actionTaken = true;
+            await delay(800);
+
+        } else if (armySize < maxUnits) {
+            // Recruit missing units (Prioritize Melee > Archer > Pikeman > Horseman)
+            const counts = gameState.unitCounts[queueKey];
+            const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'];
+            
+            for (const typeKey of preferredOrder) {
+                const unitName = UNIT_TYPES[typeKey].name;
+                if (counts[unitName] < UNIT_CAPS[unitName]) {
+                    const success = spawnUnit(player, UNIT_TYPES[typeKey]);
+                    if (success) {
+                        consumeRespawnCharge(player);
+                        actionTaken = true;
+                        await delay(800);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!actionTaken) {
+            console.log("[AI] Base blocked or unable to use reinforcement charge. Holding.");
+            break; // Prevents infinite loop if base is blocked and all units are level 3
+        }
+
+        queue = gameState.respawnQueue[queueKey]; // Refresh queue for next while loop check
+    }
+}
+
 function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     if (unit.hasPerformedMajorAction) return null;
 
     let possibleActions = [];
 
+    const enemyPlayer = unit.player === 1 ? 2 : 1;
+    const enemyBasePos = getBaseCenter(gameState.baseCampPositions[`player${enemyPlayer}`]);
+    const myBasePos = getBaseCenter(gameState.baseCampPositions[`player${unit.player}`]);
+
     // --- SUB-FUNCTION to score a potential attack ---
     const scoreAttack = (targetInfo) => {
         let score = 50.0;
         if(targetInfo.unit){
-            if(targetInfo.unit.isCarryingFlag) score += 200;
+            if(targetInfo.unit.isCarryingFlag) score += 300; // MUST kill flag carrier!
             
-            // UPDATE: Use mutable stats for damage calculation
             let predictedDmg = unit.stats.damage;
             
-            // Archer Fortification Bonus
-            if (unit.isFortified && unit.type.name === 'Archer') {
-                predictedDmg += 1;
-            }
-            
-            // Advantage/Disadvantage
-            if(unit.type.strengths.includes(targetInfo.unit.type.name)) predictedDmg += 1;
-            if(unit.type.weaknesses.includes(targetInfo.unit.type.name)) predictedDmg -= 1;
+            if (unit.isFortified && unit.type.name === 'Archer') predictedDmg += 1;
+            if (unit.type.strengths.includes(targetInfo.unit.type.name)) predictedDmg += 1;
+            if (unit.type.weaknesses.includes(targetInfo.unit.type.name)) predictedDmg -= 1;
 
-            // UPDATE: Account for Target Defense
             let targetDefense = targetInfo.unit.stats.defense;
             
-            // Fortification Check
             if (targetInfo.unit.isFortified) {
-                // Check Combined Arms (Simple check for AI)
                 const hasPartner = allAllies.some(u => 
                     u.position === unit.position && 
                     u.id !== unit.id && 
                     u.type.attackType !== unit.type.attackType
                 );
-                
                 if (hasPartner) {
-                    // Ignore positive defense
                     if (targetDefense < 0) predictedDmg -= targetDefense; 
                 } else {
-                    // Apply defense
                     predictedDmg -= targetDefense;
                 }
             } else {
-                // Not Fortified: Only apply vulnerability
                 if (targetDefense < 0) predictedDmg -= targetDefense;
             }
 
-            // Min Damage Cap
             predictedDmg = Math.max(1, predictedDmg);
-
-            // Kill Priority
-            if(targetInfo.unit.hp <= predictedDmg) score += 100;
-            
-            // Damage Value
+            if(targetInfo.unit.hp <= predictedDmg) score += 100; // High priority on securing kills
             score += predictedDmg * 10;
-
         } else { 
-            // Bridge Attack
-            score = 5; 
+            score = 15; // Bridge Attack
         } 
         return score;
     };
 
     // --- SUB-FUNCTION to score a potential move ---
     const scoreMove = (edgeKey) => {
-        let moveScore = 5.0; // Base incentive to not just stand still
+        let moveScore = 5.0; 
         const unitPos = getUnitScreenPosition(unit);
         if (!unitPos) return 0;
         
         const moveMidPoint = getEdgeMidpoint(...parseEdgeKey(edgeKey).flatMap(c=>[c.q,c.r]));
         
-        // Role-based scoring for the move itself
-        if (unit.type.name === 'Pikeman' && strategy === 'IRON_WALL') {
-            const centerDist = axialDistance(...edgeKey.split('_')[0].split(',').map(Number), 0, 0);
-            moveScore += (4 - centerDist) * 5; // Move to the center to form the wall
-        } else if (unit.type.name === 'Horseman' && strategy === 'BLITZ') {
-            const flankTarget = allEnemies.find(e => e.type.name === 'Archer' || e.type.name === 'Melee');
-            if(flankTarget) {
-                const targetPos = getUnitScreenPosition(flankTarget);
-                const currentDist = pointDistance(unitPos, targetPos);
-                const afterDist = pointDistance(moveMidPoint, targetPos);
-                if(afterDist < currentDist) moveScore += (1 - (afterDist / currentDist)) * 40;
+        // Find true closest enemy
+        let minDist = Infinity;
+        let actualClosest = null;
+        allEnemies.forEach(e => {
+            const ep = getUnitScreenPosition(e);
+            if (ep) {
+                const d = pointDistance(unitPos, ep);
+                if (d < minDist) { minDist = d; actualClosest = e; }
             }
-        } else { // Generic advance for others
-             const closestEnemy = allEnemies[0];
-             if(closestEnemy){
-                const targetPos = getUnitScreenPosition(closestEnemy);
-                const currentDist = pointDistance(unitPos, targetPos);
-                const afterDist = pointDistance(moveMidPoint, targetPos);
-                if(afterDist < currentDist) moveScore += (1 - (afterDist / currentDist)) * 20;
-             }
+        });
+
+        if (unit.isCarryingFlag && myBasePos) {
+            // RUN HOME! Ignore everything else.
+            const currentDist = pointDistance(unitPos, myBasePos);
+            const afterDist = pointDistance(moveMidPoint, myBasePos);
+            if (afterDist < currentDist) moveScore += (1 - (afterDist / currentDist)) * 300;
+        } else if (unit.type.name === 'Pikeman' && myBasePos) {
+            // DEFEND BASE
+            const currentDist = pointDistance(unitPos, myBasePos);
+            const afterDist = pointDistance(moveMidPoint, myBasePos);
+            
+            const defenseRadius = HEX_SIZE * 2.5 * gameState.renderScale;
+            if (currentDist > defenseRadius) {
+                 if (afterDist < currentDist) moveScore += 60; // Walk back home
+            } else if (actualClosest) {
+                 const ep = getUnitScreenPosition(actualClosest);
+                 if (ep) {
+                     const aDist = pointDistance(moveMidPoint, ep);
+                     if (aDist < minDist) moveScore += 30; // Intercept intruders
+                 }
+            }
+        } else {
+            // ATTACK / CAPTURE
+            if (enemyBasePos) {
+                const currentDistBase = pointDistance(unitPos, enemyBasePos);
+                const afterDistBase = pointDistance(moveMidPoint, enemyBasePos);
+                if (afterDistBase < currentDistBase) moveScore += (1 - (afterDistBase / currentDistBase)) * 40;
+            }
+            
+            // Chase nearby enemies
+            if (actualClosest) {
+                const ep = getUnitScreenPosition(actualClosest);
+                const aDist = pointDistance(moveMidPoint, ep);
+                if (aDist < minDist) moveScore += (1 - (aDist / minDist)) * 20;
+            }
         }
         return moveScore;
     };
-
 
     // === ACTION GENERATION ===
 
@@ -103,25 +186,34 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         attackTargets.forEach(targetInfo => {
             possibleActions.push({ type: 'ATTACK_ONLY', unit, targetInfo, score: scoreAttack(targetInfo) });
         });
+        
         // FORTIFY_ONLY
-        if (unit.stats.defense > 0) {
+        if (unit.stats.defense > 0 && !unit.isCarryingFlag) {
              const edgeCoords = parseEdgeKey(unit.position);
              if (edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
+                // Ensure we don't fortify on our own flag tile
+                let myFlagTileKey = null;
+                const baseData = gameState.baseCampPositions[`player${unit.player}`];
+                if (Array.isArray(baseData) && baseData.length === 3) {
+                    const tiles = baseData.map(k => ({ q: Number(k.split(',')[0]), r: Number(k.split(',')[1]), key: k }));
+                    const [t1, t2, t3] = tiles;
+                    if (axialDistance(t1.q, t1.r, t2.q, t2.r) === 1 && axialDistance(t3.q, t3.r, t1.q, t1.r) === 1) myFlagTileKey = tiles[0].key;
+                    else if (axialDistance(t1.q, t1.r, t2.q, t2.r) === 1 && axialDistance(t2.q, t2.r, t3.q, t3.r) === 1) myFlagTileKey = tiles[1].key;
+                    else myFlagTileKey = tiles[2].key;
+                }
+
                 [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {
                     const tile = gameState.tiles.get(tileKey);
-                    // Check logic for fortification
-                    // TODO: Check enemy base tiles if necessary (omitted for brevity in AI)
-                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null) {
+                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey) {
                          let score = 5 - unit.fortifyCooldown;
-                         if(strategy === 'IRON_WALL' && unit.type.name === 'Pikeman') score += 25;
-                         if(unit.hp < unit.maxHp) score+=20;
-                         if(axialDistance(...tileKey.split(',').map(Number),0,0) > 1) score-= 15;
+                         if(unit.type.name === 'Pikeman') score += 25; // Pikemen love fortifying
+                         if(unit.hp < unit.maxHp) score+=20; // Heal up
                          if(score > 0) possibleActions.push({ type: 'FORTIFY_ONLY', unit, targetTileKey: tileKey, score });
                     }
                 });
              }
         }
-    } else { // Unit is fortified
+    } else { 
         // UNFORTIFY_ONLY
         const unfortifyTargets = getPotentialUnfortifyTargets(unit);
         if (unfortifyTargets.length > 0) {
@@ -135,16 +227,15 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     possibleMoves.forEach((moveData, edgeKey) => {
         const moveScore = scoreMove(edgeKey);
         
-        // Ghost Unit for calculation: Update position AND Move Points
         const ghostUnit = { 
             ...unit, 
             position: edgeKey, 
             currentMove: unit.currentMove - moveData.cost,
-            positionType: 'edge' // Assume moving to edge
+            positionType: 'edge' 
         };
 
-        // MOVE_AND_ATTACK (for Horseman)
-        if (unit.type.canMoveAfterAttack && ghostUnit.currentMove >= ATTACK_COST) {
+        // MOVE_AND_ATTACK (Horseman hit & run)
+        if (unit.type.canMoveAfterAttack && ghostUnit.currentMove >= ATTACK_COST && !unit.isCarryingFlag) {
             const attackTargets = getValidMeleeAttackTargets(ghostUnit);
             if (attackTargets.length > 0) {
                 const bestTarget = attackTargets.sort((a,b) => scoreAttack(b) - scoreAttack(a))[0];
@@ -153,21 +244,18 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             }
         }
         
-        // MOVE_ONLY is always an option
         possibleActions.push({ type: 'MOVE_ONLY', unit, moveData, score: moveScore });
     });
     
     if (possibleActions.length === 0) return null;
     
-    // Return the single best action for this unit
     possibleActions.sort((a, b) => b.score - a.score);
     return possibleActions[0];
 }
 
-// AI Executor: Takes a chosen action and performs it with animations.
 async function executeAIAction(action) {
     if (!action) return;
-    console.log(`AI Executing: ${action.type} for ${action.unit.type.name}`, `Score: ${action.score.toFixed(2)}`);
+    console.log(`[AI] Executing: ${action.type} for ${action.unit.type.name}`, `Score: ${action.score.toFixed(2)}`);
     gameState.selectedUnit = action.unit;
     updateSelectedUnitInfoPanel();
     await delay(400);
@@ -209,12 +297,15 @@ async function executeAIAction(action) {
 }
 
 
-// AI Turn Manager: The main loop that commands the AI turn.
 async function executeAITurn() {
     if (gameState.gameOver) return;
     console.log(`--- AI Turn ${gameState.globalTurnNumber} (Player ${gameState.currentPlayer}) ---`);
 
-    const aiStrategy = 'IRON_WALL'; // Will be dynamic later
+    // 1. Process Reinforcements / Promotions
+    await handleAIReinforcements();
+
+    // 2. Execute Unit Actions
+    const aiStrategy = 'STANDARD';
     const allEnemies = gameState.units.filter(u => u.player !== gameState.currentPlayer);
     const allAllies = gameState.units.filter(u => u.player === gameState.currentPlayer);
     
@@ -233,19 +324,18 @@ async function executeAITurn() {
         }
         
         if (!bestActionOverall) {
-            console.log("AI has no more possible actions.");
+            console.log("[AI] No more possible actions.");
             break;
         }
 
         const actingUnit = bestActionOverall.unit;
         await executeAIAction(bestActionOverall);
         
-        // This is the correct way to handle the action attempt.
         actingUnit.hasPerformedMajorAction = true;
         unitsToProcess = unitsToProcess.filter(u => u.id !== actingUnit.id);
     }
 
-    console.log("AI turn finished.");
+    console.log("--- AI Turn Finished ---");
     if (!gameState.gameOver) {
         ui.endTurnButton.disabled = false;
         ui.endTurnButton.click();

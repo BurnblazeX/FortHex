@@ -55,7 +55,7 @@ const THEME = {
 };
         
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B29";
+        const BUILD_VERSION = "B29//1";
         const HEX_SIZE = 70; 
         const CANVAS_WIDTH_NORMAL = (2 * 3 + 1.5) * (HEX_SIZE * Math.sqrt(3));
         const CANVAS_HEIGHT_NORMAL = (2 * 3 + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;
@@ -233,10 +233,10 @@ IMAGE_ASSETS.map_units.PIKEMAN.src = 'assets/units/Pikeman_unit.png';
 IMAGE_ASSETS.map_units.HORSEMAN.src = 'assets/units/Horseman_unit.png';
 
 // Trigger icon loads
-IMAGE_ASSETS.icons.attack.src = 'assets/icons/Attack.png';
-IMAGE_ASSETS.icons.defense.src = 'assets/icons/Defense.png';
-IMAGE_ASSETS.icons.speed.src = 'assets/icons/Speed.png';
-IMAGE_ASSETS.icons.health.src = 'assets/icons/Health.png';
+IMAGE_ASSETS.icons.attack.src = 'assets/icons/attack.png';
+IMAGE_ASSETS.icons.defense.src = 'assets/icons/defense.png';
+IMAGE_ASSETS.icons.speed.src = 'assets/icons/speed.png';
+IMAGE_ASSETS.icons.health.src = 'assets/icons/health.png';
 
         // Hex Grid Directions (Axial Coordinates)
         const AXIAL_DIRECTIONS = [ { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 }, { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 } ];
@@ -284,9 +284,9 @@ IMAGE_ASSETS.icons.health.src = 'assets/icons/Health.png';
             name: "Volcano Island",
             radius: 4,
             tiles: new Map([
-                ['-4,0', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }], ['-4,1', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }], 
+                ['-4,0', TILE_TYPES.PLAINS], ['-4,1', TILE_TYPES.PLAINS], 
                 ['-4,2', TILE_TYPES.WATER], ['-4,3', TILE_TYPES.WATER], ['-4,4', TILE_TYPES.WATER],
-                ['-3,-1', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }], ['-3,0', TILE_TYPES.PLAINS], 
+                ['-3,-1', TILE_TYPES.PLAINS], ['-3,0', TILE_TYPES.PLAINS], 
                 ['-3,1', TILE_TYPES.FOREST], ['-3,2', TILE_TYPES.PLAINS], ['-3,3', TILE_TYPES.FOREST], ['-3,4', TILE_TYPES.WATER],
                 ['-2,-2', TILE_TYPES.WATER], ['-2,-1', TILE_TYPES.FOREST], ['-2,0', TILE_TYPES.PLAINS], 
                 ['-2,1', TILE_TYPES.FOREST], ['-2,2', TILE_TYPES.FOREST], ['-2,3', TILE_TYPES.PLAINS], ['-2,4', TILE_TYPES.WATER],
@@ -302,9 +302,9 @@ IMAGE_ASSETS.icons.health.src = 'assets/icons/Health.png';
                 ['2,-4', TILE_TYPES.WATER], ['2,-3', TILE_TYPES.PLAINS], ['2,-2', TILE_TYPES.FOREST], 
                 ['2,-1', TILE_TYPES.FOREST], ['2,0', TILE_TYPES.PLAINS], ['2,1', TILE_TYPES.FOREST], ['2,2', TILE_TYPES.WATER],
                 ['3,-4', TILE_TYPES.WATER], ['3,-3', TILE_TYPES.FOREST], ['3,-2', TILE_TYPES.PLAINS], 
-                ['3,-1', TILE_TYPES.FOREST], ['3,0', TILE_TYPES.PLAINS], ['3,1', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }],
+                ['3,-1', TILE_TYPES.FOREST], ['3,0', TILE_TYPES.PLAINS], ['3,1', TILE_TYPES.PLAINS],
                 ['4,-4', TILE_TYPES.WATER], ['4,-3', TILE_TYPES.WATER], ['4,-2', TILE_TYPES.WATER], 
-                ['4,-1', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }], ['4,0', { ...TILE_TYPES.PLAINS, isBaseCampTile: true }]
+                ['4,-1', TILE_TYPES.PLAINS], ['4,0', TILE_TYPES.PLAINS]
             ]),
             units: [
                 { player: 1, typeName: 'HORSEMAN', position: '2,0_3,0' },

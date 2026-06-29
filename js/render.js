@@ -579,59 +579,6 @@
         }
 
         function drawUnitAttackHighlightsOnly(targetsToHighlight) {
-            if (!targetsToHighlight || targetsToHighlight.length === 0) return;
-
-            // --- FIX: Apply renderScale to the highlight radius and offset ---
-            const unitSizeToHighlight = (HEX_SIZE * 0.3) * gameState.renderScale;
-            const scaledOffset = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
-
-            targetsToHighlight.forEach(targetInfo => {
-                if (!targetInfo.isBridgeTarget && targetInfo.unit) {
-                    const targetUnit = targetInfo.unit; 
-                    let unitX, unitY;
-            
-            if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
-                const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
-                if (tile) { 
-                    const centerPixel = axialToPixel(tile.q, tile.r); 
-                    unitX = centerPixel.x; 
-                    unitY = centerPixel.y; 
-                    } else return;
-                    } else if (targetInfo.edgeKey) {
-                        const edge = gameState.edges.get(targetInfo.edgeKey); 
-                        if (!edge) return;
-                
-                        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2); 
-                        unitX = mid.x; 
-                        unitY = mid.y;
-                
-                        const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
-                        const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === targetUnit.id);
-                
-                        if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
-                            const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
-                            const p1 = axialToPixel(edge.q1, edge.r1); 
-                            const p2 = axialToPixel(edge.q2, edge.r2);
-                            let dx = p2.x - p1.x, dy = p2.y - p1.y; 
-                            const len = Math.sqrt(dx*dx + dy*dy) || 1;
-                            let perpX = -dy / len, perpY = dx / len;
-                    
-                            // --- FIX: Use the scaled offset here ---
-                            unitX += perpX * scaledOffset * offsetSign * (0.5);
-                            unitY += perpY * scaledOffset * offsetSign * (0.5);
-                        }
-                    } else return;
-            
-                    ctx.beginPath(); 
-                    ctx.arc(unitX, unitY, unitSizeToHighlight, 0, 2 * Math.PI);
-                    ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; 
-                    ctx.lineWidth = 3; 
-                    ctx.stroke();
-                }
-            });
-        }
-
-        function drawUnitAttackHighlightsOnly(targetsToHighlight) {
     if (!targetsToHighlight || targetsToHighlight.length === 0) return;
 
     // --- FIX: Apply renderScale to the highlight radius and offset ---
@@ -1522,11 +1469,6 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 onComplete: null,
             };
 
-            // Remove the unit from its starting edge immediately so it doesn't get drawn there.
-        const startEdge = gameState.edges.get(unit.position);
-        if(startEdge) {
-            startEdge.units = startEdge.units.filter(u => u.id !== unit.id);
-        }
         // The unit is now "in animation" and not on any specific edge or tile.
             unit.positionType = 'animating';
     
@@ -1744,18 +1686,45 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
 
         let lastFrameTime = Date.now();
 
+        function hasIdleAnimations() {
+            // No supply lines or flags in arcade/map maker mode
+            if (gameState.gameMode === 'arcade' || gameState.mapMakerMode) return false;
+            
+            return gameState.units.some(u => {
+                if (!u.isFortified) return false;
+                
+                // 1. Check for Active Supply Lines
+                if (u.supplyLine && u.supplyLine.path && u.supplyLine.path.length > 0) return true;
+                
+                // 2. Check for Unit Covering the Flag (Expansive Map Pulse Effect)
+                if (gameState.flags && gameState.gridRadius === 4) {
+                    const myFlag = gameState.flags[`p${u.player}_flag`];
+                    if (myFlag && myFlag.status === 'at_base' && Array.isArray(myFlag.homePosition)) {
+                        const tile = gameState.tiles.get(u.position);
+                        if (tile) {
+                            const {x, y} = axialToPixel(tile.q, tile.r);
+                            const flagPos = calculateBaseCentroid(myFlag.homePosition);
+                            if (flagPos && distSq({x, y}, flagPos) < 1) return true;
+                        }
+                    }
+                }
+                
+                return false;
+            });
+        }
+
         function gameLoop() {
-            // --- DELTA TIME CALCULATION ---
+
+            // 1. DELTA TIME CALCULATION 
             const currentTime = Date.now();
-            const deltaTime = (currentTime - lastFrameTime) / 1000; // Time passed in seconds
+            const deltaTime = (currentTime - lastFrameTime) / 1000;
             lastFrameTime = currentTime;
-            // --- ARCADE LOGIC ---
-        if (gameState.gameMode === 'arcade' && !gameState.gameOver && !gameState.mapMakerMode) {
-                // Check if we are waiting for P1 to start the game
+
+            // 2. ARCADE LOGIC 
+            if (gameState.gameMode === 'arcade' && !gameState.gameOver && !gameState.mapMakerMode) {
                 const waitingForStart = gameState.globalTurnNumber === 1 && gameState.currentPlayer === 1 && !gameState.arcadeGameStartedInteraction;
 
                 if (gameState.activeAnimations.length === 0 && !waitingForStart) { 
-                    // Use deltaTime instead of hardcoded 1/60
                     gameState.arcadeTurnTimer -= deltaTime; 
             
                     if (gameState.arcadeTurnTimer <= 0) {
@@ -1772,8 +1741,44 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 const emptyColor = '#C03020';
                 ui.endTurnButton.style.background = `linear-gradient(to right, ${activeColor} ${pct}%, ${emptyColor} ${pct}%)`;
                 ui.endTurnButton.textContent = `End Turn (${Math.ceil(gameState.arcadeTurnTimer)}s)`;
+                
+                // Force redraw if in the swap phase so the border pulsates smoothly
+                if (gameState.swapState === 'selecting_unit') {
+                    gameState.needsRedraw = true;
+                }
             }
 
+            // 3. PERFORMANCE: DIRTY FLAG RENDERING
+            let needsDraw = gameState.needsRedraw ||
+                gameState.activeAnimations.length > 0 ||
+                gameState.visualEffects.length > 0 ||            
+                gameState.potentialDebugPathToDraw !== null ||   
+                gameState.debugPathToDraw !== null ||            
+                gameState.colorTransition.active ||
+                gameState.isDragging ||
+                (gameState.currentActionState === ACTION_STATES.SELECTING_BRIDGE_EDGE) ||
+                (gameState.currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET && gameState.debugAttackRangeHighlights.length > 0) ||
+                (gameSettings.debugModeEnabled && (gameState.selectedUnit || gameState.debugSelectedBasePlayer));
+
+            // 4. THROTTLED IDLE ANIMATIONS (30 FPS)
+            if (!needsDraw && hasIdleAnimations()) {
+                if (!gameState.lastIdleDrawTime) gameState.lastIdleDrawTime = 0;
+                if (currentTime - gameState.lastIdleDrawTime > 33) {
+                    needsDraw = true;
+                    gameState.lastIdleDrawTime = currentTime;
+                }
+            }
+
+            // 5. ABORT IF IDLE
+            if (!needsDraw) {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            gameState.needsRedraw = false; // Reset the flag for the next frame
+
+            // ==========================================
+            // 6. MAIN RENDER EXECUTION
+            // ==========================================
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             if (gameState.colorTransition.active) {
@@ -1786,6 +1791,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 currentDrawingColors.player1.accent = lerpColor(gameState.colorTransition.from.player1.accent, gameState.colorTransition.to.player1.accent, progress);
                 currentDrawingColors.player2.accent = lerpColor(gameState.colorTransition.from.player2.accent, gameState.colorTransition.to.player2.accent, progress);
                 if (progress >= 1) gameState.colorTransition.active = false;
+                updateCssVariables(currentDrawingColors);
             } else {
                 currentDrawingColors.player1.primary = TEAM_COLORS.player1.primary;
                 currentDrawingColors.player2.primary = TEAM_COLORS.player2.primary;
@@ -1795,7 +1801,6 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 currentDrawingColors.player2.accent = TEAM_COLORS.player2.accent;
             }
 
-            // ... (Outline logic unchanged) ...
             if (gameState.mapMakerMode) {
                 canvas.style.transition = 'outline-color 0.4s ease-in-out';
                 canvas.style.outlineColor = '#F0F0F0';
@@ -1803,16 +1808,12 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 canvas.style.transition = 'outline-color 0.4s ease-in-out';
                 canvas.style.outlineColor = 'transparent';
             } else if (gameState.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
-                // DISABLE transition for immediate frame-by-frame updates
                 canvas.style.transition = 'none'; 
-                
-                const time = Date.now();
                 const playerColor = TEAM_COLORS[`player${gameState.currentPlayer}`].secondary;
                 const alertColor = '#FFC020'; 
-                const pulse = (Math.sin(time / 200) + 1) / 2; 
+                const pulse = (Math.sin(currentTime / 200) + 1) / 2; 
                 canvas.style.outlineColor = lerpColor(playerColor, alertColor, pulse);
             } else {
-                // RESTORE transition for smooth turn switching
                 canvas.style.transition = 'outline-color 0.4s ease-in-out';
                 canvas.style.outlineColor = gameState.currentPlayer === 1 ? TEAM_COLORS.player1.secondary : TEAM_COLORS.player2.secondary;
             }
@@ -1826,7 +1827,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             drawBridges();
             drawSupplyLines();
             drawDebugVisibilityHighlights(); 
-            drawDebugAttackRangeHighlights() 
+            drawDebugAttackRangeHighlights(); 
 
             if (!gameState.isDragging) {
                 switch(gameState.currentActionState) {
@@ -1846,8 +1847,6 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                         drawBridgeAttackHighlightsOnly(currentAttackTargets); 
                         break;
                 }
-                
-                // ADDED: Draw map maker highlights if needed
                 drawMapMakerHighlights();
             }
             
@@ -1898,6 +1897,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 ui.victoryMessage.style.display = 'none';
                 ui.endTurnButton.disabled = false;
             }
+            gameState.needsRedraw = true;
             // A single call to gameLoop will trigger a full redraw of the canvas
             requestAnimationFrame(gameLoop);
         }

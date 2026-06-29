@@ -332,20 +332,25 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
 /* ==========================================================================
    ACTION LOG & QUEUES
    ========================================================================== */
-.unit-info-container { width: 100%; }
+.unit-info-container { 
+    width: 100%; 
+    container-type: inline-size;
+}
 #selectedUnitInfoContainer {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     flex-grow: 1; 
+    padding-bottom: 80px;
 }
 
 .unit-info-container p { font-size: 1em; margin: 4px 0; }
 
 .action-info-header {
     font-size: 1.1em;
-    margin-bottom: 10px;
+    margin-top: 0;
+    margin-bottom: 0px;
     color: #FFC020;
     width: 100%;
     text-align: center;
@@ -460,6 +465,7 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
     justify-content: flex-start; 
     width: 100%;
     flex-grow: 1; 
+    padding-bottom: 80px;
 }
 
 .action-buttons-grid {
@@ -469,7 +475,7 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
     width: 100%;
     max-width: 260px; 
     
-    margin-top: auto;
+    margin-top: 200px;
     margin-bottom: auto;
 }
 
@@ -695,4 +701,76 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
     color: white;
     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
     transition: background-color 0s !important; 
+}
+
+/* ==========================================================================
+   RESPONSIVE / MOBILE SUPPORT
+   ========================================================================== */
+@media (max-width: 1150px) {
+    /* Override Desktop Hard limits */
+    #gameWrapper {
+        min-width: 0 !important;
+        width: 100%;
+        padding-top: 10px;
+        transform: none !important; /* Disable manual UI scale on mobile */
+    }
+
+    /* Switch from Row Flexbox to 2x2 Grid */
+    #gameLayoutContainer {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto;
+        gap: 10px;
+        width: 100%;
+        padding: 0 10px;
+    }
+
+    /* Canvas spans the entire top row */
+    #gameCanvas {
+        grid-column: 1 / 3;
+        grid-row: 1;
+        width: 100%;
+        height: auto; /* Scales proportionally based on width */
+        max-height: 60vh; /* Prevents it from being too tall on weird aspect ratios */
+        object-fit: contain;
+    }
+
+    /* Left Panel takes bottom-left */
+    #leftPanel {
+        grid-column: 1;
+        grid-row: 2;
+        min-width: 0;
+        min-height: auto;
+        padding: 10px;
+    }
+
+    /* Right Panel takes bottom-right */
+    #rightPanel {
+        grid-column: 2;
+        grid-row: 2;
+        min-width: 0;
+        min-height: auto;
+        padding: 10px;
+    }
+
+    /* Adjust interior UI elements to fit the narrower panels */
+    #globalTurnCounterDisplay, #turnDisplay {
+        font-size: 1.2em;
+    }
+    
+    #supplyPointsContainer {
+        display: flex;
+        flex-direction: column; /* Stack supply points vertically */
+        gap: 5px;
+    }
+
+    .action-buttons-grid {
+        display: flex;
+        flex-direction: column; /* Stack buttons vertically so they remain clickable */
+        margin-top: 15px;
+    }
+
+    #actionLogWrapper {
+        height: 250px; /* Shorten log on mobile */
+    }
 }

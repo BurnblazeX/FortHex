@@ -1184,7 +1184,7 @@ function eraseAt(x, y) {
     
     // Prioritize erasing units if clicking near an edge with units on it
     if (edge && edge.units.length > 0 && distance < (HEX_SIZE * 0.4)) {
-        const unitToRemove = edge.units.pop(); // Remove the last unit added
+        const unitToRemove = edge.units[edge.units.length - 1]; 
         gameState.units = gameState.units.filter(u => u.id !== unitToRemove.id);
     } else {
         // Otherwise, erase the tile by setting it to plains
@@ -1198,6 +1198,7 @@ function eraseAt(x, y) {
         }
     }
     autoSaveMap();
+    gameState.needsRedraw = true;
 }
 
 function clearMapForMaker() {
@@ -1397,10 +1398,9 @@ function applyMapMakerBrush(x, y) {
                         const otherTile = gameState.tiles.get(getTileKey(otherTileQ, otherTileR));
                         
                         if (otherTile && otherTile.type === TILE_TYPES.WATER) {
-                            edge.units.forEach(unitToRemove => {
-                                gameState.units = gameState.units.filter(u => u.id !== unitToRemove.id);
-                            });
-                            edge.units = [];
+                            // Filter via master array, don't try to clear the getter array!
+                            const unitsToRemove = edge.units;
+                            gameState.units = gameState.units.filter(u => !unitsToRemove.some(rem => rem.id === u.id));
                         }
                     }
                 });
@@ -1448,7 +1448,7 @@ function applyMapMakerBrush(x, y) {
 
         const newUnit = createUnit(brush.player, brush.value, closestEdgeKey);
         gameState.units.push(newUnit);
-        edge.units.push(newUnit);
     }
     autoSaveMap();
+    gameState.needsRedraw = true;
 }

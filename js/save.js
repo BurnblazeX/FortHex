@@ -395,24 +395,58 @@ function rehydrateGameState() {
             if (!unit.type) console.warn("Unknown Unit Type ID:", unit.typeId);
         });
 
-        // 6. Re-link Units to Edges
-        for (const edge of gameState.edges.values()) {
-            edge.units = [];
-        }
-        gameState.units.forEach(unit => {
-            if (unit.positionType === 'edge') {
-                const edge = gameState.edges.get(unit.position);
-                if (edge) {
-                    edge.units.push(unit);
+        // 6. Re-link Units to Edges (Re-attach Getters)
+        gameState.edges.forEach((edge, edgeKey) => {
+            Object.defineProperty(edge, 'units', {
+                get: function() { 
+                    return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && u.id !== gameState.draggingUnit?.id); 
+                },
+                configurable: true,
+                enumerable: true
+            });
+        });
+
+        // 7. Clean Sweep / Sanity Checks
+        console.log("Running post-load sanity checks...");
+        
+        // A. Fix illegally fortified units (Defense <= 0)
+        // We clone the array because handleUnitDeath modifies gameState.units
+        const unitsToCheck = [...gameState.units]; 
+        for (const unit of unitsToCheck) {
+            if (unit.isFortified && unit.stats.defense <= 0) {
+                console.warn(`[Clean Sweep] Unit ${unit.id} illegally fortified. Evicting...`);
+                const validTargets = getPotentialUnfortifyTargets(unit);
+                
+                if (validTargets.length === 0) {
+                    handleUnitDeath(unit, "crushed");
+                } else {
+                    logAction(`P${unit.player} ${unit.type.name} was forced to retreat due to 0 defense.`, unit.player);
+                    // This queues the unfortify animation to play as soon as the canvas loads!
+                    completeUnfortify(unit, validTargets[0]); 
                 }
             }
-        });
+        }
+
+        // B. Check for stuck Reinforcement Modals
+        if (gameState.gameMode !== 'arcade') {
+            const activePlayer = gameState.currentPlayer;
+            const queueKey = `player${activePlayer}`;
+            const queue = gameState.respawnQueue[queueKey];
+            
+            if (queue && queue.length > 0 && queue[0].turnsRemaining <= 0) {
+                console.warn(`[Clean Sweep] P${activePlayer} has pending reinforcements. Opening modal...`);
+                // We use a tiny timeout so it pops up AFTER fullGameRedraw() finishes setting up the UI
+                setTimeout(() => showRespawnModal(activePlayer), 100);
+            }
+        }
 
     } catch (err) {
         console.error("[Rehydrate] Error:", err);
     }
     console.groupEnd();
 }
+
+
 
 function autoSaveMap() {
     if (!gameState.mapMakerMode) return;
@@ -448,7 +482,6 @@ function loadMapFromDataObject(mapData) {
 
     gameState.units = [];
     gameState.tiles.clear();
-    gameState.edges.forEach(edge => edge.units = []);
 
     mapData.tiles.forEach(([key, tile]) => {
         const rehydratedTile = { ...tile,
