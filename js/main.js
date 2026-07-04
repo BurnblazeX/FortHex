@@ -64,19 +64,34 @@ function checkVictoryCondition() {
 
                 if (Array.isArray(carrierHomeBaseData)) {
                     // Expansive Mode (Radius 4): Base is a list of tiles.
-                    // Victory condition: Unit is on an edge connecting two of these tiles (Internal Edge).
-                    const [h1, h2] = parseEdgeKey(unit.position);
-                    if (!isNaN(h1.q) && !isNaN(h2.q)) {
-                        const t1 = getTileKey(h1.q, h1.r);
-                        const t2 = getTileKey(h2.q, h2.r);
-                        if (carrierHomeBaseData.includes(t1) && carrierHomeBaseData.includes(t2)) {
+                    if (unit.positionType === 'center') {
+                        // WIN: Fortified directly on one of the home base tiles
+                        if (carrierHomeBaseData.includes(unit.position)) {
                             isHome = true;
+                        }
+                    } else {
+                        // WIN: Unit is on an edge connecting two of these tiles (Internal Edge).
+                        const [h1, h2] = parseEdgeKey(unit.position);
+                        if (!isNaN(h1.q) && !isNaN(h2.q)) {
+                            const t1 = getTileKey(h1.q, h1.r);
+                            const t2 = getTileKey(h2.q, h2.r);
+                            if (carrierHomeBaseData.includes(t1) && carrierHomeBaseData.includes(t2)) {
+                                isHome = true;
+                            }
                         }
                     }
                 } else {
                     // Standard Mode (Radius 3): Base is a specific edge key string.
                     if (unit.position === carrierHomeBaseData) {
                         isHome = true;
+                    } else if (unit.positionType === 'center') {
+                        // WIN: Fortified directly on one of the tiles touching the home edge
+                        const [h1, h2] = parseEdgeKey(carrierHomeBaseData);
+                        const t1 = getTileKey(h1.q, h1.r);
+                        const t2 = getTileKey(h2.q, h2.r);
+                        if (unit.position === t1 || unit.position === t2) {
+                            isHome = true;
+                        }
                     }
                 }
 
@@ -322,55 +337,70 @@ function applyStartOfTurnZoCDamage() {
     if (Array.isArray(activePlayerBaseData)) {
         activePlayerBaseTiles = activePlayerBaseData;
     } else if (typeof activePlayerBaseData === 'string') {
+        // Splitting "1,2_2,1" safely gives us an array of the two tile keys: ['1,2', '2,1']
         activePlayerBaseTiles = activePlayerBaseData.split('_');
     }
 
     gameState.units.forEach(unit => {
-        if (unit.player !== enemyPlayer || unit.positionType !== 'edge' || unit.isFortified) return;
+        if (unit.player !== enemyPlayer) return;
         
-        const edgeKey = unit.position;
-        const edgeTileCoords = parseEdgeKey(edgeKey);
-        if (edgeTileCoords.some(coord => isNaN(coord.q))) return;
+        // --- 1. Edge ZoC (Original Logic) ---
+        if (unit.positionType === 'edge' && !unit.isFortified) {
+            const edgeKey = unit.position;
+            const edgeTileCoords = parseEdgeKey(edgeKey);
+            if (edgeTileCoords.some(coord => isNaN(coord.q))) return;
 
-        const tile1Key = getTileKey(edgeTileCoords[0].q, edgeTileCoords[0].r);
-        const tile2Key = getTileKey(edgeTileCoords[1].q, edgeTileCoords[1].r);
-        const tile1 = gameState.tiles.get(tile1Key);
-        const tile2 = gameState.tiles.get(tile2Key);
-        
-        // Helper to check if a specific tile deals ZoC
-        const checkTileZoC = (tile, tKey) => {
-            if (!tile) return false;
+            const tile1Key = getTileKey(edgeTileCoords[0].q, edgeTileCoords[0].r);
+            const tile2Key = getTileKey(edgeTileCoords[1].q, edgeTileCoords[1].r);
+            const tile1 = gameState.tiles.get(tile1Key);
+            const tile2 = gameState.tiles.get(tile2Key);
             
-            // Base Camps always deal ZoC (Unsuppressable)
-            if (activePlayerBaseTiles.includes(tKey)) return true;
+            const checkTileZoC = (tile, tKey) => {
+                if (!tile) return false;
+                if (activePlayerBaseTiles.includes(tKey)) return true; // Base Camp (Unsuppressable)
 
-            // Fortified Units deal ZoC unless Suppressed
-            if (tile.fortifiedByPlayer === activePlayer) {
-                const fortUnit = gameState.units.find(u => u.isFortified && u.position === tKey && u.player === activePlayer);
-                if (fortUnit) {
-                    if (isZoCSuppressed(fortUnit)) {
-                        // Optional: Log suppression once? (Can be spammy, maybe skip log)
-                        return false; 
-                    }
-                    return true;
+                if (tile.fortifiedByPlayer === activePlayer) {
+                    const fortUnit = gameState.units.find(u => u.isFortified && u.position === tKey && u.player === activePlayer);
+                    if (fortUnit && !isZoCSuppressed(fortUnit)) return true;
+                }
+                return false;
+            };
+
+            if (checkTileZoC(tile1, tile1Key) || checkTileZoC(tile2, tile2Key)) {
+                unit.hp -= FORTIFICATION_DAMAGE;
+                triggerDamageVisual(unit, 'normal'); // Added missing visual feedback
+                
+                zocEvents.push({
+                    unitId: unit.id,
+                    damage: FORTIFICATION_DAMAGE,
+                    remainingHp: unit.hp,
+                    isFatal: unit.hp <= 0
+                });
+
+                logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, activePlayer, 3500);
+                if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
+                    unitsToDestroy.push(unit);
                 }
             }
-            return false;
-        };
+        }
+        // --- 2. Center/Fortified Base Camp ZoC (NEW LOGIC) ---
+        else if (unit.positionType === 'center' && unit.isFortified) {
+            // If the enemy unit is fortified DIRECTLY ON the active player's base camp tile
+            if (activePlayerBaseTiles.includes(unit.fortifiedTileKey)) {
+                unit.hp -= FORTIFICATION_DAMAGE;
+                triggerDamageVisual(unit, 'normal'); // Added visual feedback
+                
+                zocEvents.push({
+                    unitId: unit.id,
+                    damage: FORTIFICATION_DAMAGE,
+                    remainingHp: unit.hp,
+                    isFatal: unit.hp <= 0
+                });
 
-        if (checkTileZoC(tile1, tile1Key) || checkTileZoC(tile2, tile2Key)) {
-            unit.hp -= FORTIFICATION_DAMAGE;
-            
-            zocEvents.push({
-                unitId: unit.id,
-                damage: FORTIFICATION_DAMAGE,
-                remainingHp: unit.hp,
-                isFatal: unit.hp <= 0
-            });
-
-            logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, activePlayer, 3500);
-            if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
-                unitsToDestroy.push(unit);
+                logAction(`P${unit.player} ${unit.type.name} takes Base Camp ZoC. HP: ${unit.hp}`, activePlayer, 3500);
+                if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
+                    unitsToDestroy.push(unit);
+                }
             }
         }
     });
@@ -1221,7 +1251,6 @@ function handleUnitSelectionClick(x, y) {
                 return; 
             }
 
-            // 1. Identify Enemy Base (To prevent fortifying in their base)
             const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
             const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
             const enemyBaseTileKeys = new Set();
@@ -1234,10 +1263,9 @@ function handleUnitSelectionClick(x, y) {
                 if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
             }
 
-            // 2. Identify the specific Friendly Flag Tile
             const myFlagTileKey = getFlagTileKey(selectedUnit.player);
+            const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
 
-            // 3. Identify adjacent tiles
             const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); 
             const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
             const tile1 = gameState.tiles.get(tile1Key); 
@@ -1245,29 +1273,24 @@ function handleUnitSelectionClick(x, y) {
             
             gameState.validFortifyTargetTileKeys = [];
 
-            // 4. THE FIX: Strict validation including myFlagTileKey
-            if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key) && tile1Key !== myFlagTileKey) {
+            if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey)) {
                 gameState.validFortifyTargetTileKeys.push(tile1Key);
             }
-            if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key) && tile2Key !== myFlagTileKey) {
+            if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey)) {
                 gameState.validFortifyTargetTileKeys.push(tile2Key);
             }
 
-            // 5. Execution
             if (gameState.validFortifyTargetTileKeys.length === 0) { 
                 showInstruction("No valid adjacent tile to fortify.", 2000); 
                 return; 
             }
             
             if (gameState.validFortifyTargetTileKeys.length === 1) {
-                // If only one tile is valid, instantly fortify there without highlighting
                 completeFortify(selectedUnit, gameState.validFortifyTargetTileKeys[0]);
             } else { 
-                // If both are valid (neither is the flag), prompt the user to choose
                 gameState.currentActionState = ACTION_STATES.SELECTING_FORTIFY_TILE;
                 showInstruction("Select tile to fortify.", 3000); 
             }
-            
             updateSelectedUnitInfoPanel();
         }
         
@@ -1486,14 +1509,15 @@ function handleUnitSelectionClick(x, y) {
 
     // 7. Generate Edges
     gameState.tiles.forEach(tile => {
-        const { q, r } = tile;
-        getNeighbors(q, r).forEach(n_coord => {
+        getNeighbors(tile.q, tile.r).forEach(n_coord => {
             if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
-                const edgeKey = getEdgeKey(q, r, n_coord.q, n_coord.r);
+                const edgeKey = getEdgeKey(tile.q, tile.r, n_coord.q, n_coord.r);
                 if (!gameState.edges.has(edgeKey)) {
                     gameState.edges.set(edgeKey, {
-                        q1: q, r1: r, q2: n_coord.q, r2: n_coord.r,
-                        get units() { return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && u.id !== gameState.draggingUnit?.id); },
+                        q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r,
+                        get units() { 
+                            return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!gameState.draggingUnit || u.id !== gameState.draggingUnit.id)); 
+                        },
                         bridge: false, bridgeHp: null, isPathway: true
                     });
                 }
@@ -2111,6 +2135,7 @@ canvas.addEventListener('contextmenu', (event) => {
             animationsCheckbox.addEventListener('change', (e) => {
                 gameSettings.animationsEnabled = e.target.checked;
                 saveSettings();
+                gameState.needsRedraw = true;
             });
 
             passTurnCheckbox.addEventListener('change', (e) => {
@@ -2121,6 +2146,7 @@ canvas.addEventListener('contextmenu', (event) => {
             fancyVisualsCheckbox.addEventListener('change', (e) => {
                 gameSettings.fancyVisualsEnabled = e.target.checked;
                 saveSettings();
+                gameState.needsRedraw = true;
             });
 
             tooltipsCheckbox.addEventListener('change', (e) => {
@@ -2133,6 +2159,7 @@ canvas.addEventListener('contextmenu', (event) => {
                 gameSettings.uiScale = scaleValue;
                 applyUiScale(); 
                 saveSettings(); 
+                gameState.needsRedraw = true;
             });
 
             // --- Debug Mode Toggle ---

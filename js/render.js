@@ -579,57 +579,73 @@
         }
 
         function drawUnitAttackHighlightsOnly(targetsToHighlight) {
-    if (!targetsToHighlight || targetsToHighlight.length === 0) return;
+            if (!targetsToHighlight || targetsToHighlight.length === 0) return;
 
-    // --- FIX: Apply renderScale to the highlight radius and offset ---
-    const unitSizeToHighlight = (HEX_SIZE * 0.3) * gameState.renderScale;
-    const scaledOffset = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
+            const baseSizeToHighlight = (HEX_SIZE * 0.3) * gameState.renderScale;
+            const scaledOffset = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
 
-    targetsToHighlight.forEach(targetInfo => {
-        if (!targetInfo.isBridgeTarget && targetInfo.unit) {
-            const targetUnit = targetInfo.unit; 
-            let unitX, unitY;
+            // --- REFINED PULSE MATH ---
+            const currentTime = Date.now();
+            const pulseProgress = (currentTime % PULSE_DURATION_MS) / PULSE_DURATION_MS; 
+            const sinWave = (Math.sin(pulseProgress * 2 * Math.PI) + 1) / 2; // 0.0 to 1.0
+
+            // Toned down visual parameters
+            const opacity = 0.4 + (0.4 * sinWave); // Breathes between 0.4 and 0.8
+            const extraRadius = sinWave * 2 * gameState.renderScale; // Much smaller physical expansion
+            const currentLineWidth = 2 + (sinWave * 1.5); // Thinner, sharper stroke
+
+            targetsToHighlight.forEach(targetInfo => {
+                if (!targetInfo.isBridgeTarget && targetInfo.unit) {
+                    const targetUnit = targetInfo.unit; 
+                    let unitX, unitY;
             
-            if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
-                const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
-                if (tile) { 
-                    const centerPixel = axialToPixel(tile.q, tile.r); 
-                    unitX = centerPixel.x; 
-                    unitY = centerPixel.y; 
-                } else return;
-            } else if (targetInfo.edgeKey) {
-                const edge = gameState.edges.get(targetInfo.edgeKey); 
-                if (!edge) return;
-                
-                const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2); 
-                unitX = mid.x; 
-                unitY = mid.y;
-                
-                const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
-                const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === targetUnit.id);
-                
-                if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
-                    const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
-                    const p1 = axialToPixel(edge.q1, edge.r1); 
-                    const p2 = axialToPixel(edge.q2, edge.r2);
-                    let dx = p2.x - p1.x, dy = p2.y - p1.y; 
-                    const len = Math.sqrt(dx*dx + dy*dy) || 1;
-                    let perpX = -dy / len, perpY = dx / len;
+                    if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
+                        const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
+                        if (tile) { 
+                            const centerPixel = axialToPixel(tile.q, tile.r); 
+                            unitX = centerPixel.x; 
+                            unitY = centerPixel.y; 
+                        } else return;
+                    } else if (targetInfo.edgeKey) {
+                        const edge = gameState.edges.get(targetInfo.edgeKey); 
+                        if (!edge) return;
+                        
+                        const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2); 
+                        unitX = mid.x; 
+                        unitY = mid.y;
+                        
+                        const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
+                        const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === targetUnit.id);
+                        
+                        if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
+                            const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
+                            const p1 = axialToPixel(edge.q1, edge.r1); 
+                            const p2 = axialToPixel(edge.q2, edge.r2);
+                            let dx = p2.x - p1.x, dy = p2.y - p1.y; 
+                            const len = Math.sqrt(dx*dx + dy*dy) || 1;
+                            let perpX = -dy / len, perpY = dx / len;
+                            
+                            unitX += perpX * scaledOffset * offsetSign * (0.5);
+                            unitY += perpY * scaledOffset * offsetSign * (0.5);
+                        }
+                    } else return;
                     
-                    // --- FIX: Use the scaled offset here ---
-                    unitX += perpX * scaledOffset * offsetSign * (0.5);
-                    unitY += perpY * scaledOffset * offsetSign * (0.5);
+                    const finalRadius = baseSizeToHighlight + extraRadius;
+
+                    ctx.beginPath(); 
+                    ctx.arc(unitX, unitY, finalRadius, 0, 2 * Math.PI);
+                    
+                    // Very faint inner fill so you can still see the unit clearly
+                    ctx.fillStyle = `rgba(255, 0, 0, ${opacity * 0.15})`;
+                    ctx.fill();
+
+                    // Crisp outer stroke
+                    ctx.strokeStyle = `rgba(255, 0, 0, ${opacity})`; 
+                    ctx.lineWidth = currentLineWidth; 
+                    ctx.stroke();
                 }
-            } else return;
-            
-            ctx.beginPath(); 
-            ctx.arc(unitX, unitY, unitSizeToHighlight, 0, 2 * Math.PI);
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; 
-            ctx.lineWidth = 3; 
-            ctx.stroke();
+            });
         }
-    });
-}
 
 // --- TINTED IMAGE CACHE ---
 // Prevents the canvas from running expensive tint operations every frame.
@@ -1102,45 +1118,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
 
         ctx.restore();
     }
-
-    // --- 2. GAMEPLAY MODE: Show Valid Targets (ORANGE) ---
-    if (gameState.currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET && gameState.debugAttackRangeHighlights.length > 0) {
-        const pulseProgress = (currentTime % PULSE_DURATION_MS) / PULSE_DURATION_MS; 
-        const opacity = 0.5 + 0.4 * (Math.sin(pulseProgress * 2 * Math.PI) + 1) / 2;
-        
-        ctx.save();
-        ctx.strokeStyle = `rgba(255, 140, 0, ${opacity})`; 
-        ctx.lineWidth = 5; 
-
-        gameState.debugAttackRangeHighlights.forEach(edgeKey => {
-            const edge = gameState.edges.get(edgeKey);
-            if (!edge) return;
-
-            const p1_center = axialToPixel(edge.q1, edge.r1);
-            const p2_center = axialToPixel(edge.q2, edge.r2);
-
-            const edgeMidX = (p1_center.x + p2_center.x) / 2;
-            const edgeMidY = (p1_center.y + p2_center.y) / 2;
-
-            let perp_dx = -(p2_center.y - p1_center.y);
-            let perp_dy = p2_center.x - p1_center.x;
-            const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
-
-                    if (len_perp_vec > 0) {
-                        const scale = (currentHexSize / 2) * 0.95; 
-                        const dx = (perp_dx / len_perp_vec) * scale;
-                        const dy = (perp_dy / len_perp_vec) * scale;
-
-                        ctx.beginPath();
-                        ctx.moveTo(edgeMidX + dx, edgeMidY + dy);
-                        ctx.lineTo(edgeMidX - dx, edgeMidY - dy);
-                        ctx.stroke();
-                    }
-                });
-                ctx.restore();
-            }
-        }
-
+}
         function drawDebugVisibilityHighlights() {
             if (!gameSettings.debugModeEnabled) return;
 
@@ -1757,7 +1735,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 gameState.colorTransition.active ||
                 gameState.isDragging ||
                 (gameState.currentActionState === ACTION_STATES.SELECTING_BRIDGE_EDGE) ||
-                (gameState.currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET && gameState.debugAttackRangeHighlights.length > 0) ||
+                (gameState.currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET) ||
                 (gameSettings.debugModeEnabled && (gameState.selectedUnit || gameState.debugSelectedBasePlayer));
 
             // 4. THROTTLED IDLE ANIMATIONS (30 FPS)

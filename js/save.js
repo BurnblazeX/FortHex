@@ -49,6 +49,9 @@ function autoSaveGame(isSilent = false) {
         if (!isSilent) showInstruction("Cannot save while dragging.", 2000);
         return;
     }
+    if (gameState.isTestingMap) {
+        return; 
+    }
 
     try {
         console.groupCollapsed("[Autosave] Saving Game State...");
@@ -90,6 +93,12 @@ function autoSaveGame(isSilent = false) {
 }
 
 function saveGameToFile() {
+
+    if (gameState.isTestingMap) {
+        showInstruction("Cannot download saves while testing a map.", 2500);
+        return;
+    }
+
     // --- Create the custom filename ---
     const now = new Date();
     const day = padZero(now.getDate());

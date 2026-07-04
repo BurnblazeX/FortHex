@@ -611,13 +611,11 @@
                     unitToDestroy.isCarryingFlag = false;
                     logAction(`The P${flag.player} flag has been returned to base!`, activePlayer);
 
-                    // Restore supply points and recalculate the entire network
                     updateSupplyPointsBasedOnFlagStatus(flag.player); 
                     recalculatePlayerSupplyNetwork(flag.player);      
                 }
             }
             
-            // --- FIX: Only add to respawn queue if NOT in Arcade mode ---
             if (gameState.gameMode !== 'arcade') {
                 const queueKey = `player${destroyedPlayer}`;
                 gameState.respawnQueue[queueKey].push({
@@ -641,16 +639,28 @@
                 logAction(`P${destroyedPlayer} ${unitToDestroy.type.name} has been destroyed!`, activePlayer, 3000);
             }
 
+            // --- THE FIX: Nuclear Tile Clearing ---
+            if (unitToDestroy.positionType === 'edge') {
+                const edgeOfUnit = gameState.edges.get(unitToDestroy.position);
+                if (edgeOfUnit) edgeOfUnit.units = edgeOfUnit.units.filter(u => u.id !== unitToDestroy.id);
+            } else if (unitToDestroy.positionType === 'center' || wasFortified) {
+                // Use a fallback to grab the tile key just in case positionType got desynced
+                const tileKey = unitToDestroy.positionType === 'center' ? unitToDestroy.position : unitToDestroy.fortifiedTileKey;
+                const fortifiedTile = gameState.tiles.get(tileKey);
+                
+                // Forcibly clear the tile, no questions asked
+                if (fortifiedTile) {
+                    fortifiedTile.fortifiedByPlayer = null;
+                }
+            }
+
             gameState.units = gameState.units.filter(u => u.id !== unitToDestroy.id);
 
-            // If the destroyed unit was fortified, its removal might change the supply network
             if (wasFortified) {
                 const playerFlag = gameState.flags[`p${destroyedPlayer}_flag`];
-                // Only recalculate the network if that player's flag is NOT currently stolen.
                 if (playerFlag && playerFlag.status !== 'carried') {
                     recalculatePlayerSupplyNetwork(destroyedPlayer);
                 } else {
-                    // If the flag is stolen, just refund the supply points without recalculating.
                     if (unitToDestroy.supplyLine && unitToDestroy.supplyLine.cost > 0) {
                         gameState.supplyPoints[`player${destroyedPlayer}`] += Math.round(unitToDestroy.supplyLine.cost);
                         updateSupplyPointsDisplay();
@@ -675,7 +685,11 @@
             }
 
             checkVictoryCondition();
+            
+            // --- GUARANTEE REDRAW ---
+            gameState.needsRedraw = true;
         }
+        
 
         function getMaxUnitsForCurrentMap() {
             return MAP_SIZE_UNIT_LIMITS[gameState.gridRadius] || 4;
@@ -1155,9 +1169,9 @@
                 resetActionSelectionStates(); 
                 updateSelectedUnitInfoPanel(); return;
             }
-    
+
             const myFlagTileKey = getFlagTileKey(unitToFortify.player);
-            if (targetTileKeyToFortify === myFlagTileKey) {
+            if (targetTileKeyToFortify === myFlagTileKey && !unitToFortify.isCarryingFlag) {
                 showInstruction("Cannot fortify on the flag tile.", 2500);
                 resetActionSelectionStates(); 
                 updateSelectedUnitInfoPanel(); return;
@@ -1199,6 +1213,48 @@
                 });
             }
             logAction(`${unitToFortify.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
+
+            if (gameState.gameMode !== 'arcade') {
+                const enemyPlayer = unitToFortify.player === 1 ? 2 : 1;
+                const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
+                
+                if (targetTileKeyToFortify === enemyFlagTileKey) {
+                    const enemyFlagObj = unitToFortify.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+                    
+                    if (enemyFlagObj && enemyFlagObj.status === 'at_base') {
+                        enemyFlagObj.status = 'carried';
+                        enemyFlagObj.carrierId = unitToFortify.id;
+                        unitToFortify.isCarryingFlag = true;
+                        
+                        logAction(`P${unitToFortify.player} ${unitToFortify.type.name} has captured the flag from the fort!`, gameState.currentPlayer);
+                        
+                        updateAllHealingStatus();
+                        severSupplyLinesForPlayer(enemyPlayer);
+                        
+                        const victimPlayerQueue = gameState.respawnQueue[`player${enemyPlayer}`];
+                        victimPlayerQueue.forEach(item => {
+                            if (!item.timerHalved) {
+                                item.turnsRemaining = Math.ceil(item.turnsRemaining / 2);
+                                item.timerHalved = true;
+                            }
+                        });
+                        updateRespawnQueueDisplay();
+                        updateSupplyPointsBasedOnFlagStatus(enemyPlayer);
+
+                        const unitPos = getUnitScreenPosition(unitToFortify);
+                        if (unitPos) {
+                            gameState.visualEffects.push({
+                                type: 'flag_capture_burst',
+                                x: unitPos.x,
+                                y: unitPos.y,
+                                player: enemyPlayer,
+                                startTime: Date.now(),
+                                duration: 500
+                            });
+                        }
+                    }
+                }
+            }
 
             const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
             if (playerFlag && playerFlag.status !== 'carried') {

@@ -191,23 +191,22 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         if (unit.stats.defense > 0 && !unit.isCarryingFlag) {
              const edgeCoords = parseEdgeKey(unit.position);
              if (edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
-                // Ensure we don't fortify on our own flag tile
-                let myFlagTileKey = null;
-                const baseData = gameState.baseCampPositions[`player${unit.player}`];
-                if (Array.isArray(baseData) && baseData.length === 3) {
-                    const tiles = baseData.map(k => ({ q: Number(k.split(',')[0]), r: Number(k.split(',')[1]), key: k }));
-                    const [t1, t2, t3] = tiles;
-                    if (axialDistance(t1.q, t1.r, t2.q, t2.r) === 1 && axialDistance(t3.q, t3.r, t1.q, t1.r) === 1) myFlagTileKey = tiles[0].key;
-                    else if (axialDistance(t1.q, t1.r, t2.q, t2.r) === 1 && axialDistance(t2.q, t2.r, t3.q, t3.r) === 1) myFlagTileKey = tiles[1].key;
-                    else myFlagTileKey = tiles[2].key;
-                }
+                
+                const myFlagTileKey = getFlagTileKey(unit.player);
+                const enemyPlayer = unit.player === 1 ? 2 : 1;
+                const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
+                const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+                const enemyBaseTileKeys = new Set(Array.isArray(enemyBaseData) ? enemyBaseData : []);
 
                 [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {
                     const tile = gameState.tiles.get(tileKey);
-                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey) {
+                    
+                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey && (!enemyBaseTileKeys.has(tileKey) || tileKey === enemyFlagTileKey)) {
                          let score = 5 - unit.fortifyCooldown;
-                         if(unit.type.name === 'Pikeman') score += 25; // Pikemen love fortifying
-                         if(unit.hp < unit.maxHp) score+=20; // Heal up
+                         if(unit.type.name === 'Pikeman') score += 25; 
+                         if(unit.hp < unit.maxHp) score+=20; 
+                         if(tileKey === enemyFlagTileKey) score += 300; // MASSIVE incentive to capture the flag!
+                         if(axialDistance(...tileKey.split(',').map(Number),0,0) > 1) score-= 15;
                          if(score > 0) possibleActions.push({ type: 'FORTIFY_ONLY', unit, targetTileKey: tileKey, score });
                     }
                 });

@@ -174,10 +174,13 @@
                             if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
                         }
 
+                        // Get the single specific flag tiles for both players
                         const myFlagTileKey = getFlagTileKey(selectedUnit.player);
+                        const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
 
-                        const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key) && tile1Key !== myFlagTileKey;
-                        const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key) && tile2Key !== myFlagTileKey;
+                        // Block enemy bases, block friendly FLAG tile (UNLESS carrying flag), but ALLOW friendly BASE tiles AND enemy FLAG tile
+                        const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey);
+                        const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey);
                         
                         fortifyDisabledCondition = !(canFortifyTile1 || canFortifyTile2) || selectedUnit.positionType === 'center';
                     } else {
@@ -1070,12 +1073,18 @@
                 calibrationDiv.style.border = '2px solid #FFC020';
                 calibrationDiv.style.boxShadow = '0 10px 30px rgba(0,0,0,0.8)';
                 
-                // We add "calibrationCardContainerHeader" so your makeElementDraggable script automatically grabs it
                 calibrationDiv.innerHTML = `
-                    <div id="calibrationCardContainerHeader" style="cursor: move; padding-bottom: 10px; border-bottom: 1px solid #4a6075; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                    <div id="calibrationCardContainerHeader" style="cursor: move; padding-bottom: 10px; border-bottom: 1px solid #4a6075; margin-bottom: 15px; text-align: center;">
                         <h3 style="color: #FFC020; margin: 0; font-family: 'Geostar', cursive; pointer-events: none; font-size: 1.2em;">UI Calibrator</h3>
-                        <button id="calibrationCardCloseBtn" style="background: none; border: none; color: #F0F0F0; font-size: 1.5em; cursor: pointer; line-height: 1; padding: 0;">&times;</button>
                     </div>
+                    
+                    <button id="calibrationCardCloseBtn" style="position: absolute; top: 10px; right: 10px; background: none; border: none; cursor: pointer; padding: 5px; z-index: 9999; pointer-events: auto; display: block;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F0F0F0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+
                     <div class="unit-card" style="font-size: 10px; margin: 0 auto; pointer-events: none;">
                         ${getUnitCardHTML(dummyMaxUnit, false)}
                     </div>
@@ -1086,8 +1095,14 @@
 
                 document.body.appendChild(calibrationDiv);
 
-                // Add close button logic
-                document.getElementById('calibrationCardCloseBtn').addEventListener('click', () => {
+                // --- FIX: Add stopPropagation so dragging doesn't steal the click ---
+                const closeBtn = document.getElementById('calibrationCardCloseBtn');
+                
+                closeBtn.addEventListener('mousedown', (e) => {
+                    e.stopPropagation(); // Prevent the drag logic from triggering
+                });
+                
+                closeBtn.addEventListener('click', () => {
                     calibrationDiv.style.display = 'none';
                 });
 
@@ -1102,6 +1117,7 @@
                 calibrationDiv.style.display = calibrationDiv.style.display === 'none' ? 'block' : 'none';
             }
         }
+
 
         // --- DEBUG CONSOLE SYSTEM ---
         function setupDebugConsoleSystem() {
