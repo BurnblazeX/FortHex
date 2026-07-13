@@ -1034,16 +1034,16 @@
             gameState.respawnQueue[queueKey].shift(); // Remove used charge
             updateRespawnQueueDisplay(); 
             
-            // Check if NEXT charge is also ready (Rare, but possible)
-            const queue = gameState.respawnQueue[queueKey];
-            if (queue.length > 0 && queue[0].turnsRemaining <= 0) {
-                // --- FIX: Prevent AI from opening the modal for the human player ---
-                if (gameState.gameMode === 'singleplayer' && player !== gameState.playerSide) {
-                    return; // AI handles its own loop
-                }
-                // Re-open for next charge
-                setTimeout(() => showRespawnModal(player), 500);
+        // Check if NEXT charge is also ready (Rare, but possible)
+        const queue = gameState.respawnQueue[queueKey];
+        if (queue.length > 0 && queue[0].turnsRemaining <= 0) {
+            // --- FIX: Prevent AI from opening the modal ---
+            if (gameState.isTrainingMode || (gameState.gameMode === 'singleplayer' && player !== gameState.playerSide)) {
+                return; // AI handles its own loop
             }
+            // Re-open for next charge
+            setTimeout(() => showRespawnModal(player), 500);
+        }
         }
 
         // DEBUG: CALIBRATION CARD TOOL
@@ -1168,8 +1168,9 @@
                 document.getElementById('debugConsoleModal').style.display = 'none';
             });
 
-            // Alt + C Toggle
+            // Alt + C Toggle Console & Alt + X Abort Training
             document.addEventListener('keydown', (e) => {
+                // Console toggle
                 if (e.altKey && (e.key === 'c' || e.key === 'C')) {
                     if (gameSettings.debugModeEnabled) {
                         const modal = document.getElementById('debugConsoleModal');
@@ -1178,6 +1179,52 @@
                         } else {
                             modal.style.display = 'none';
                         }
+                    }
+                }
+                // Abort Training
+                if (e.altKey && (e.key === 'x' || e.key === 'X')) {
+                    if (gameState.isTrainingMode) {
+                        console.log("--- TRAINING SIMULATION ABORTED BY USER ---");
+                        gameState.isTrainingMode = false;
+                        gameState.gameOver = true; // Kills the execution loop
+                        document.getElementById('trainingBanner').style.display = 'none';
+                        
+                        const blocker = document.getElementById('trainingInteractionBlocker');
+                        if (blocker) blocker.style.display = 'none';
+
+                        showInstruction("Training Aborted. Brain Saved.", 3000);
+                        if (typeof saveAIBrain === 'function') saveAIBrain();
+                        
+                        // --- PROPER SETTINGS RESTORATION ---
+                        if (gameState.preTrainingSettings) {
+                            gameSettings.animationsEnabled = gameState.preTrainingSettings.animations;
+                            gameSettings.fancyVisualsEnabled = gameState.preTrainingSettings.fancy;
+                        } else {
+                            loadSettings(); // Safe fallback
+                        }
+                        
+                        // --- FULL BOARD SANITIZATION ---
+                        setTimeout(() => { 
+                            // Reset game configuration strictly back to default Local Multiplayer
+                            gameState.gameMode = 'local';
+                            gameState.playerSide = null;
+                            gameState.gameOver = false;
+                            
+                            // This completely clears ghost interactions, dragging, and hover states
+                            clearSelectionAndDebugState(); 
+                            
+                            // Re-build the grid properly for a human
+                            initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+                            
+                            const modal = document.getElementById('gameMenuModal');
+                            document.getElementById('mainMenuContent').style.display = 'block';
+                            document.getElementById('singleplayerMenuContent').style.display = 'none';
+                            document.getElementById('multiplayerMenuContent').style.display = 'none';
+                            if (modal) {
+                                modal.style.display = 'flex';
+                                setTimeout(() => modal.classList.add('modal-visible'), 10);
+                            }
+                        }, 100); // 100ms ensures the AI async loop has fully bled out before rebuilding
                     }
                 }
             });

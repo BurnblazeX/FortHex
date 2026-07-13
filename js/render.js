@@ -1203,6 +1203,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
         }
 
         function triggerDamageVisual(targetUnit, attackStatus = 'normal') {
+            if (gameState.isTrainingMode || !gameSettings.animationsEnabled) return;
             // Get the unit's screen position and size for the effect
             let targetX, targetY, targetRadius;
             if (targetUnit.isFortified) {

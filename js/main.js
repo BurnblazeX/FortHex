@@ -1,4 +1,7 @@
 function delay(ms) {
+    if (gameState.isTrainingMode) {
+        return Promise.resolve(); 
+    }
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -40,6 +43,16 @@ function checkArcadeVictoryCondition() {
 function checkVictoryCondition() {
     if (gameState.gameOver) return true;
     let victoryText = null;
+
+    if (gameState.isTrainingMode && gameState.globalTurnNumber >= 150) {
+        console.log("Stalemate reached. Forcing tiebreaker...");
+        const p1HP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
+        const p2HP = gameState.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
+        
+        if (p1HP > p2HP) victoryText = "Player 1 Wins by Timeout (HP Tiebreaker)!";
+        else if (p2HP > p1HP) victoryText = "Player 2 Wins by Timeout (HP Tiebreaker)!";
+        else victoryText = "It's a Draw! (Timeout)";
+    }
 
     if (gameState.gameMode === 'arcade') {
         const player1Units = gameState.units.filter(u => u.player === 1);
@@ -120,6 +133,42 @@ function checkVictoryCondition() {
     }
 
     if (victoryText) {
+        // --- NEW: TRAINING MODE INTERCEPT ---
+        if (gameState.isTrainingMode) {
+            console.log(`[TRAINING] ${victoryText}`);
+            let winningPlayer = null;
+            if (victoryText.includes("Player 1")) winningPlayer = 1;
+            else if (victoryText.includes("Player 2")) winningPlayer = 2;
+
+            if (winningPlayer) {
+                const losingPlayer = winningPlayer === 1 ? 2 : 1;
+                // Train the brain based on what the WINNER did right
+                evolveAIBrain(true, victoryText, winningPlayer, gameState.matchHistory);
+                // Train the brain based on what the LOSER did wrong
+                evolveAIBrain(false, victoryText, losingPlayer, gameState.matchHistory);
+            }
+            
+            // Instantly wipe the board and start the next generation
+            gameState.gameOver = false;
+            initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+            setTimeout(() => { executeAITurn(); }, 0); // 0ms delay to keep it blazing fast
+            return true;
+        }
+
+        if (gameState.gameMode === 'singleplayer') {
+            const aiPlayerNum = gameState.playerSide === 1 ? 2 : 1;
+            let aiVictory = false;
+            
+            // Determine if the AI won based on the victory text
+            if (victoryText.includes(`Player ${aiPlayerNum}`)) {
+                aiVictory = true; 
+            }
+            
+            console.log("Singleplayer match finished. Updating AI Brain...");
+            evolveAIBrain(aiVictory, victoryText, aiPlayerNum, gameState.matchHistory);
+        }
+
+        // --- STANDARD VICTORY LOGIC ---
         ui.victoryMessage.textContent = victoryText;
         ui.victoryMessage.style.display = 'block';
         triggerConfetti();
@@ -135,27 +184,23 @@ function checkVictoryCondition() {
         gameState.currentReachableMoves.clear(); 
         updateSelectedUnitInfoPanel();
 
-        // VICTORY SCREEN LOGIC
         const interactionBlocker = document.getElementById('victoryInteractionBlocker');
-        interactionBlocker.style.display = 'block'; // Block interactions immediately
+        interactionBlocker.style.display = 'block'; 
 
         const CONFETTI_DURATION = 7000;
         new Promise(resolve => setTimeout(resolve, CONFETTI_DURATION)).then(() => {
-            
             const restartGameOnClick = () => {
                 window.removeEventListener('click', restartGameOnClick);
                 window.removeEventListener('touchend', restartGameOnClick);
                 interactionBlocker.style.display = 'none'; 
                 location.reload();
             };
-
             window.addEventListener('click', restartGameOnClick);
             window.addEventListener('touchend', restartGameOnClick);
-
             showInstruction("Click anywhere to play again.", CONFETTI_DURATION);
         });
 
-        return true; // VICTORY!
+        return true; 
     }
 
     // No victory condition met
@@ -274,7 +319,8 @@ function proceedToEndTurn() {
     // AI Handling (Singleplayer)
     if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
         ui.endTurnButton.disabled = true;
-        setTimeout(() => { executeAITurn(); }, 1500);
+        const aiDelay = gameState.isTrainingMode ? 0 : 1500;
+        setTimeout(() => { executeAITurn(); }, aiDelay);
     } else {
         ui.endTurnButton.disabled = false;
     }
@@ -589,17 +635,23 @@ function logSiegeStatus() {
             });
 
             // Check front of queue
-            const firstItem = queue[0];
-            if (firstItem && firstItem.turnsRemaining <= 0) {
-                console.log(`[Respawn] Player ${player} unit ready.`);
-                try {
-                    showRespawnModal(player);
-                } catch (e) {
-                    console.error("Failed to open Respawn Modal:", e);
-                }
+        const firstItem = queue[0];
+        if (firstItem && firstItem.turnsRemaining <= 0) {
+            console.log(`[Respawn] Player ${player} unit ready.`);
+
+            if (gameState.isTrainingMode || (gameState.gameMode === 'singleplayer' && player !== gameState.playerSide)) {
+                updateRespawnQueueDisplay();
+                return; 
             }
-    
-            updateRespawnQueueDisplay();
+
+            try {
+                showRespawnModal(player);
+            } catch (e) {
+                console.error("Failed to open Respawn Modal:", e);
+            }
+        }
+
+        updateRespawnQueueDisplay();
         }
         
 function triggerConfetti() {
@@ -1984,6 +2036,7 @@ canvas.addEventListener('contextmenu', (event) => {
 
             document.getElementById('playAsBlueButton').addEventListener('click', () => startSingleplayerGame(1));
             document.getElementById('playAsRedButton').addEventListener('click', () => startSingleplayerGame(2));
+            document.getElementById('trainingModeButton').addEventListener('click', startTrainingMode);
 
             document.getElementById('localMultiplayerButton').addEventListener('click', () => {
                 // First, completely exit the map maker mode, which restores the UI.
@@ -2168,6 +2221,8 @@ canvas.addEventListener('contextmenu', (event) => {
             
             // Set initial console visibility based on loaded settings
             const consoleModal = document.getElementById('debugConsoleModal');
+            const trainingBtn = document.getElementById('trainingModeButton'); // <-- ADD THIS
+
             if (gameSettings.debugModeEnabled) {
                 consoleModal.style.display = 'flex';
                 // Reset position to top-right default on load
@@ -2176,28 +2231,31 @@ canvas.addEventListener('contextmenu', (event) => {
                 consoleModal.style.left = 'auto';
                 
                 toggleCalibrationCard(true); 
+                if (trainingBtn) trainingBtn.style.display = 'block'; // <-- ADD THIS
             } else {
                 consoleModal.style.display = 'none';
                 
                 toggleCalibrationCard(false);
+                if (trainingBtn) trainingBtn.style.display = 'none'; // <-- ADD THIS
             }
 
             debugModeCheckbox.addEventListener('change', (e) => {
                 gameSettings.debugModeEnabled = e.target.checked;
                 saveSettings();
+                const trainingBtn = document.getElementById('trainingModeButton'); 
+
                 if (!gameSettings.debugModeEnabled) {
                     clearSelectionAndDebugState(); 
                     consoleModal.style.display = 'none';
-                    
                     toggleCalibrationCard(false); 
+                    if(trainingBtn) trainingBtn.style.display = 'none'; 
                 } else {
                     consoleModal.style.display = 'flex';
-                    // Reset position to top-right
                     consoleModal.style.top = '10px';
                     consoleModal.style.right = '10px';
                     consoleModal.style.left = 'auto';
-                    
                     toggleCalibrationCard(true);
+                    if(trainingBtn) trainingBtn.style.display = 'block'; 
                 }
                 console.log(`Debug Mode: ${gameSettings.debugModeEnabled ? 'ON' : 'OFF'}`);
             });
@@ -2561,3 +2619,48 @@ document.querySelectorAll('.swap-choice').forEach(btn => {
 
         }
 
+function startTrainingMode() {
+    exitMapMakerMode(); 
+    hideAllModals(); 
+    
+    gameState.isTrainingMode = true;
+    gameState.gameMode = 'singleplayer';
+    gameState.playerSide = null; 
+
+    // --- PROPER SETTINGS BACKUP ---
+    // Store current UI preferences without touching localStorage
+    gameState.preTrainingSettings = {
+        animations: gameSettings.animationsEnabled,
+        fancy: gameSettings.fancyVisualsEnabled
+    };
+    // Override local variables for max performance
+    gameSettings.animationsEnabled = false;
+    gameSettings.fancyVisualsEnabled = false;
+    
+    document.getElementById('trainingBanner').style.display = 'block';
+
+    let blocker = document.getElementById('trainingInteractionBlocker');
+    if (!blocker) {
+        blocker = document.createElement('div');
+        blocker.id = 'trainingInteractionBlocker';
+        blocker.style.position = 'fixed';
+        blocker.style.top = '0';
+        blocker.style.left = '0';
+        blocker.style.width = '100vw';
+        blocker.style.height = '100vh';
+        blocker.style.zIndex = '9000'; 
+        blocker.style.backgroundColor = 'rgba(0,0,0,0.1)'; 
+        blocker.style.cursor = 'not-allowed';
+        blocker.addEventListener('click', (e) => { e.stopPropagation(); });
+        document.body.appendChild(blocker);
+    }
+    blocker.style.display = 'block';
+
+    gameState.gridRadius = 3;
+    gameState.renderScale = 1.0;
+    gameState.renderOffset = { x: 0, y: 0 };
+    initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+    
+    console.log("--- TRAINING SIMULATION STARTED ---");
+    setTimeout(() => { executeAITurn(); }, 0);
+}

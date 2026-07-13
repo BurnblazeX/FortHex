@@ -1,3 +1,73 @@
+// --- AI Memory System ---
+const DEFAULT_AI_BRAIN = {
+    version: 5, 
+    matchesPlayed: 0,
+    wins: 0,
+    weights: {
+        "atk_flag_carrier": 795.9893115433262,
+        "atk_secure_kill": 392.01291384586483,
+        "atk_damage_multiplier": 26.006937637450577,
+        "atk_bridge": 60,
+        "move_base_score": 5,
+        "move_run_home_flag": 300,
+        "move_pikeman_defend": 159.1978623086652,
+        "move_pikeman_intercept": 79.5989311543326,
+        "move_toward_base": 38.046795010126644,
+        "move_chase_enemy": 20,
+        "fortify_base_score": 5,
+        "fortify_pikeman_bonus": 25,
+        "fortify_heal_bonus": 29.54910887578125,
+        "fortify_enemy_flag": 795.9893115433262,
+        "fortify_distance_penalty": 15,
+        "unfortify_full_hp_multiplier": 3.317102156445312,
+        "recruit_melee": 1613.5783085302178,
+        "recruit_archer": 1138.160912192839,
+        "recruit_pikeman": 625.8879632769316,
+        "recruit_horseman": 1613.5783085302178,
+        "promote_tendency": 0.3,
+        "penalty_zoc": 118.196435503125,
+        "penalty_vulnerable_exposure": 88.64732662734376,
+        "bonus_favorable_exposure": 13.268408625781248,
+        "build_bridge_base": 60,
+        "build_bridge_forward": 56.212444406438166
+    }
+};
+
+let aiBrain = null;
+
+function loadAIBrain() {
+    const saved = localStorage.getItem('forthex_ai_brain');
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            aiBrain = { 
+                ...parsed, 
+                weights: { ...DEFAULT_AI_BRAIN.weights, ...parsed.weights } 
+            };
+            console.log("[AI] Loaded Brain from memory. Matches played:", aiBrain.matchesPlayed);
+
+            saveAIBrain(); 
+        } catch (e) {
+            console.error("Failed to parse AI Brain. Resetting to default.");
+            aiBrain = JSON.parse(JSON.stringify(DEFAULT_AI_BRAIN));
+            saveAIBrain(); 
+        }
+    } else {
+        aiBrain = JSON.parse(JSON.stringify(DEFAULT_AI_BRAIN));
+        console.log("[AI] Initialized fresh Brain.");
+        saveAIBrain(); 
+    }
+}
+
+function saveAIBrain() {
+    if (!aiBrain) return;
+    localStorage.setItem('forthex_ai_brain', JSON.stringify(aiBrain));
+}
+
+// Call this immediately so the brain is ready when the script loads
+loadAIBrain();
+
+
 // --- AI Helper: Get Center Pixel of a Base ---
 function getBaseCenter(baseData) {
     if (!baseData) return null;
@@ -25,7 +95,7 @@ async function handleAIReinforcements() {
         const promotableUnits = gameState.units.filter(u => u.player === player && u.level < 3);
         
         // AI Logic: Promote if army is full, or 30% chance to promote anyway if units are available
-        const shouldPromote = (armySize >= maxUnits) || (promotableUnits.length > 0 && Math.random() < 0.3);
+        const shouldPromote = (armySize >= maxUnits) || (promotableUnits.length > 0 && Math.random() < aiBrain.weights.promote_tendency);
 
         if (shouldPromote && promotableUnits.length > 0) {
             // Pick a random eligible unit
@@ -46,9 +116,17 @@ async function handleAIReinforcements() {
             await delay(800);
 
         } else if (armySize < maxUnits) {
-            // Recruit missing units (Prioritize Melee > Archer > Pikeman > Horseman)
-            const counts = gameState.unitCounts[queueKey];
-            const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'];
+// Recruit missing units based on Brain Weights
+const counts = gameState.unitCounts[queueKey];
+
+// Sort classes dynamically based on their learned weight (Highest weight first)
+const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
+    const weightA = aiBrain.weights[`recruit_${a.toLowerCase()}`] || 100;
+    const weightB = aiBrain.weights[`recruit_${b.toLowerCase()}`] || 100;
+    return weightB - weightA; 
+});
+
+console.log(`[AI] Recruitment preferred order:`, preferredOrder);
             
             for (const typeKey of preferredOrder) {
                 const unitName = UNIT_TYPES[typeKey].name;
@@ -86,7 +164,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     const scoreAttack = (targetInfo) => {
         let score = 50.0;
         if(targetInfo.unit){
-            if(targetInfo.unit.isCarryingFlag) score += 300; // MUST kill flag carrier!
+            if(targetInfo.unit.isCarryingFlag) score += aiBrain.weights.atk_flag_carrier; 
             
             let predictedDmg = unit.stats.damage;
             
@@ -112,23 +190,23 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             }
 
             predictedDmg = Math.max(1, predictedDmg);
-            if(targetInfo.unit.hp <= predictedDmg) score += 100; // High priority on securing kills
-            score += predictedDmg * 10;
+            if(targetInfo.unit.hp <= predictedDmg) score += aiBrain.weights.atk_secure_kill; 
+            score += predictedDmg * aiBrain.weights.atk_damage_multiplier; 
         } else { 
-            score = 15; // Bridge Attack
+            score = aiBrain.weights.atk_bridge; 
         } 
         return score;
     };
 
     // --- SUB-FUNCTION to score a potential move ---
     const scoreMove = (edgeKey) => {
-        let moveScore = 5.0; 
+        let moveScore = aiBrain.weights.move_base_score; 
         const unitPos = getUnitScreenPosition(unit);
         if (!unitPos) return 0;
         
         const moveMidPoint = getEdgeMidpoint(...parseEdgeKey(edgeKey).flatMap(c=>[c.q,c.r]));
         
-        // Find true closest enemy
+        // --- 1. FIND CLOSEST ENEMY ---
         let minDist = Infinity;
         let actualClosest = null;
         allEnemies.forEach(e => {
@@ -139,41 +217,148 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             }
         });
 
+        // --- 1.5. CHECK FLAG STATUS ---
+        const myFlag = (gameState.flags && gameState.gameMode !== 'arcade') ? gameState.flags[`p${unit.player}_flag`] : null;
+        const isMyFlagStolen = myFlag && myFlag.status === 'carried';
+        let myFlagCarrier = null;
+        if (isMyFlagStolen) {
+            myFlagCarrier = allEnemies.find(e => e.id === myFlag.carrierId);
+        }
+
+        // --- 2. BASE MOVEMENT LOGIC ---
+        
+        // A. WE HAVE THEIR FLAG! RUN HOME!
         if (unit.isCarryingFlag && myBasePos) {
-            // RUN HOME! Ignore everything else.
             const currentDist = pointDistance(unitPos, myBasePos);
             const afterDist = pointDistance(moveMidPoint, myBasePos);
-            if (afterDist < currentDist) moveScore += (1 - (afterDist / currentDist)) * 300;
-        } else if (unit.type.name === 'Pikeman' && myBasePos) {
-            // DEFEND BASE
+            if (afterDist < currentDist) {
+                moveScore += aiBrain.weights.move_run_home_flag;
+                moveScore += (currentDist - afterDist) * 0.5; 
+            }
+        } 
+        // B. HUNT THE THIEF! 
+        else if (isMyFlagStolen && myFlagCarrier) {
+            const thiefPos = getUnitScreenPosition(myFlagCarrier);
+            if (thiefPos) {
+                const currentDist = pointDistance(unitPos, thiefPos);
+                const afterDist = pointDistance(moveMidPoint, thiefPos);
+                if (afterDist < currentDist) {
+                    moveScore += aiBrain.weights.atk_flag_carrier; 
+                    moveScore += (currentDist - afterDist) * 0.5; 
+                }
+            }
+        }
+        // C. PIKEMAN DEFENSE
+        else if (unit.type.name === 'Pikeman' && myBasePos) {
             const currentDist = pointDistance(unitPos, myBasePos);
             const afterDist = pointDistance(moveMidPoint, myBasePos);
-            
             const defenseRadius = HEX_SIZE * 2.5 * gameState.renderScale;
+            
             if (currentDist > defenseRadius) {
-                 if (afterDist < currentDist) moveScore += 60; // Walk back home
+                 if (afterDist < currentDist) moveScore += aiBrain.weights.move_pikeman_defend;
             } else if (actualClosest) {
                  const ep = getUnitScreenPosition(actualClosest);
                  if (ep) {
                      const aDist = pointDistance(moveMidPoint, ep);
-                     if (aDist < minDist) moveScore += 30; // Intercept intruders
+                     if (aDist < minDist) moveScore += aiBrain.weights.move_pikeman_intercept;
                  }
             }
-        } else {
-            // ATTACK / CAPTURE
+        } 
+        // D. STANDARD ATTACK/CAPTURE (Gravitate to Enemy Base)
+        else {
             if (enemyBasePos) {
+                // --- NEW: FLAG GRAB OVERRIDE ---
+                let isEnemyFlagEdge = false;
+                const enemyFlagObj = (gameState.flags && gameState.gameMode !== 'arcade') ? gameState.flags[`p${enemyPlayer}_flag`] : null;
+                
+                const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+                let enemyBaseTiles = Array.isArray(enemyBaseData) ? enemyBaseData : (typeof enemyBaseData === 'string' ? enemyBaseData.split('_') : []);
+
+                if (gameState.gridRadius === 4) {
+                     if (isInternalBaseEdge(edgeKey)) {
+                        const [eh1, eh2] = parseEdgeKey(edgeKey); 
+                        const et1 = getTileKey(eh1.q, eh1.r);
+                        if (enemyBaseTiles.includes(et1)) isEnemyFlagEdge = true;
+                    }
+                } else {
+                    if (enemyFlagObj && enemyFlagObj.homePosition === edgeKey) isEnemyFlagEdge = true;
+                }
+
+                // If this is the flag edge and the flag is sitting there, CRUSH the ZoC penalty!
+                if (isEnemyFlagEdge && enemyFlagObj && enemyFlagObj.status === 'at_base') {
+                    moveScore += (aiBrain.weights.atk_flag_carrier * 1.5); // ~450 points!
+                }
+
+                // Standard Gravity
                 const currentDistBase = pointDistance(unitPos, enemyBasePos);
                 const afterDistBase = pointDistance(moveMidPoint, enemyBasePos);
-                if (afterDistBase < currentDistBase) moveScore += (1 - (afterDistBase / currentDistBase)) * 40;
+                if (afterDistBase < currentDistBase) {
+                    moveScore += aiBrain.weights.move_toward_base; 
+                    moveScore += (currentDistBase - afterDistBase) * 0.2; 
+                }
             }
-            
-            // Chase nearby enemies
             if (actualClosest) {
                 const ep = getUnitScreenPosition(actualClosest);
                 const aDist = pointDistance(moveMidPoint, ep);
-                if (aDist < minDist) moveScore += (1 - (aDist / minDist)) * 20;
+                if (aDist < minDist) {
+                    moveScore += aiBrain.weights.move_chase_enemy;
+                }
             }
         }
+
+        // --- 3. FORESIGHT: THREAT ASSESSMENT ---
+        let threatPenalty = 0;
+        
+        // A. Zone of Control (ZoC) Check
+        const [h1, h2] = parseEdgeKey(edgeKey);
+        const tile1 = gameState.tiles.get(getTileKey(h1.q, h1.r));
+        const tile2 = gameState.tiles.get(getTileKey(h2.q, h2.r));
+        
+        const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+        let enemyBaseTiles = Array.isArray(enemyBaseData) ? enemyBaseData : (typeof enemyBaseData === 'string' ? enemyBaseData.split('_') : []);
+
+        const checkZoC = (tile, tileKey) => {
+            if (!tile) return false;
+            if (enemyBaseTiles.includes(tileKey)) return true;
+            if (tile.fortifiedByPlayer === enemyPlayer) {
+                const fortUnit = gameState.units.find(u => u.isFortified && u.position === tileKey && u.player === enemyPlayer);
+                if (fortUnit && !isZoCSuppressed(fortUnit)) return true;
+            }
+            return false;
+        };
+
+        if (checkZoC(tile1, getTileKey(h1.q, h1.r)) || checkZoC(tile2, getTileKey(h2.q, h2.r))) {
+            threatPenalty += (aiBrain.weights.penalty_zoc || 80.0);
+            
+            // --- NEW: SUICIDE DETERRENT ---
+            // If the unit has 1 HP, stepping in ZoC is guaranteed death. 
+            // Don't suicide to grab the flag, let a healthier unit do it!
+            if (unit.hp <= 1) { 
+                threatPenalty += 1000.0; 
+            }
+        }
+
+        // B. Matchup Exposure Check
+        allEnemies.forEach(enemy => {
+            const ep = getUnitScreenPosition(enemy);
+            if (ep) {
+                const distToDestination = pointDistance(moveMidPoint, ep);
+                const attackRangePixels = (enemy.stats.speed * HEX_SIZE * gameState.renderScale) + 
+                                          (enemy.type.attackType === 'ranged' ? HEX_SIZE * 1.5 * gameState.renderScale : 0);
+                
+                if (distToDestination <= attackRangePixels) {
+                    if (enemy.type.strengths && enemy.type.strengths.includes(unit.type.name)) {
+                        threatPenalty += (aiBrain.weights.penalty_vulnerable_exposure || 60.0);
+                    } else if (unit.type.strengths && unit.type.strengths.includes(enemy.type.name)) {
+                        threatPenalty -= (aiBrain.weights.bonus_favorable_exposure || 20.0);
+                    } else {
+                        threatPenalty += 10.0; 
+                    }
+                }
+            }
+        });
+
+        moveScore -= threatPenalty;
         return moveScore;
     };
 
@@ -187,6 +372,26 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             possibleActions.push({ type: 'ATTACK_ONLY', unit, targetInfo, score: scoreAttack(targetInfo) });
         });
         
+        // BUILD_BRIDGE
+        if (unit.type.canBuildBridge && unit.currentMove >= BUILD_BRIDGE_COST && !unit.isCarryingFlag) {
+            const bridgeTargets = getPotentialBridgeTargets(unit);
+            bridgeTargets.forEach(edgeKey => {
+                let score = aiBrain.weights.build_bridge_base;
+                
+                // Boost the score if this bridge goes TOWARD the enemy base
+                const moveMidPoint = getEdgeMidpoint(...parseEdgeKey(edgeKey).flatMap(c=>[c.q,c.r]));
+                if (enemyBasePos) {
+                    const currentDistBase = pointDistance(getUnitScreenPosition(unit), enemyBasePos);
+                    const afterDistBase = pointDistance(moveMidPoint, enemyBasePos);
+                    if (afterDistBase < currentDistBase) {
+                        score += aiBrain.weights.build_bridge_forward; // Greatly prefers aggressive bridges
+                    }
+                }
+                
+                possibleActions.push({ type: 'BUILD_BRIDGE', unit, targetEdgeKey: edgeKey, score });
+            });
+        }
+
         // FORTIFY_ONLY
         if (unit.stats.defense > 0 && !unit.isCarryingFlag) {
              const edgeCoords = parseEdgeKey(unit.position);
@@ -202,11 +407,11 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                     const tile = gameState.tiles.get(tileKey);
                     
                     if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey && (!enemyBaseTileKeys.has(tileKey) || tileKey === enemyFlagTileKey)) {
-                         let score = 5 - unit.fortifyCooldown;
-                         if(unit.type.name === 'Pikeman') score += 25; 
-                         if(unit.hp < unit.maxHp) score+=20; 
-                         if(tileKey === enemyFlagTileKey) score += 300; // MASSIVE incentive to capture the flag!
-                         if(axialDistance(...tileKey.split(',').map(Number),0,0) > 1) score-= 15;
+                         let score = aiBrain.weights.fortify_base_score - unit.fortifyCooldown;
+                         if(unit.type.name === 'Pikeman') score += aiBrain.weights.fortify_pikeman_bonus; 
+                         if(unit.hp < unit.maxHp) score += aiBrain.weights.fortify_heal_bonus; 
+                         if(tileKey === enemyFlagTileKey) score += aiBrain.weights.fortify_enemy_flag; 
+                         if(axialDistance(...tileKey.split(',').map(Number),0,0) > 1) score -= aiBrain.weights.fortify_distance_penalty;
                          if(score > 0) possibleActions.push({ type: 'FORTIFY_ONLY', unit, targetTileKey: tileKey, score });
                     }
                 });
@@ -216,7 +421,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         // UNFORTIFY_ONLY
         const unfortifyTargets = getPotentialUnfortifyTargets(unit);
         if (unfortifyTargets.length > 0) {
-            let score = (unit.hp >= unit.maxHp && unit.turnsFortified > 2) ? (unit.turnsFortified * 5) : 0;
+            let score = (unit.hp >= unit.maxHp && unit.turnsFortified > 2) ? (unit.turnsFortified * aiBrain.weights.unfortify_full_hp_multiplier) : 0;
             if(score > 0) possibleActions.push({ type: 'UNFORTIFY_ONLY', unit, targetEdgeKey: unfortifyTargets[0], score });
         }
     }
@@ -251,7 +456,6 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     possibleActions.sort((a, b) => b.score - a.score);
     return possibleActions[0];
 }
-
 async function executeAIAction(action) {
     if (!action) return;
     console.log(`[AI] Executing: ${action.type} for ${action.unit.type.name}`, `Score: ${action.score.toFixed(2)}`);
@@ -260,9 +464,11 @@ async function executeAIAction(action) {
     await delay(400);
 
     const animateAndMove = async (unit, moveData) => {
-        gameState.potentialDebugPathToDraw = moveData.path;
-        gameState.debugPathHoverStartTime = Date.now() - PATH_DRAW_HOVER_DELAY_MS;
-        await delay(PATH_DRAW_ANIMATION_DURATION_MS + 200);
+        if (!gameState.isTrainingMode) {
+            gameState.potentialDebugPathToDraw = moveData.path;
+            gameState.debugPathHoverStartTime = Date.now() - PATH_DRAW_HOVER_DELAY_MS;
+            await delay(PATH_DRAW_ANIMATION_DURATION_MS + 200);
+        }
         handleMoveAction(unit, moveData.path[moveData.path.length - 1], moveData.cost);
     };
 
@@ -281,6 +487,10 @@ async function executeAIAction(action) {
         case 'UNFORTIFY_ONLY':
             completeUnfortify(action.unit, action.targetEdgeKey);
             await delay(700);
+            break;
+        case 'BUILD_BRIDGE':
+            completeBuildBridge(action.targetEdgeKey);
+            await delay(500);
             break;
         case 'MOVE_AND_ATTACK':
             await animateAndMove(action.unit, action.moveData);
@@ -339,4 +549,111 @@ async function executeAITurn() {
         ui.endTurnButton.disabled = false;
         ui.endTurnButton.click();
     }
+}
+
+function evolveAIBrain(aiVictory, victoryReason, aiPlayerNum, matchHistory) {
+    const LEARNING_RATE = 0.05;
+
+    aiBrain.matchesPlayed++;
+    if (aiVictory) aiBrain.wins++;
+
+    const adjustWeight = (key, increase) => {
+        const adjustment = aiBrain.weights[key] * LEARNING_RATE;
+        aiBrain.weights[key] += increase ? adjustment : -adjustment;
+        if (aiBrain.weights[key] < 1.0) aiBrain.weights[key] = 1.0; 
+    };
+
+    console.group(`[AI Brain] Evolving Weights (Match ${aiBrain.matchesPlayed})`);
+    console.log(`Result: ${aiVictory ? "WIN" : "LOSS"} via ${victoryReason}`);
+
+    // --- 1. EVALUATE OVERALL STRATEGY ---
+    if (aiVictory) {
+        adjustWeight('atk_damage_multiplier', true);
+        adjustWeight('atk_secure_kill', true);
+        adjustWeight('build_bridge_forward', true); 
+
+        if (victoryReason.includes('captured the flag')) {
+            adjustWeight('move_toward_base', true);
+            adjustWeight('fortify_enemy_flag', true);
+        }
+    } else {
+        if (victoryReason.includes('captured the flag')) {
+            adjustWeight('move_pikeman_defend', true);
+            adjustWeight('move_pikeman_intercept', true);
+            adjustWeight('atk_flag_carrier', true);
+            adjustWeight('move_toward_base', false); 
+            adjustWeight('build_bridge_forward', false); 
+        } else if (victoryReason.includes('Annihilation')) {
+            adjustWeight('fortify_heal_bonus', true);
+            adjustWeight('unfortify_full_hp_multiplier', false);
+            adjustWeight('atk_damage_multiplier', false); 
+            
+            adjustWeight('penalty_zoc', true);
+            adjustWeight('penalty_vulnerable_exposure', true);
+            adjustWeight('bonus_favorable_exposure', false); 
+        }
+    }
+
+    // --- 2. EVALUATE UNIT UTILITY FROM HISTORY ---
+    let classUtility = { MELEE: 0, ARCHER: 0, PIKEMAN: 0, HORSEMAN: 0 };
+    let totalActions = 0;
+    let totalUpgrades = 0;
+
+    matchHistory.forEach(action => {
+        if (action.player === aiPlayerNum && action.actorId) {
+            // Extract the unit class from the actorId (e.g., u_p2_ARCHER_t1_1)
+            const unitClass = action.actorId.split('_')[2]; 
+            
+            if (classUtility[unitClass] !== undefined) {
+                totalActions++;
+
+                // Give points for dealing damage and getting kills
+                if (action.type === 'ATTACK' && action.payload) {
+                    classUtility[unitClass] += (action.payload.damageDealt || 0);
+                    if (action.payload.isKill) classUtility[unitClass] += 10; // Bonus for securing a kill
+                }
+                // Give points for effective Zone of Control damage
+                else if (action.type === 'FORTIFY_ZOC_BLAST' && action.payload && action.payload.hits) {
+                    classUtility[unitClass] += action.payload.hits.reduce((sum, hit) => sum + hit.damage, 0);
+                }
+                // Track if the AI used promotions
+                else if (action.type === 'UNIT_UPGRADE') {
+                    totalUpgrades++;
+                }
+            }
+        }
+    });
+
+    console.log("[AI] Unit Utility Scores:", classUtility);
+
+    // --- 3. ADJUST RECRUITMENT WEIGHTS ---
+    ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].forEach(unitClass => {
+        const weightKey = `recruit_${unitClass.toLowerCase()}`;
+        const utility = classUtility[unitClass] || 0;
+
+        // If the unit performed well, increase its likelihood of being recruited.
+        // If it performed poorly (or wasn't used efficiently), decrease it.
+        if (utility > 5) {
+            adjustWeight(weightKey, true);
+            console.log(`Boosted ${unitClass} recruit weight.`);
+        } else if (!aiVictory) {
+            // Only punish units if we lost. If we won, don't fix what isn't broken.
+            adjustWeight(weightKey, false);
+            console.log(`Lowered ${unitClass} recruit weight.`);
+        }
+    });
+
+    // --- 4. ADJUST PROMOTION TENDENCY ---
+    // If we won and used upgrades, promote more! If we lost and used upgrades, maybe rely on fresh recruits.
+    const upgradeRatio = totalUpgrades / (totalActions || 1);
+    if (aiVictory && upgradeRatio > 0.05) {
+        aiBrain.weights.promote_tendency = Math.min(1.0, aiBrain.weights.promote_tendency + 0.02);
+    } else if (!aiVictory && upgradeRatio > 0.05) {
+        aiBrain.weights.promote_tendency = Math.max(0.0, aiBrain.weights.promote_tendency - 0.02);
+    }
+
+    console.log("New Brain Weights:", aiBrain.weights);
+    console.groupEnd();
+
+    saveAIBrain();
 }
