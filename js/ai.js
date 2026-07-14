@@ -29,7 +29,13 @@ const DEFAULT_AI_BRAIN = {
         "penalty_vulnerable_exposure": 88.64732662734376,
         "bonus_favorable_exposure": 13.268408625781248,
         "build_bridge_base": 60,
-        "build_bridge_forward": 56.212444406438166
+        "build_bridge_forward": 56.212444406438166,
+        "build_bridge_backward_penalty": 90,
+        "absolute_advantage_aggression": 35,
+        "absolute_disadvantage_caution": 45,
+        "move_advance_from_base_bonus": 30,
+        "move_stay_near_base_penalty": 42,
+        "game_speed_urgency": 18
     }
 };
 
@@ -67,6 +73,17 @@ function saveAIBrain() {
 // Call this immediately so the brain is ready when the script loads
 loadAIBrain();
 
+function computeBattlefieldAdvantage(allAllies, allEnemies) {
+    const scoreUnit = (unit) => {
+        return unit.hp + (unit.stats.damage || 0) * 3 + (unit.stats.defense || 0) * 2 + (unit.stats.speed || 0);
+    };
+
+    const allyScore = allAllies.reduce((sum, unit) => sum + scoreUnit(unit), 0);
+    const enemyScore = allEnemies.reduce((sum, unit) => sum + scoreUnit(unit), 0);
+    const relative = (allyScore - enemyScore) / (allyScore + enemyScore + 1);
+
+    return { allyScore, enemyScore, relative };
+}
 
 // --- AI Helper: Get Center Pixel of a Base ---
 function getBaseCenter(baseData) {
@@ -192,6 +209,14 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             predictedDmg = Math.max(1, predictedDmg);
             if(targetInfo.unit.hp <= predictedDmg) score += aiBrain.weights.atk_secure_kill; 
             score += predictedDmg * aiBrain.weights.atk_damage_multiplier; 
+
+            const battlefieldAdvantage = computeBattlefieldAdvantage(allAllies, allEnemies);
+            const advantageFactor = battlefieldAdvantage.relative;
+            if (advantageFactor > 0) {
+                score += advantageFactor * aiBrain.weights.absolute_advantage_aggression * 2.0;
+            } else {
+                score -= (-advantageFactor) * aiBrain.weights.absolute_disadvantage_caution * 0.8;
+            }
         } else { 
             score = aiBrain.weights.atk_bridge; 
         } 
@@ -201,6 +226,8 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     // --- SUB-FUNCTION to score a potential move ---
     const scoreMove = (edgeKey) => {
         let moveScore = aiBrain.weights.move_base_score; 
+        const battlefieldAdvantage = computeBattlefieldAdvantage(allAllies, allEnemies);
+        const advantageFactor = battlefieldAdvantage.relative;
         const unitPos = getUnitScreenPosition(unit);
         if (!unitPos) return 0;
         
@@ -266,6 +293,27 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         } 
         // D. STANDARD ATTACK/CAPTURE (Gravitate to Enemy Base)
         else {
+            let currentDistOwnBase = Infinity;
+            let afterDistOwnBase = Infinity;
+            let retreatBonusAllowed = true;
+            if (myBasePos) {
+                currentDistOwnBase = pointDistance(unitPos, myBasePos);
+                afterDistOwnBase = pointDistance(moveMidPoint, myBasePos);
+                const baseThreatRadius = HEX_SIZE * 2.5 * gameState.renderScale;
+                if (actualClosest) {
+                    const closestEnemyPos = getUnitScreenPosition(actualClosest);
+                    if (closestEnemyPos && pointDistance(closestEnemyPos, myBasePos) <= baseThreatRadius) {
+                        retreatBonusAllowed = false;
+                    }
+                }
+
+                if (currentDistOwnBase <= baseThreatRadius && afterDistOwnBase < currentDistOwnBase && !isMyFlagStolen) {
+                    moveScore += aiBrain.weights.move_advance_from_base_bonus;
+                } else if (currentDistOwnBase <= baseThreatRadius && afterDistOwnBase >= currentDistOwnBase && retreatBonusAllowed && !unit.isCarryingFlag) {
+                    moveScore -= aiBrain.weights.move_stay_near_base_penalty;
+                }
+            }
+
             if (enemyBasePos) {
                 // --- NEW: FLAG GRAB OVERRIDE ---
                 let isEnemyFlagEdge = false;
@@ -295,6 +343,13 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                 if (afterDistBase < currentDistBase) {
                     moveScore += aiBrain.weights.move_toward_base; 
                     moveScore += (currentDistBase - afterDistBase) * 0.2; 
+                    moveScore += aiBrain.weights.game_speed_urgency;
+                } else if (advantageFactor < 0) {
+                    moveScore -= (-advantageFactor) * aiBrain.weights.absolute_disadvantage_caution * 2;
+                }
+
+                if (advantageFactor > 0 && afterDistBase < currentDistBase) {
+                    moveScore += advantageFactor * aiBrain.weights.absolute_advantage_aggression * 4;
                 }
             }
             if (actualClosest) {
@@ -358,7 +413,11 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             }
         });
 
-        moveScore -= threatPenalty;
+        const threatMultiplier = advantageFactor > 0
+            ? Math.max(0.6, 1 - advantageFactor * 0.4)
+            : 1 + Math.min(0.5, -advantageFactor * 0.5);
+
+        moveScore -= threatPenalty * threatMultiplier;
         return moveScore;
     };
 
@@ -385,9 +444,11 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                     const afterDistBase = pointDistance(moveMidPoint, enemyBasePos);
                     if (afterDistBase < currentDistBase) {
                         score += aiBrain.weights.build_bridge_forward; // Greatly prefers aggressive bridges
+                    } else {
+                        score -= aiBrain.weights.build_bridge_backward_penalty; // Discourage bridges away from the front
                     }
                 }
-                
+                    
                 possibleActions.push({ type: 'BUILD_BRIDGE', unit, targetEdgeKey: edgeKey, score });
             });
         }
