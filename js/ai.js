@@ -4,86 +4,278 @@ const DEFAULT_AI_BRAIN = {
     matchesPlayed: 0,
     wins: 0,
     weights: {
-        "atk_flag_carrier": 795.9893115433262,
-        "atk_secure_kill": 392.01291384586483,
-        "atk_damage_multiplier": 26.006937637450577,
-        "atk_bridge": 60,
-        "move_base_score": 5,
-        "move_run_home_flag": 300,
-        "move_pikeman_defend": 159.1978623086652,
-        "move_pikeman_intercept": 79.5989311543326,
-        "move_toward_base": 38.046795010126644,
-        "move_chase_enemy": 20,
-        "fortify_base_score": 5,
-        "fortify_pikeman_bonus": 25,
-        "fortify_heal_bonus": 29.54910887578125,
-        "fortify_enemy_flag": 795.9893115433262,
-        "fortify_distance_penalty": 15,
-        "unfortify_full_hp_multiplier": 3.317102156445312,
-        "recruit_melee": 1613.5783085302178,
-        "recruit_archer": 1138.160912192839,
-        "recruit_pikeman": 625.8879632769316,
-        "recruit_horseman": 1613.5783085302178,
+        "atk_flag_carrier": 1,
+        "atk_secure_kill": 1,
+        "atk_damage_multiplier": 1,
+        "atk_bridge": 1,
+        "move_base_score": 1,
+        "move_run_home_flag": 1,
+        "move_pikeman_defend": 1,
+        "move_pikeman_intercept": 1,
+        "move_toward_base": 1,
+        "move_chase_enemy": 1,
+        "fortify_base_score": 1,
+        "fortify_pikeman_bonus": 1,
+        "fortify_heal_bonus": 1,
+        "fortify_enemy_flag": 1,
+        "fortify_distance_penalty": 1,
+        "unfortify_full_hp_multiplier": 1,
+        "recruit_melee": 1,
+        "recruit_archer": 1,
+        "recruit_pikeman": 1,
+        "recruit_horseman": 1,
         "promote_tendency": 0.3,
-        "penalty_zoc": 118.196435503125,
-        "penalty_vulnerable_exposure": 88.64732662734376,
-        "bonus_favorable_exposure": 13.268408625781248,
-        "build_bridge_base": 60,
-        "build_bridge_forward": 56.212444406438166,
-        "build_bridge_backward_penalty": 90,
-        "absolute_advantage_aggression": 35,
-        "absolute_disadvantage_caution": 45,
-        "move_advance_from_base_bonus": 30,
-        "move_stay_near_base_penalty": 42,
-        "game_speed_urgency": 18
+        "penalty_zoc": 1,
+        "penalty_vulnerable_exposure": 1,
+        "bonus_favorable_exposure": 1,
+        "build_bridge_base": 1,
+        "build_bridge_forward": 1,
+        "influence_map_weight": 1,
+        "press_advantage_weight": 1,
+        "aggression_scaling": 1,
+        "formation_spread_bias": 0
     }
 };
 
-let aiBrain = null;
+// --- Tournament Population Config ---
+const AI_POPULATION_SIZE = 8;
+const AI_EXPLOIT_COUNT = 4;                        // low-mutation "refine what works" cohort
+const AI_EXPLORE_COUNT = AI_POPULATION_SIZE - AI_EXPLOIT_COUNT; // high-mutation "try weird stuff" cohort
+const AI_POP_STORAGE_KEY = 'forthex_ai_population';
+const AI_LEGACY_BRAIN_KEY = 'forthex_ai_brain';   // old single-brain save; used only for one-time migration
 
-function loadAIBrain() {
-    const saved = localStorage.getItem('forthex_ai_brain');
+const AI_EXPLOIT_MUTATION_RATE = 0.08;             // exploit brains: small, careful nudges
+const AI_EXPLOIT_MUTATION_STRENGTH = 0.10;
+const AI_EXPLORE_MUTATION_RATE = 0.40;             // explore brains: big, frequent jumps
+const AI_EXPLORE_MUTATION_STRENGTH = 0.50;
+
+const AI_WEIGHT_MIN = 0.5;
+const AI_WEIGHT_MAX = 500;                         // prevents runaway weights from multiplicative growth
+const AI_MATCHES_PER_GENERATION = 16;              // tournament "round" length before culling/breeding
+const AI_DRAW_PENALTY_RATE = 0.08;                 // stronger than the normal 0.05 win/loss learning rate
+
+let aiPopulation = null;       // array of brain objects, persisted to AI_POP_STORAGE_KEY
+let aiBrain = null;            // ACTIVE brain pointer - repointed every AI turn to whichever brain is playing
+let matchesSinceEvolution = 0;
+
+function clampWeight(v) {
+    return Math.min(AI_WEIGHT_MAX, Math.max(AI_WEIGHT_MIN, v));
+}
+
+// promote_tendency is a 0-1 probability, not a score magnitude - it needs its own range
+// or the generic [0.5, 500] weight clamp would floor it upward and break it.
+function clampWeightForKey(key, v) {
+    if (key === 'promote_tendency') return Math.min(1.0, Math.max(0.0, v));
+    if (key === 'aggression_scaling') return Math.min(4.0, Math.max(0.1, v));
+    if (key === 'formation_spread_bias') return Math.min(15, Math.max(-15, v));
+    return clampWeight(v);
+}
+
+function createBrain(seedWeights, generation, role) {
+    return {
+        id: 'brain_' + Math.random().toString(36).slice(2, 9),
+        generation: generation || 0,
+        role: role || 'exploit',       // 'exploit' (curated/refined) or 'explore' (high-mutation experiment)
+        weights: seedWeights ? JSON.parse(JSON.stringify(seedWeights)) : JSON.parse(JSON.stringify(DEFAULT_AI_BRAIN.weights)),
+        matchesPlayed: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0
+    };
+}
+
+function mutateWeights(weights, rate, strength) {
+    const mutRate = rate !== undefined ? rate : AI_EXPLOIT_MUTATION_RATE;
+    const mutStrength = strength !== undefined ? strength : AI_EXPLOIT_MUTATION_STRENGTH;
+    const out = {};
+    for (const key in weights) {
+        let v = weights[key];
+        if (Math.random() < mutRate) {
+            if (key === 'formation_spread_bias') {
+                // Signed, zero-centered personality trait - multiplicative jitter can
+                // never move a value off zero, so this one mutates additively instead.
+                v = v + (Math.random() * 2 - 1) * mutStrength * 10;
+            } else {
+                v = v * (1 + (Math.random() * 2 - 1) * mutStrength);
+            }
+        }
+        out[key] = clampWeightForKey(key, v);
+    }
+    return out;
+}
+
+// Laplace-smoothed win rate so brains with only a few games played aren't ranked
+// as a false 0% or 100% - keeps the tournament from over-trusting small samples.
+// Draws count against a brain here too (they inflate matchesPlayed without wins),
+// which is part of how draws get discouraged at the population-selection level.
+function brainWinRate(brain) {
+    const played = brain.matchesPlayed || 0;
+    return (brain.wins + 1) / (played + 2);
+}
+
+function getChampionBrain() {
+    if (!aiPopulation || aiPopulation.length === 0) return aiBrain;
+    let best = aiPopulation[0];
+    for (let i = 1; i < aiPopulation.length; i++) {
+        if (brainWinRate(aiPopulation[i]) > brainWinRate(best)) best = aiPopulation[i];
+    }
+    return best;
+}
+
+function loadPopulation() {
+    const saved = localStorage.getItem(AI_POP_STORAGE_KEY);
     if (saved) {
         try {
             const parsed = JSON.parse(saved);
-            aiBrain = { 
-                ...parsed, 
-                weights: { ...DEFAULT_AI_BRAIN.weights, ...parsed.weights } 
-            };
-            console.log("[AI] Loaded Brain from memory. Matches played:", aiBrain.matchesPlayed);
-
-            saveAIBrain(); 
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                aiPopulation = parsed.map(b => ({
+                    ...b,
+                    role: b.role || 'exploit',
+                    draws: b.draws || 0,
+                    weights: { ...DEFAULT_AI_BRAIN.weights, ...b.weights }
+                }));
+                // Top up if the population size config changed since last save
+                while (aiPopulation.length < AI_POPULATION_SIZE) {
+                    const champ = getChampionBrain();
+                    const isExplore = aiPopulation.filter(b => b.role === 'explore').length < AI_EXPLORE_COUNT;
+                    const brain = isExplore
+                        ? createBrain(mutateWeights(champ.weights, AI_EXPLORE_MUTATION_RATE, AI_EXPLORE_MUTATION_STRENGTH), champ.generation, 'explore')
+                        : createBrain(mutateWeights(champ.weights, AI_EXPLOIT_MUTATION_RATE, AI_EXPLOIT_MUTATION_STRENGTH), champ.generation, 'exploit');
+                    aiPopulation.push(brain);
+                }
+                console.log(`[AI] Loaded tournament population: ${aiPopulation.length} brains.`);
+                savePopulation();
+                return;
+            }
         } catch (e) {
-            console.error("Failed to parse AI Brain. Resetting to default.");
-            aiBrain = JSON.parse(JSON.stringify(DEFAULT_AI_BRAIN));
-            saveAIBrain(); 
+            console.error("[AI] Failed to parse population save. Regenerating.", e);
         }
-    } else {
-        aiBrain = JSON.parse(JSON.stringify(DEFAULT_AI_BRAIN));
-        console.log("[AI] Initialized fresh Brain.");
-        saveAIBrain(); 
     }
+
+    // --- MIGRATION: seed the new population from an old single-brain save, if one exists ---
+    let seedWeights = null;
+    const legacy = localStorage.getItem(AI_LEGACY_BRAIN_KEY);
+    if (legacy) {
+        try {
+            const parsedLegacy = JSON.parse(legacy);
+            seedWeights = { ...DEFAULT_AI_BRAIN.weights, ...parsedLegacy.weights };
+            console.log("[AI] Migrating existing single-brain save into new population as seed Champion.");
+        } catch (e) { /* fall through to fresh defaults */ }
+    }
+
+    aiPopulation = [];
+    // Exploit cohort (4): slot 0 is the pure seed/default, unmutated; the rest get small jitters.
+    aiPopulation.push(createBrain(seedWeights, 0, 'exploit'));
+    for (let i = 1; i < AI_EXPLOIT_COUNT; i++) {
+        aiPopulation.push(createBrain(
+            mutateWeights(seedWeights || DEFAULT_AI_BRAIN.weights, AI_EXPLOIT_MUTATION_RATE, AI_EXPLOIT_MUTATION_STRENGTH),
+            0, 'exploit'
+        ));
+    }
+    // Explore cohort (4): big, frequent jitters, to actually try weird strategies.
+    for (let i = 0; i < AI_EXPLORE_COUNT; i++) {
+        aiPopulation.push(createBrain(
+            mutateWeights(seedWeights || DEFAULT_AI_BRAIN.weights, AI_EXPLORE_MUTATION_RATE, AI_EXPLORE_MUTATION_STRENGTH),
+            0, 'explore'
+        ));
+    }
+    console.log(`[AI] Initialized fresh tournament population: ${AI_EXPLOIT_COUNT} exploit + ${AI_EXPLORE_COUNT} explore brains.`);
+    savePopulation();
 }
 
+function savePopulation() {
+    if (!aiPopulation) return;
+    localStorage.setItem(AI_POP_STORAGE_KEY, JSON.stringify(aiPopulation));
+}
+
+// Kept so any existing call site (e.g. abortTrainingMode) that still calls saveAIBrain() keeps working.
 function saveAIBrain() {
-    if (!aiBrain) return;
-    localStorage.setItem('forthex_ai_brain', JSON.stringify(aiBrain));
+    savePopulation();
 }
 
-// Call this immediately so the brain is ready when the script loads
-loadAIBrain();
-
-function computeBattlefieldAdvantage(allAllies, allEnemies) {
-    const scoreUnit = (unit) => {
-        return unit.hp + (unit.stats.damage || 0) * 3 + (unit.stats.defense || 0) * 2 + (unit.stats.speed || 0);
+// Draws are penalized harder than a normal loss: both brains get pushed away from
+// passive/stalling behavior (heavy fortifying, no forward pressure) since that's
+// usually what produces a non-result, wasting a full match's worth of training data.
+function applyDrawPenalty(brain) {
+    const push = (key, increase) => {
+        const adjustment = brain.weights[key] * AI_DRAW_PENALTY_RATE;
+        brain.weights[key] = clampWeightForKey(key, brain.weights[key] + (increase ? adjustment : -adjustment));
     };
-
-    const allyScore = allAllies.reduce((sum, unit) => sum + scoreUnit(unit), 0);
-    const enemyScore = allEnemies.reduce((sum, unit) => sum + scoreUnit(unit), 0);
-    const relative = (allyScore - enemyScore) / (allyScore + enemyScore + 1);
-
-    return { allyScore, enemyScore, relative };
+    push('move_toward_base', true);
+    push('move_chase_enemy', true);
+    push('atk_secure_kill', true);
+    push('press_advantage_weight', true);
+    push('fortify_base_score', false);
+    push('fortify_pikeman_bonus', false);
+    push('fortify_distance_penalty', true);
+    console.log(`[AI Brain] Draw penalty applied to Brain #${aiPopulation.indexOf(brain)} (role: ${brain.role}).`);
 }
+
+// --- Tournament Match Pairing ---
+// Picks two distinct brains from the population, randomizes which side of the board
+// they play on (to avoid a positional bias), and starts a fresh match between them.
+function startNewTrainingMatch() {
+    if (!aiPopulation || aiPopulation.length < 2) loadPopulation();
+
+    let i = Math.floor(Math.random() * aiPopulation.length);
+    let j = Math.floor(Math.random() * aiPopulation.length);
+    while (j === i) j = Math.floor(Math.random() * aiPopulation.length);
+
+    const flip = Math.random() < 0.5;
+    const brainP1 = flip ? aiPopulation[i] : aiPopulation[j];
+    const brainP2 = flip ? aiPopulation[j] : aiPopulation[i];
+
+    gameState.matchBrains = { player1: brainP1, player2: brainP2 };
+    gameState.currentMatchSamples = []; // fresh NN-training sample buffer for this match
+    aiBrain = brainP1; // sane default; executeAITurn() repoints this every turn anyway
+
+    console.log(
+        `[AI Tournament] New match: [#${aiPopulation.indexOf(brainP1)}] (${brainP1.role}, WR ${(brainWinRate(brainP1) * 100).toFixed(0)}%, gen ${brainP1.generation}) ` +
+        `vs [#${aiPopulation.indexOf(brainP2)}] (${brainP2.role}, WR ${(brainWinRate(brainP2) * 100).toFixed(0)}%, gen ${brainP2.generation})`
+    );
+
+    initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+}
+
+// --- Generational Culling / Breeding ---
+// Every AI_MATCHES_PER_GENERATION matches, rank the full population by win rate. The
+// top 4 overall become next generation's EXPLOIT cohort (low-mutation refinements of
+// what's actually winning - a good explore brain can "graduate" into this group). The
+// EXPLORE cohort is re-rolled from the full ranked list every generation with heavy
+// mutation, so experimentation never stops even after the exploit side converges.
+function maybeEvolvePopulation() {
+    matchesSinceEvolution++;
+    if (matchesSinceEvolution < AI_MATCHES_PER_GENERATION) return;
+    matchesSinceEvolution = 0;
+
+    const ranked = [...aiPopulation].sort((a, b) => brainWinRate(b) - brainWinRate(a));
+    const nextGen = (ranked[0].generation || 0) + 1;
+    const elites = ranked.slice(0, AI_EXPLOIT_COUNT);
+
+    console.log(
+        `[AI Tournament] === Generation ${nextGen} === Champion winrate: ` +
+        `${(brainWinRate(ranked[0]) * 100).toFixed(1)}% (${ranked[0].wins}W / ${ranked[0].draws || 0}D / ${ranked[0].matchesPlayed}G, role: ${ranked[0].role})`
+    );
+
+    const newPopulation = [];
+    elites.forEach(e => newPopulation.push(
+        createBrain(mutateWeights(e.weights, AI_EXPLOIT_MUTATION_RATE, AI_EXPLOIT_MUTATION_STRENGTH), nextGen, 'exploit')
+    ));
+    for (let i = 0; i < AI_EXPLORE_COUNT; i++) {
+        const parent = ranked[Math.floor(Math.random() * ranked.length)];
+        newPopulation.push(
+            createBrain(mutateWeights(parent.weights, AI_EXPLORE_MUTATION_RATE, AI_EXPLORE_MUTATION_STRENGTH), nextGen, 'explore')
+        );
+    }
+
+    aiPopulation = newPopulation;
+    savePopulation();
+}
+
+// Call this immediately so the population is ready when the script loads
+loadPopulation();
+aiBrain = getChampionBrain();
+
 
 // --- AI Helper: Get Center Pixel of a Base ---
 function getBaseCenter(baseData) {
@@ -95,6 +287,66 @@ function getBaseCenter(baseData) {
         if (edge) return getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
     }
     return null;
+}
+
+// --- AI: Influence Map ("Heatmap") ---
+// Which tile(s) a unit "occupies" for territorial purposes. Fortified units sit on a
+// single tile; everyone else stands on an edge between two tiles.
+function getUnitTileKeys(u) {
+    if (u.isFortified) return [u.position];
+    const edgeCoords = parseEdgeKey(u.position);
+    if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) return [];
+    return [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)];
+}
+
+// Radiates positive influence from friendly units and negative influence from enemy
+// units across the hex grid, so the AI can reason about *territory and formations*
+// instead of only "distance to the single nearest enemy". Archers project further out
+// (their threat range), Pikemen radiate more strongly at close range (their defensive
+// bite) - matching their actual combat roles rather than treating every unit the same.
+function buildInfluenceMap(allAllies, allEnemies) {
+    const map = new Map(); // tileKey -> signed influence (+friendly control, -enemy control)
+
+    const radiate = (u, sign) => {
+        const sourceTiles = getUnitTileKeys(u);
+        if (sourceTiles.length === 0) return;
+
+        let baseStrength = 10;
+        let reach = 1; // hex-distance the unit's influence meaningfully reaches
+        if (u.type.name === 'Pikeman') { baseStrength = 12; reach = 1; }
+        else if (u.type.name === 'Archer') { baseStrength = 8; reach = 2; }
+        else if (u.type.name === 'Horseman') { baseStrength = 9; reach = 1; }
+
+        gameState.tiles.forEach((tile, tileKey) => {
+            const [tq, tr] = tileKey.split(',').map(Number);
+            let minDist = Infinity;
+            for (const stKey of sourceTiles) {
+                const [sq, sr] = stKey.split(',').map(Number);
+                const d = axialDistance(sq, sr, tq, tr);
+                if (d < minDist) minDist = d;
+            }
+            if (minDist > reach) return;
+
+            const falloff = minDist === 0 ? 1.0 : (minDist === 1 ? 0.5 : 0.3);
+            map.set(tileKey, (map.get(tileKey) || 0) + sign * baseStrength * falloff);
+        });
+    };
+
+    allAllies.forEach(a => radiate(a, +1));
+    allEnemies.forEach(e => radiate(e, -1));
+
+    // Exposed for optional debug rendering later (e.g. an overlay in render.js)
+    gameState.lastInfluenceMap = map;
+    return map;
+}
+
+// Sums the influence of the tile(s) touching an edge - this is what move/fortify scoring reads.
+function getEdgeInfluence(influenceMap, edgeKey) {
+    const coords = parseEdgeKey(edgeKey);
+    if (!coords || coords.length !== 2 || isNaN(coords[0].q)) return 0;
+    const k1 = getTileKey(coords[0].q, coords[0].r);
+    const k2 = getTileKey(coords[1].q, coords[1].r);
+    return (influenceMap.get(k1) || 0) + (influenceMap.get(k2) || 0);
 }
 
 // --- AI Reinforcements System ---
@@ -136,12 +388,12 @@ async function handleAIReinforcements() {
 // Recruit missing units based on Brain Weights
 const counts = gameState.unitCounts[queueKey];
 
-// Sort classes dynamically based on their learned weight (Highest weight first)
-const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
-    const weightA = aiBrain.weights[`recruit_${a.toLowerCase()}`] || 100;
-    const weightB = aiBrain.weights[`recruit_${b.toLowerCase()}`] || 100;
-    return weightB - weightA; 
-});
+        // Sort classes dynamically based on their learned weight (Highest weight first)
+        const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
+            const weightA = (aiBrain.weights[`recruit_${a.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
+            const weightB = (aiBrain.weights[`recruit_${b.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
+            return weightB - weightA; 
+        });
 
 console.log(`[AI] Recruitment preferred order:`, preferredOrder);
             
@@ -168,6 +420,82 @@ console.log(`[AI] Recruitment preferred order:`, preferredOrder);
     }
 }
 
+// --- NN TRAINING PIPELINE (Stage 1): sample buffer + export ---
+const AI_TRAINING_DATA_KEY = 'forthex_training_data';
+const AI_TRAINING_DATA_MAX_BUFFERED = 20000; // localStorage-safe cap; export regularly to avoid hitting it
+
+// Called every time the AI actually takes an action (not for every candidate it considered -
+// just the one it picked). Buffered in memory for the current match only; labeled with the
+// outcome and moved to persistent storage once the match resolves.
+function logTrainingSample(action) {
+    if (!gameState.currentMatchSamples) gameState.currentMatchSamples = [];
+    gameState.currentMatchSamples.push({
+        player: gameState.currentPlayer,
+        actionType: action.type,
+        score: action.score,
+        features: action.features || {}
+    });
+}
+
+// Call once a match resolves: labels every sample belonging to `player` with the outcome
+// (1 = win, 0 = loss, 0.5 = draw) and appends it to the persistent export buffer.
+function finalizeTrainingSamples(player, outcomeLabel) {
+    if (!gameState.currentMatchSamples || gameState.currentMatchSamples.length === 0) return;
+    const labeled = gameState.currentMatchSamples
+        .filter(s => s.player === player)
+        .map(s => ({ ...s, outcome: outcomeLabel }));
+    if (labeled.length === 0) return;
+
+    let buffer = [];
+    try {
+        const saved = localStorage.getItem(AI_TRAINING_DATA_KEY);
+        if (saved) buffer = JSON.parse(saved);
+    } catch (e) { buffer = []; }
+
+    buffer = buffer.concat(labeled);
+    if (buffer.length > AI_TRAINING_DATA_MAX_BUFFERED) {
+        console.warn(`[AI Training Data] Buffer passed ${AI_TRAINING_DATA_MAX_BUFFERED} samples - trimming oldest. Export soon with exportTrainingData()!`);
+        buffer = buffer.slice(buffer.length - AI_TRAINING_DATA_MAX_BUFFERED);
+    }
+
+    try {
+        localStorage.setItem(AI_TRAINING_DATA_KEY, JSON.stringify(buffer));
+    } catch (e) {
+        console.error('[AI Training Data] Failed to save (localStorage full?). Export and clear soon.', e);
+    }
+}
+
+// Console-callable: run `exportTrainingData()` in devtools to download everything collected
+// so far as a .jsonl file (one JSON sample per line - the format the Python trainer expects).
+// Clears the buffer afterward, so repeated sessions just produce more files to concatenate offline.
+function exportTrainingData() {
+    let buffer = [];
+    try {
+        const saved = localStorage.getItem(AI_TRAINING_DATA_KEY);
+        if (saved) buffer = JSON.parse(saved);
+    } catch (e) { buffer = []; }
+
+    if (buffer.length === 0) {
+        console.log('[AI Training Data] Nothing to export yet - run some training matches first.');
+        return;
+    }
+
+    const jsonl = buffer.map(s => JSON.stringify(s)).join('\n');
+    const blob = new Blob([jsonl], { type: 'application/jsonl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `forthex_training_data_${Date.now()}.jsonl`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log(`[AI Training Data] Exported ${buffer.length} samples. Buffer cleared.`);
+    localStorage.removeItem(AI_TRAINING_DATA_KEY);
+}
+if (typeof window !== 'undefined') window.exportTrainingData = exportTrainingData;
+
 function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     if (unit.hasPerformedMajorAction) return null;
 
@@ -176,14 +504,44 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     const enemyPlayer = unit.player === 1 ? 2 : 1;
     const enemyBasePos = getBaseCenter(gameState.baseCampPositions[`player${enemyPlayer}`]);
     const myBasePos = getBaseCenter(gameState.baseCampPositions[`player${unit.player}`]);
+    const influenceMap = buildInfluenceMap(allAllies, allEnemies);
+
+    // --- ABSOLUTE ADVANTAGE: how far ahead/behind are we right now, in HP and headcount? ---
+    // Ranges roughly -1 (crushed) to +1 (dominant). Used to make the AI more aggressive
+    // and willing to take risks when it's winning, and more careful/defensive when losing,
+    // rather than playing every position with the same fixed risk tolerance.
+    const myTotalHP = allAllies.reduce((sum, u) => sum + u.hp, 0);
+    const enemyTotalHP = allEnemies.reduce((sum, u) => sum + u.hp, 0);
+    const hpAdvantage = (myTotalHP - enemyTotalHP) / Math.max(1, myTotalHP + enemyTotalHP);
+    const countAdvantage = (allAllies.length - allEnemies.length) / Math.max(1, allAllies.length + allEnemies.length);
+    const absoluteAdvantage = Math.max(-1, Math.min(1, (hpAdvantage + countAdvantage) / 2));
+
+    // --- NN TRAINING PIPELINE (Stage 1): raw feature logging ---
+    // Purely additive - doesn't change any scoring or behavior. Captures the state-level
+    // context for this unit's decision (same for every action it's considering right now),
+    // plus per-action terms that scoreMove/scoreAttack stash into `lastActionFeatures` right
+    // before they return. This is the dataset that'll eventually train a network to replace
+    // the linear dot-product below with a learned combination.
+    const stateFeatures = {
+        turn: gameState.globalTurnNumber,
+        myTotalHP, enemyTotalHP,
+        myUnitCount: allAllies.length, enemyUnitCount: allEnemies.length,
+        absoluteAdvantage,
+        unitHpRatio: unit.hp / Math.max(1, unit.maxHp),
+        unitLevel: unit.level || 1,
+        unitType: unit.type.name,
+        unitIsFortified: unit.isFortified ? 1 : 0
+    };
+    let lastActionFeatures = {};
 
     // --- SUB-FUNCTION to score a potential attack ---
     const scoreAttack = (targetInfo) => {
         let score = 50.0;
+        let predictedDmg = 0;
         if(targetInfo.unit){
             if(targetInfo.unit.isCarryingFlag) score += aiBrain.weights.atk_flag_carrier; 
             
-            let predictedDmg = unit.stats.damage;
+            predictedDmg = unit.stats.damage;
             
             if (unit.isFortified && unit.type.name === 'Archer') predictedDmg += 1;
             if (unit.type.strengths.includes(targetInfo.unit.type.name)) predictedDmg += 1;
@@ -209,25 +567,32 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             predictedDmg = Math.max(1, predictedDmg);
             if(targetInfo.unit.hp <= predictedDmg) score += aiBrain.weights.atk_secure_kill; 
             score += predictedDmg * aiBrain.weights.atk_damage_multiplier; 
-
-            const battlefieldAdvantage = computeBattlefieldAdvantage(allAllies, allEnemies);
-            const advantageFactor = battlefieldAdvantage.relative;
-            if (advantageFactor > 0) {
-                score += advantageFactor * aiBrain.weights.absolute_advantage_aggression * 2.0;
-            } else {
-                score -= (-advantageFactor) * aiBrain.weights.absolute_disadvantage_caution * 0.8;
-            }
         } else { 
             score = aiBrain.weights.atk_bridge; 
+            if (enemyBasePos) {
+                const bridgeMid = getEdgeMidpoint(...parseEdgeKey(targetInfo.edgeKey).flatMap(c=>[c.q,c.r]));
+                const distToEnemyBase = pointDistance(bridgeMid, enemyBasePos);
+                // If the bridge is between us and the enemy, it's worth destroying. Otherwise ignore it.
+                if (distToEnemyBase < pointDistance(getUnitScreenPosition(unit), enemyBasePos)) {
+                    score += 40.0;
+                }
+            }
         } 
+        // Press the advantage when ahead; hold back on marginal attacks when behind.
+        score += absoluteAdvantage * 20 * (aiBrain.weights.aggression_scaling || 1) * (aiBrain.weights.press_advantage_weight || 1);
+
+        lastActionFeatures = {
+            isBridgeAttack: targetInfo.unit ? 0 : 1,
+            targetHpRatio: targetInfo.unit ? targetInfo.unit.hp / Math.max(1, targetInfo.unit.maxHp) : 0,
+            predictedDamage: predictedDmg,
+            targetIsFlagCarrier: (targetInfo.unit && targetInfo.unit.isCarryingFlag) ? 1 : 0
+        };
         return score;
     };
 
     // --- SUB-FUNCTION to score a potential move ---
     const scoreMove = (edgeKey) => {
         let moveScore = aiBrain.weights.move_base_score; 
-        const battlefieldAdvantage = computeBattlefieldAdvantage(allAllies, allEnemies);
-        const advantageFactor = battlefieldAdvantage.relative;
         const unitPos = getUnitScreenPosition(unit);
         if (!unitPos) return 0;
         
@@ -293,27 +658,6 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         } 
         // D. STANDARD ATTACK/CAPTURE (Gravitate to Enemy Base)
         else {
-            let currentDistOwnBase = Infinity;
-            let afterDistOwnBase = Infinity;
-            let retreatBonusAllowed = true;
-            if (myBasePos) {
-                currentDistOwnBase = pointDistance(unitPos, myBasePos);
-                afterDistOwnBase = pointDistance(moveMidPoint, myBasePos);
-                const baseThreatRadius = HEX_SIZE * 2.5 * gameState.renderScale;
-                if (actualClosest) {
-                    const closestEnemyPos = getUnitScreenPosition(actualClosest);
-                    if (closestEnemyPos && pointDistance(closestEnemyPos, myBasePos) <= baseThreatRadius) {
-                        retreatBonusAllowed = false;
-                    }
-                }
-
-                if (currentDistOwnBase <= baseThreatRadius && afterDistOwnBase < currentDistOwnBase && !isMyFlagStolen) {
-                    moveScore += aiBrain.weights.move_advance_from_base_bonus;
-                } else if (currentDistOwnBase <= baseThreatRadius && afterDistOwnBase >= currentDistOwnBase && retreatBonusAllowed && !unit.isCarryingFlag) {
-                    moveScore -= aiBrain.weights.move_stay_near_base_penalty;
-                }
-            }
-
             if (enemyBasePos) {
                 // --- NEW: FLAG GRAB OVERRIDE ---
                 let isEnemyFlagEdge = false;
@@ -343,13 +687,6 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                 if (afterDistBase < currentDistBase) {
                     moveScore += aiBrain.weights.move_toward_base; 
                     moveScore += (currentDistBase - afterDistBase) * 0.2; 
-                    moveScore += aiBrain.weights.game_speed_urgency;
-                } else if (advantageFactor < 0) {
-                    moveScore -= (-advantageFactor) * aiBrain.weights.absolute_disadvantage_caution * 2;
-                }
-
-                if (advantageFactor > 0 && afterDistBase < currentDistBase) {
-                    moveScore += advantageFactor * aiBrain.weights.absolute_advantage_aggression * 4;
                 }
             }
             if (actualClosest) {
@@ -413,11 +750,61 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             }
         });
 
-        const threatMultiplier = advantageFactor > 0
-            ? Math.max(0.6, 1 - advantageFactor * 0.4)
-            : 1 + Math.min(0.5, -advantageFactor * 0.5);
+        // --- 4. INFLUENCE MAP: prefer moving into friendly-controlled territory, avoid enemy-controlled ---
+        // This is what stops a lone unit from walking into a wall of enemies - it's not
+        // reacting to one nearby unit anymore, it's reading the aggregate territorial pull.
+        const destInfluence = getEdgeInfluence(influenceMap, edgeKey);
+        moveScore += destInfluence * (aiBrain.weights.influence_map_weight || 1) * 0.5;
 
-        moveScore -= threatPenalty * threatMultiplier;
+        // --- 5. FORMATION STRATEGY: cluster vs. spread out, a learnable per-brain trait ---
+        // The influence map above always rewards huddling near allies (that's what makes a
+        // tile "safe"). This term is separate: it lets a brain evolve an actual formation
+        // *preference* on top of that - some brains learn to mass together, others learn
+        // to spread out and threaten from multiple angles - instead of every brain
+        // defaulting to the same blob behavior.
+        const destCoords = parseEdgeKey(edgeKey);
+        let nearbyAllyCount = 0;
+        if (destCoords.length === 2 && !isNaN(destCoords[0].q)) {
+            const destTileKeys = [getTileKey(destCoords[0].q, destCoords[0].r), getTileKey(destCoords[1].q, destCoords[1].r)];
+            allAllies.forEach(a => {
+                if (a.id === unit.id) return;
+                const allyTiles = getUnitTileKeys(a);
+                const isNear = allyTiles.some(at => {
+                    const [aq, ar] = at.split(',').map(Number);
+                    return destTileKeys.some(dt => {
+                        const [dq, dr] = dt.split(',').map(Number);
+                        return axialDistance(aq, ar, dq, dr) <= 1;
+                    });
+                });
+                if (isNear) nearbyAllyCount++;
+            });
+            // Positive bias = this brain prefers spreading out (crowding is penalized).
+            // Negative bias = this brain prefers clustering (crowding is rewarded). 0 = no opinion.
+            moveScore -= nearbyAllyCount * (aiBrain.weights.formation_spread_bias || 0);
+        }
+
+        // --- 6. ABSOLUTE ADVANTAGE: scale risk tolerance and reward contesting enemy ground ---
+        // When we're ahead, threats matter less (we can afford to trade) and pushing into
+        // contested/enemy-leaning territory becomes attractive - actively taking ground and
+        // "inflicting" a bad position on the opponent rather than always playing it safe.
+        // When we're behind, the opposite: threats matter more, so it plays cautiously.
+        const advantageFactor = Math.max(-0.6, Math.min(0.6, absoluteAdvantage * (aiBrain.weights.aggression_scaling || 1) * 0.5));
+        threatPenalty *= (1 - advantageFactor);
+
+        if (destInfluence < 0) {
+            const denialIncentive = Math.max(0, absoluteAdvantage) * Math.abs(destInfluence) *
+                (aiBrain.weights.aggression_scaling || 1) * (aiBrain.weights.press_advantage_weight || 1) * 0.3;
+            moveScore += denialIncentive;
+        }
+
+        moveScore -= threatPenalty;
+
+        lastActionFeatures = {
+            destInfluence,
+            threatPenalty,
+            nearbyAllyCount,
+            minDistToEnemy: minDist === Infinity ? -1 : minDist
+        };
         return moveScore;
     };
 
@@ -428,7 +815,8 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         // ATTACK_ONLY
         const attackTargets = getValidMeleeAttackTargets(unit).concat(getValidArcherAttackTargets(unit));
         attackTargets.forEach(targetInfo => {
-            possibleActions.push({ type: 'ATTACK_ONLY', unit, targetInfo, score: scoreAttack(targetInfo) });
+            const atkScore = scoreAttack(targetInfo);
+            possibleActions.push({ type: 'ATTACK_ONLY', unit, targetInfo, score: atkScore, features: { ...stateFeatures, ...lastActionFeatures, actionType: 'ATTACK_ONLY' } });
         });
         
         // BUILD_BRIDGE
@@ -444,12 +832,10 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                     const afterDistBase = pointDistance(moveMidPoint, enemyBasePos);
                     if (afterDistBase < currentDistBase) {
                         score += aiBrain.weights.build_bridge_forward; // Greatly prefers aggressive bridges
-                    } else {
-                        score -= aiBrain.weights.build_bridge_backward_penalty; // Discourage bridges away from the front
                     }
                 }
-                    
-                possibleActions.push({ type: 'BUILD_BRIDGE', unit, targetEdgeKey: edgeKey, score });
+                
+                possibleActions.push({ type: 'BUILD_BRIDGE', unit, targetEdgeKey: edgeKey, score, features: { ...stateFeatures, actionType: 'BUILD_BRIDGE' } });
             });
         }
 
@@ -473,7 +859,10 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                          if(unit.hp < unit.maxHp) score += aiBrain.weights.fortify_heal_bonus; 
                          if(tileKey === enemyFlagTileKey) score += aiBrain.weights.fortify_enemy_flag; 
                          if(axialDistance(...tileKey.split(',').map(Number),0,0) > 1) score -= aiBrain.weights.fortify_distance_penalty;
-                         if(score > 0) possibleActions.push({ type: 'FORTIFY_ONLY', unit, targetTileKey: tileKey, score });
+                         score += (influenceMap.get(tileKey) || 0) * (aiBrain.weights.influence_map_weight || 1) * 0.3;
+                         // Behind on HP/headcount -> fortifying (digging in) becomes more attractive.
+                         score += Math.max(0, -absoluteAdvantage) * 15 * (aiBrain.weights.aggression_scaling || 1);
+                         if(score > 0) possibleActions.push({ type: 'FORTIFY_ONLY', unit, targetTileKey: tileKey, score, features: { ...stateFeatures, actionType: 'FORTIFY_ONLY' } });
                     }
                 });
              }
@@ -483,7 +872,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         const unfortifyTargets = getPotentialUnfortifyTargets(unit);
         if (unfortifyTargets.length > 0) {
             let score = (unit.hp >= unit.maxHp && unit.turnsFortified > 2) ? (unit.turnsFortified * aiBrain.weights.unfortify_full_hp_multiplier) : 0;
-            if(score > 0) possibleActions.push({ type: 'UNFORTIFY_ONLY', unit, targetEdgeKey: unfortifyTargets[0], score });
+            if(score > 0) possibleActions.push({ type: 'UNFORTIFY_ONLY', unit, targetEdgeKey: unfortifyTargets[0], score, features: { ...stateFeatures, actionType: 'UNFORTIFY_ONLY' } });
         }
     }
 
@@ -491,6 +880,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     const possibleMoves = getPossibleMoves(unit);
     possibleMoves.forEach((moveData, edgeKey) => {
         const moveScore = scoreMove(edgeKey);
+        const moveFeatures = { ...stateFeatures, ...lastActionFeatures, actionType: 'MOVE_ONLY' }; // snapshot now - scoreAttack() below would otherwise clobber lastActionFeatures
         
         const ghostUnit = { 
             ...unit, 
@@ -505,14 +895,17 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             if (attackTargets.length > 0) {
                 const bestTarget = attackTargets.sort((a,b) => scoreAttack(b) - scoreAttack(a))[0];
                 const combinedScore = moveScore + scoreAttack(bestTarget);
-                possibleActions.push({ type: 'MOVE_AND_ATTACK', unit, moveData, targetInfo: bestTarget, score: combinedScore });
+                possibleActions.push({ type: 'MOVE_AND_ATTACK', unit, moveData, targetInfo: bestTarget, score: combinedScore, features: { ...stateFeatures, ...lastActionFeatures, actionType: 'MOVE_AND_ATTACK' } });
             }
         }
         
-        possibleActions.push({ type: 'MOVE_ONLY', unit, moveData, score: moveScore });
+        possibleActions.push({ type: 'MOVE_ONLY', unit, moveData, score: moveScore, features: moveFeatures });
     });
     
     if (possibleActions.length === 0) return null;
+    possibleActions.forEach(action => {
+        action.score += (Math.random() * 5.0) - 2.5;
+    });
     
     possibleActions.sort((a, b) => b.score - a.score);
     return possibleActions[0];
@@ -569,7 +962,16 @@ async function executeAIAction(action) {
 
 async function executeAITurn() {
     if (gameState.gameOver) return;
-    console.log(`--- AI Turn ${gameState.globalTurnNumber} (Player ${gameState.currentPlayer}) ---`);
+
+    // Point the active brain at whichever population member is playing this side.
+    // Turns are sequential (never concurrent), so a single reassigned global is safe.
+    if (gameState.isTrainingMode && gameState.matchBrains) {
+        aiBrain = gameState.matchBrains[`player${gameState.currentPlayer}`] || getChampionBrain();
+    } else {
+        aiBrain = getChampionBrain();
+    }
+
+    console.log(`--- AI Turn ${gameState.globalTurnNumber} (Player ${gameState.currentPlayer}) using brain #${aiPopulation.indexOf(aiBrain)} ---`);
 
     // 1. Process Reinforcements / Promotions
     await handleAIReinforcements();
@@ -582,6 +984,9 @@ async function executeAITurn() {
     let unitsToProcess = allAllies.filter(u => !u.hasPerformedMajorAction);
 
     while (unitsToProcess.length > 0) {
+        
+        unitsToProcess.sort(() => Math.random() - 0.5);
+
         let bestActionOverall = null;
 
         for (const unit of unitsToProcess) {
@@ -599,6 +1004,7 @@ async function executeAITurn() {
         }
 
         const actingUnit = bestActionOverall.unit;
+        logTrainingSample(bestActionOverall);
         await executeAIAction(bestActionOverall);
         
         actingUnit.hasPerformedMajorAction = true;
@@ -612,20 +1018,25 @@ async function executeAITurn() {
     }
 }
 
-function evolveAIBrain(aiVictory, victoryReason, aiPlayerNum, matchHistory) {
+function evolveBrain(brain, aiVictory, victoryReason, aiPlayerNum, matchHistory) {
     const LEARNING_RATE = 0.05;
 
-    aiBrain.matchesPlayed++;
-    if (aiVictory) aiBrain.wins++;
+    // --- NEW: EFFICIENCY MULTIPLIER ---
+    // Max turns is 150. Faster wins = higher multiplier.
+    let efficiencyMultiplier = 1.0;
+    if (aiVictory) {
+        // e.g., Turn 30 / 150 = 0.2. Math.max(0.1, 1.0 - 0.2) = 0.8x learning boost.
+        efficiencyMultiplier = Math.max(0.1, 1.0 - (gameState.globalTurnNumber / 50));
+    }
 
     const adjustWeight = (key, increase) => {
-        const adjustment = aiBrain.weights[key] * LEARNING_RATE;
-        aiBrain.weights[key] += increase ? adjustment : -adjustment;
-        if (aiBrain.weights[key] < 1.0) aiBrain.weights[key] = 1.0; 
+        // Apply the efficiency multiplier so fast wins create stronger habits!
+        const adjustment = brain.weights[key] * LEARNING_RATE * efficiencyMultiplier;
+        brain.weights[key] = clampWeight(brain.weights[key] + (increase ? adjustment : -adjustment));
     };
 
-    console.group(`[AI Brain] Evolving Weights (Match ${aiBrain.matchesPlayed})`);
-    console.log(`Result: ${aiVictory ? "WIN" : "LOSS"} via ${victoryReason}`);
+    console.group(`[AI Brain] Evolving Weights (Brain #${aiPopulation.indexOf(brain)}, Match ${brain.matchesPlayed})`);
+    console.log(`Result: ${aiVictory ? "WIN" : "LOSS"} via ${victoryReason}. (Efficiency: ${efficiencyMultiplier.toFixed(2)}x)`);
 
     // --- 1. EVALUATE OVERALL STRATEGY ---
     if (aiVictory) {
@@ -638,13 +1049,23 @@ function evolveAIBrain(aiVictory, victoryReason, aiPlayerNum, matchHistory) {
             adjustWeight('fortify_enemy_flag', true);
         }
     } else {
-        if (victoryReason.includes('captured the flag')) {
+        if (victoryReason.includes('Timeout')) {
+            // --- NEW: STALEMATE PUNISHMENT ---
+            // If the AI timed out, it was camping. Heavily punish defensive/passive traits.
+            console.log("AI timed out/camped. Punishing passive traits.");
+            adjustWeight('move_toward_base', true); // Force it forward
+            adjustWeight('penalty_zoc', false); // Tell it to stop being so afraid of ZoC
+            adjustWeight('move_pikeman_defend', false); // Stop camping at base
+            brain.weights.promote_tendency = Math.max(0.0, brain.weights.promote_tendency - 0.05);
+        }
+        else if (victoryReason.includes('captured the flag')) {
             adjustWeight('move_pikeman_defend', true);
             adjustWeight('move_pikeman_intercept', true);
-            adjustWeight('atk_flag_carrier', true);
+            adjustWeight('atk_flag_carrier', true); 
             adjustWeight('move_toward_base', false); 
             adjustWeight('build_bridge_forward', false); 
-        } else if (victoryReason.includes('Annihilation')) {
+        } 
+        else if (victoryReason.includes('Annihilation')) {
             adjustWeight('fortify_heal_bonus', true);
             adjustWeight('unfortify_full_hp_multiplier', false);
             adjustWeight('atk_damage_multiplier', false); 
@@ -708,12 +1129,91 @@ function evolveAIBrain(aiVictory, victoryReason, aiPlayerNum, matchHistory) {
     // If we won and used upgrades, promote more! If we lost and used upgrades, maybe rely on fresh recruits.
     const upgradeRatio = totalUpgrades / (totalActions || 1);
     if (aiVictory && upgradeRatio > 0.05) {
-        aiBrain.weights.promote_tendency = Math.min(1.0, aiBrain.weights.promote_tendency + 0.02);
+        brain.weights.promote_tendency = Math.min(1.0, brain.weights.promote_tendency + 0.02);
     } else if (!aiVictory && upgradeRatio > 0.05) {
-        aiBrain.weights.promote_tendency = Math.max(0.0, aiBrain.weights.promote_tendency - 0.02);
+        brain.weights.promote_tendency = Math.max(0.0, brain.weights.promote_tendency - 0.02);
     }
 
-    console.log("New Brain Weights:", aiBrain.weights);
+    console.log("New Brain Weights:", brain.weights);
+    console.groupEnd();
+
+    // =========================================================
+    // --- 5. "GOSPEL" IMITATION LEARNING (Learn from Human) ---
+    // =========================================================
+    
+    // We ONLY want to copy the opponent if it's a real human, not during AI-vs-AI training
+    if (!gameState.isTrainingMode) {
+        console.log("[AI] Analyzing Human 'Gospel' Gameplay...");
+        
+        // Identify the human's player number
+        const humanPlayerNum = aiPlayerNum === 1 ? 2 : 1;
+        
+        // Gospel Rate: 15% shift per game (3x faster than normal learning)
+        // If the human beat the AI, make the AI copy the human EVEN HARDER (25% shift)
+        const GOSPEL_RATE = aiVictory ? 0.15 : 0.25; 
+
+        let humanClassUsage = { MELEE: 0, ARCHER: 0, PIKEMAN: 0, HORSEMAN: 0 };
+        let humanUpgrades = 0;
+        let humanBridgeBuilds = 0;
+        let humanBridgeAttacks = 0;
+        let humanActionCount = 0;
+
+        // Parse the ledger to see exactly what the human did
+        matchHistory.forEach(action => {
+            if (action.player === humanPlayerNum) {
+                humanActionCount++;
+                
+                // Track which units the human prefers to use
+                if (action.actorId) {
+                    const unitClass = action.actorId.split('_')[2]; // Extracts 'MELEE' from 'u_p1_MELEE_t1_1'
+                    if (humanClassUsage[unitClass] !== undefined) {
+                        humanClassUsage[unitClass]++;
+                    }
+                }
+
+                // Track human tactical quirks
+                if (action.type === 'UNIT_UPGRADE') humanUpgrades++;
+                if (action.type === 'BUILD_BRIDGE') humanBridgeBuilds++;
+                if (action.type === 'ATTACK' && action.payload && action.payload.targetType === 'BRIDGE') humanBridgeAttacks++;
+            }
+        });
+
+        if (humanActionCount > 0) {
+            // 1. Copy Human Army Composition
+            ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].forEach(unitClass => {
+                const usagePercentage = humanClassUsage[unitClass] / humanActionCount;
+                
+                // If the human uses a unit heavily (> 20% of their total actions), treat it as Gospel
+                if (usagePercentage > 0.20) {
+                    const weightKey = `recruit_${unitClass.toLowerCase()}`;
+                    brain.weights[weightKey] = clampWeight(brain.weights[weightKey] + brain.weights[weightKey] * GOSPEL_RATE);
+                    console.log(`[Imitation] Human heavily utilizes ${unitClass}. Ramping up recruitment weight.`);
+                }
+            });
+
+            // 2. Copy Human Veterancy Strategy
+            const promoteRate = humanUpgrades / humanActionCount;
+            if (promoteRate > 0.05) {
+                // Human likes to promote units. Copy them!
+                brain.weights.promote_tendency = Math.min(1.0, brain.weights.promote_tendency + 0.05);
+                console.log(`[Imitation] Human relies on Veterans. Increasing AI promote tendency.`);
+            }
+
+            // 3. Copy Human Bridge Mechanics
+            if (humanBridgeBuilds > 0) {
+                brain.weights.build_bridge_base = clampWeight(brain.weights.build_bridge_base + brain.weights.build_bridge_base * GOSPEL_RATE);
+                brain.weights.build_bridge_forward = clampWeight(brain.weights.build_bridge_forward + brain.weights.build_bridge_forward * GOSPEL_RATE);
+                console.log(`[Imitation] Human utilizes bridges. AI will now build more bridges.`);
+            }
+            if (humanBridgeAttacks > 0) {
+                brain.weights.atk_bridge = clampWeight(brain.weights.atk_bridge + brain.weights.atk_bridge * GOSPEL_RATE);
+                console.log(`[Imitation] Human attacks bridges. AI will now prioritize breaking bridges.`);
+            }
+        }
+    }
+    // =========================================================
+
+    console.log("Final Evolved Brain Weights:", brain.weights);
     console.groupEnd();
 
     saveAIBrain();

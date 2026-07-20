@@ -44,7 +44,7 @@ function checkVictoryCondition() {
     if (gameState.gameOver) return true;
     let victoryText = null;
 
-    if (gameState.isTrainingMode && gameState.globalTurnNumber >= 150) {
+    if (gameState.isTrainingMode && gameState.globalTurnNumber >= 50) {
         console.log("Stalemate reached. Forcing tiebreaker...");
         const p1HP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
         const p2HP = gameState.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
@@ -140,17 +140,53 @@ function checkVictoryCondition() {
             if (victoryText.includes("Player 1")) winningPlayer = 1;
             else if (victoryText.includes("Player 2")) winningPlayer = 2;
 
-            if (winningPlayer) {
+            if (winningPlayer && gameState.matchBrains) {
                 const losingPlayer = winningPlayer === 1 ? 2 : 1;
-                // Train the brain based on what the WINNER did right
-                evolveAIBrain(true, victoryText, winningPlayer, gameState.matchHistory);
-                // Train the brain based on what the LOSER did wrong
-                evolveAIBrain(false, victoryText, losingPlayer, gameState.matchHistory);
+                const winnerBrain = gameState.matchBrains[`player${winningPlayer}`];
+                const loserBrain = gameState.matchBrains[`player${losingPlayer}`];
+
+                winnerBrain.matchesPlayed++;
+                winnerBrain.wins++;
+                loserBrain.matchesPlayed++;
+                loserBrain.losses++;
+
+                // Train the actual WINNER's brain based on what it did right
+                evolveBrain(winnerBrain, true, victoryText, winningPlayer, gameState.matchHistory);
+                // Train the actual LOSER's brain based on what it did wrong
+                evolveBrain(loserBrain, false, victoryText, losingPlayer, gameState.matchHistory);
+
+                // NN training pipeline: label this match's logged samples with the real outcome
+                finalizeTrainingSamples(winningPlayer, 1);
+                finalizeTrainingSamples(losingPlayer, 0);
+
+                // Every N matches, cull the weak half of the population and breed
+                // mutated clones of the strong half (the actual "evolving" part).
+                maybeEvolvePopulation();
+                savePopulation();
+            } else if (victoryText.includes("Draw") && gameState.matchBrains) {
+                // Neither side gets a win, and BOTH brains get pushed hard away from
+                // whatever passive/stalling behavior produced a non-result. A draw wastes
+                // a full match's worth of training data, so it's penalized more than a loss.
+                const brainA = gameState.matchBrains.player1;
+                const brainB = gameState.matchBrains.player2;
+
+                [brainA, brainB].forEach(brain => {
+                    brain.matchesPlayed++;
+                    brain.draws = (brain.draws || 0) + 1;
+                    applyDrawPenalty(brain);
+                });
+
+                finalizeTrainingSamples(1, 0.5);
+                finalizeTrainingSamples(2, 0.5);
+
+                console.log(`[TRAINING] Draw - both brains penalized (draws are heavily discouraged).`);
+                maybeEvolvePopulation();
+                savePopulation();
             }
-            
-            // Instantly wipe the board and start the next generation
+
+            // Instantly wipe the board and start the next tournament pairing
             gameState.gameOver = false;
-            initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+            startNewTrainingMatch();
             setTimeout(() => { executeAITurn(); }, 0); // 0ms delay to keep it blazing fast
             return true;
         }
@@ -165,7 +201,12 @@ function checkVictoryCondition() {
             }
             
             console.log("Singleplayer match finished. Updating AI Brain...");
-            evolveAIBrain(aiVictory, victoryText, aiPlayerNum, gameState.matchHistory);
+            const championBrain = getChampionBrain();
+            championBrain.matchesPlayed++;
+            if (aiVictory) championBrain.wins++; else championBrain.losses++;
+            evolveBrain(championBrain, aiVictory, victoryText, aiPlayerNum, gameState.matchHistory);
+            finalizeTrainingSamples(aiPlayerNum, aiVictory ? 1 : 0);
+            savePopulation();
         }
 
         // --- STANDARD VICTORY LOGIC ---
@@ -319,8 +360,9 @@ function proceedToEndTurn() {
     // AI Handling (Singleplayer)
     if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
         ui.endTurnButton.disabled = true;
-        const aiDelay = gameState.isTrainingMode ? 0 : 1500;
-        setTimeout(() => { executeAITurn(); }, aiDelay);
+        if (!gameState.isTrainingMode) {
+            setTimeout(() => { executeAITurn(); }, 1500);
+        }
     } else {
         ui.endTurnButton.disabled = false;
     }
@@ -1481,6 +1523,7 @@ function handleUnitSelectionClick(x, y) {
     gameState.currentReachableMoves.clear();
     resetActionSelectionStates();
     gameState.actionLog = [];
+    gameState.matchHistory = [];
     gameState.respawnQueue = { player1: [], player2: [] };
     updateActionLogDisplay();
     updateRespawnQueueDisplay();
@@ -2619,26 +2662,159 @@ document.querySelectorAll('.swap-choice').forEach(btn => {
 
         }
 
+//  AI TRAINING SIMULATOR FUNCTIONS
+
+function abortTrainingMode() {
+    if (!gameState.isTrainingMode) return;
+    
+    console.log("--- TRAINING SIMULATION ABORTED BY USER ---");
+    gameState.isTrainingMode = false;
+    gameState.gameOver = true; // Kills the execution loop
+    document.getElementById('trainingBanner').style.display = 'none';
+    
+    const blocker = document.getElementById('trainingInteractionBlocker');
+    if (blocker) blocker.style.display = 'none';
+
+    showInstruction("Training Aborted. Brain Saved.", 3000);
+    if (typeof saveAIBrain === 'function') saveAIBrain();
+    
+    // --- PROPER SETTINGS RESTORATION & DOM SYNC ---
+    if (gameState.preTrainingSettings) {
+        // Restore Backend Logic
+        gameSettings.animationsEnabled = gameState.preTrainingSettings.animations;
+        gameSettings.fancyVisualsEnabled = gameState.preTrainingSettings.fancy;
+        gameSettings.passTurnConfirmationEnabled = gameState.preTrainingSettings.passTurn;
+        gameSettings.tooltipsEnabled = gameState.preTrainingSettings.tooltips;
+
+        // Restore Frontend HTML Checkboxes to match
+        const chkAnim = document.getElementById('settingAnimations');
+        const chkFancy = document.getElementById('settingFancyVisuals');
+        const chkPass = document.getElementById('settingPassTurnConfirmation');
+        const chkTooltips = document.getElementById('settingTooltips');
+        
+        if (chkAnim) chkAnim.checked = gameSettings.animationsEnabled;
+        if (chkFancy) chkFancy.checked = gameSettings.fancyVisualsEnabled;
+        if (chkPass) chkPass.checked = gameSettings.passTurnConfirmationEnabled;
+        if (chkTooltips) chkTooltips.checked = gameSettings.tooltipsEnabled;
+    } else {
+        loadSettings(); // Fallback if data is missing
+    }
+    
+    // Full Board Sanitization
+    setTimeout(() => { 
+        gameState.gameMode = 'local';
+        gameState.playerSide = null;
+        gameState.gameOver = false;
+        
+        clearSelectionAndDebugState(); 
+        initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+        
+        const modal = document.getElementById('gameMenuModal');
+        document.getElementById('mainMenuContent').style.display = 'block';
+        document.getElementById('singleplayerMenuContent').style.display = 'none';
+        document.getElementById('multiplayerMenuContent').style.display = 'none';
+        if (modal) {
+            modal.style.display = 'flex';
+            setTimeout(() => modal.classList.add('modal-visible'), 10);
+        }
+    }, 100); 
+}
+
+async function runTrainingHyperLoop() {
+    const banner = document.getElementById('trainingBanner');
+    let epochCounter = 0;
+
+    // Inject the HTML for the banner including the Touch STOP button
+    if (banner) {
+        banner.innerHTML = `
+            ⚠️ AI TOURNAMENT TRAINING ACTIVE ⚠️ <br> 
+            Generation: <span id="trainGenCount" style="color: #2ecc71;">0</span> |
+            Champion WR: <span id="trainChampWR" style="color: #2ecc71;">--%</span> |
+            Turns: <span id="trainTurnCount">0</span> <br>
+            <span id="trainPopSummary" style="font-size: 0.75em; opacity: 0.85;"></span> <br>
+            <button id="abortTrainingBtn" style="margin-top: 10px; padding: 6px 20px; background: #FFC020; color: #182830; border: none; border-radius: 5px; font-weight: bold; font-family: 'Exo 2', sans-serif; cursor: pointer; box-shadow: 0 3px #C09000;">STOP TRAINING</button>
+            <div style="font-size: 0.8em; margin-top: 5px;">(Or press Alt + X)</div>
+        `;
+        // Bind the button to the abort function
+        document.getElementById('abortTrainingBtn').addEventListener('click', abortTrainingMode);
+    }
+
+    while (gameState.isTrainingMode) {
+        // Run 5 turns instantly without letting the browser breathe
+        for (let i = 0; i < 5; i++) {
+            if (!gameState.isTrainingMode) break;
+
+            if (gameState.gameOver) {
+                gameState.gameOver = false;
+                startNewTrainingMatch();
+            } else {
+                await executeAITurn();
+            }
+        }
+
+        epochCounter += 5;
+        
+        // Only update text nodes to avoid destroying the button
+        if (banner && gameState.isTrainingMode && aiPopulation) {
+            const champion = getChampionBrain();
+            const genEl = document.getElementById('trainGenCount');
+            const wrEl = document.getElementById('trainChampWR');
+            const turnCountEl = document.getElementById('trainTurnCount');
+            const popEl = document.getElementById('trainPopSummary');
+
+            if (genEl) genEl.textContent = champion.generation;
+            if (wrEl) wrEl.textContent = `${(brainWinRate(champion) * 100).toFixed(0)}% (${champion.wins}W/${champion.matchesPlayed}G)`;
+            if (turnCountEl) turnCountEl.textContent = epochCounter;
+            if (popEl) {
+                const summary = aiPopulation
+                    .map((b, idx) => `#${idx}:${(brainWinRate(b) * 100).toFixed(0)}%`)
+                    .join(' &nbsp;');
+                popEl.innerHTML = summary;
+            }
+        }
+
+        // Yield to the browser for 1 tick so the tab doesn't freeze
+        await new Promise(resolve => setTimeout(resolve, 0));
+    }
+}
+
 function startTrainingMode() {
     exitMapMakerMode(); 
     hideAllModals(); 
     
     gameState.isTrainingMode = true;
     gameState.gameMode = 'singleplayer';
-    gameState.playerSide = null; 
+    gameState.playerSide = null; // Setting to null means BOTH players are AI
 
-    // --- PROPER SETTINGS BACKUP ---
-    // Store current UI preferences without touching localStorage
+    // --- PROPER SETTINGS BACKUP & OVERRIDE ---
+    // 1. Backup all configurable settings
     gameState.preTrainingSettings = {
         animations: gameSettings.animationsEnabled,
-        fancy: gameSettings.fancyVisualsEnabled
+        fancy: gameSettings.fancyVisualsEnabled,
+        passTurn: gameSettings.passTurnConfirmationEnabled,
+        tooltips: gameSettings.tooltipsEnabled
     };
-    // Override local variables for max performance
+    
+    // 2. Override internal game logic for max performance
     gameSettings.animationsEnabled = false;
     gameSettings.fancyVisualsEnabled = false;
+    gameSettings.passTurnConfirmationEnabled = false;
+    gameSettings.tooltipsEnabled = false;
+
+    // 3. Uncheck the physical HTML toggles so the UI reflects the override
+    const chkAnim = document.getElementById('settingAnimations');
+    const chkFancy = document.getElementById('settingFancyVisuals');
+    const chkPass = document.getElementById('settingPassTurnConfirmation');
+    const chkTooltips = document.getElementById('settingTooltips');
+    
+    if (chkAnim) chkAnim.checked = false;
+    if (chkFancy) chkFancy.checked = false;
+    if (chkPass) chkPass.checked = false;
+    if (chkTooltips) chkTooltips.checked = false;
     
     document.getElementById('trainingBanner').style.display = 'block';
 
+    // --- INTERACTION BLOCKER ---
     let blocker = document.getElementById('trainingInteractionBlocker');
     if (!blocker) {
         blocker = document.createElement('div');
@@ -2659,8 +2835,9 @@ function startTrainingMode() {
     gameState.gridRadius = 3;
     gameState.renderScale = 1.0;
     gameState.renderOffset = { x: 0, y: 0 };
-    initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+    startNewTrainingMatch(); // picks the first tournament pairing and initializes the grid
     
     console.log("--- TRAINING SIMULATION STARTED ---");
-    setTimeout(() => { executeAITurn(); }, 0);
+    
+    runTrainingHyperLoop();
 }
