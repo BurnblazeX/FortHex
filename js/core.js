@@ -80,6 +80,34 @@
             }
         }
 
+        function getFlagTileKey(playerNum) {
+            const baseData = gameState.baseCampPositions[`player${playerNum}`];
+            if (!Array.isArray(baseData) || baseData.length !== 3) return null; // Only applies to 3-tile bases
+
+            const tiles = baseData.map(k => {
+                const [q, r] = k.split(',').map(Number);
+                return { q, r, key: k };
+            });
+
+            const [t1, t2, t3] = tiles;
+            const d12 = axialDistance(t1.q, t1.r, t2.q, t2.r);
+            const d23 = axialDistance(t2.q, t2.r, t3.q, t3.r);
+            const d31 = axialDistance(t3.q, t3.r, t1.q, t1.r);
+
+            if (d12 === 1 && d23 === 1 && d31 === 1) {
+                // Triangle Cluster: Flag is at the vertex intersection, not on a single tile center.
+                return null; 
+            } else {
+                // Line or 'L' Shape: Find the center tile
+                let centerTileIndex = 0;
+                if (d12 === 1 && d31 === 1) centerTileIndex = 0;      
+                else if (d12 === 1 && d23 === 1) centerTileIndex = 1; 
+                else centerTileIndex = 2;                             
+
+                return tiles[centerTileIndex].key;
+            }
+        }
+
         function rotateAxial(q, r, rotations) {
             let currentQ = q;
             let currentR = r;
@@ -547,7 +575,6 @@
                 const newUnit = createUnit(player, unitType, spawnEdgeKey);
                 gameState.units.push(newUnit);
                 const edge = gameState.edges.get(spawnEdgeKey);
-                edge.units.push(newUnit);
                 logAction(`P${player} ${unitType.name} has returned to the fight!`, player);
                 return true;
             }
@@ -584,13 +611,11 @@
                     unitToDestroy.isCarryingFlag = false;
                     logAction(`The P${flag.player} flag has been returned to base!`, activePlayer);
 
-                    // Restore supply points and recalculate the entire network
                     updateSupplyPointsBasedOnFlagStatus(flag.player); 
                     recalculatePlayerSupplyNetwork(flag.player);      
                 }
             }
             
-            // --- FIX: Only add to respawn queue if NOT in Arcade mode ---
             if (gameState.gameMode !== 'arcade') {
                 const queueKey = `player${destroyedPlayer}`;
                 gameState.respawnQueue[queueKey].push({
@@ -601,32 +626,41 @@
                 updateRespawnQueueDisplay();
             }
 
+            // --- CENTRALIZED DEATH LOGGING ---
             if (reason === "bridge_collapse") {
                 logAction(`P${destroyedPlayer} ${unitToDestroy.type.name} fell as the bridge collapsed!`, activePlayer, 3500);
-            } else if (reason === "zoc_move" || reason === "zoc_turn_start" || reason === "fort_zoc") {
+            } else if (reason === "zoc_move" || reason === "zoc_turn_start" || reason === "fort_zoc" || reason === "zoc_fort") {
                 logAction(`P${destroyedPlayer} ${unitToDestroy.type.name} destroyed by ZoC!`, activePlayer, 3500);
+            } else if (reason === "cowardice") {
+                logAction(`P${destroyedPlayer} ${unitToDestroy.type.name} was destroyed for cowardice!`, activePlayer, 3500);
+            } else if (reason === "crushed") {
+                logAction(`P${destroyedPlayer} ${unitToDestroy.type.name}'s defenses collapsed, and they were crushed with no escape!`, activePlayer, 3500);
             } else {
                 logAction(`P${destroyedPlayer} ${unitToDestroy.type.name} has been destroyed!`, activePlayer, 3000);
             }
 
+            // --- THE FIX: Nuclear Tile Clearing ---
             if (unitToDestroy.positionType === 'edge') {
                 const edgeOfUnit = gameState.edges.get(unitToDestroy.position);
                 if (edgeOfUnit) edgeOfUnit.units = edgeOfUnit.units.filter(u => u.id !== unitToDestroy.id);
-            } else if (unitToDestroy.positionType === 'center' && wasFortified) {
-                const fortifiedTile = gameState.tiles.get(unitToDestroy.position);
-                if (fortifiedTile && fortifiedTile.fortifiedByPlayer === destroyedPlayer) fortifiedTile.fortifiedByPlayer = null;
+            } else if (unitToDestroy.positionType === 'center' || wasFortified) {
+                // Use a fallback to grab the tile key just in case positionType got desynced
+                const tileKey = unitToDestroy.positionType === 'center' ? unitToDestroy.position : unitToDestroy.fortifiedTileKey;
+                const fortifiedTile = gameState.tiles.get(tileKey);
+                
+                // Forcibly clear the tile, no questions asked
+                if (fortifiedTile) {
+                    fortifiedTile.fortifiedByPlayer = null;
+                }
             }
 
             gameState.units = gameState.units.filter(u => u.id !== unitToDestroy.id);
 
-            // If the destroyed unit was fortified, its removal might change the supply network
             if (wasFortified) {
                 const playerFlag = gameState.flags[`p${destroyedPlayer}_flag`];
-                // Only recalculate the network if that player's flag is NOT currently stolen.
                 if (playerFlag && playerFlag.status !== 'carried') {
                     recalculatePlayerSupplyNetwork(destroyedPlayer);
                 } else {
-                    // If the flag is stolen, just refund the supply points without recalculating.
                     if (unitToDestroy.supplyLine && unitToDestroy.supplyLine.cost > 0) {
                         gameState.supplyPoints[`player${destroyedPlayer}`] += Math.round(unitToDestroy.supplyLine.cost);
                         updateSupplyPointsDisplay();
@@ -651,7 +685,11 @@
             }
 
             checkVictoryCondition();
+            
+            // --- GUARANTEE REDRAW ---
+            gameState.needsRedraw = true;
         }
+        
 
         function getMaxUnitsForCurrentMap() {
             return MAP_SIZE_UNIT_LIMITS[gameState.gridRadius] || 4;
@@ -1131,8 +1169,15 @@
                 resetActionSelectionStates(); 
                 updateSelectedUnitInfoPanel(); return;
             }
-    
-    // --- FIX: Immediately clear move highlights so they don't persist during animation ---
+
+            const myFlagTileKey = getFlagTileKey(unitToFortify.player);
+            if (targetTileKeyToFortify === myFlagTileKey && !unitToFortify.isCarryingFlag) {
+                showInstruction("Cannot fortify on the flag tile.", 2500);
+                resetActionSelectionStates(); 
+                updateSelectedUnitInfoPanel(); return;
+            }
+
+    //Immediately clear move highlights so they don't persist during animation
     gameState.currentReachableMoves.clear();
 
     const animation = {
@@ -1147,7 +1192,6 @@
             const fortifyingPlayer = unitToFortify.player;
             
             const currentEdge = gameState.edges.get(unitToFortify.position);
-            if (currentEdge) currentEdge.units = currentEdge.units.filter(u => u.id !== unitToFortify.id);
             unitToFortify.isFortified = true; unitToFortify.fortifiedTileKey = targetTileKeyToFortify;
             if (unitToFortify.typeId === 'ARCHER') {
                 unitToFortify.stats.damage += 2;
@@ -1169,6 +1213,48 @@
                 });
             }
             logAction(`${unitToFortify.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
+
+            if (gameState.gameMode !== 'arcade') {
+                const enemyPlayer = unitToFortify.player === 1 ? 2 : 1;
+                const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
+                
+                if (targetTileKeyToFortify === enemyFlagTileKey) {
+                    const enemyFlagObj = unitToFortify.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+                    
+                    if (enemyFlagObj && enemyFlagObj.status === 'at_base') {
+                        enemyFlagObj.status = 'carried';
+                        enemyFlagObj.carrierId = unitToFortify.id;
+                        unitToFortify.isCarryingFlag = true;
+                        
+                        logAction(`P${unitToFortify.player} ${unitToFortify.type.name} has captured the flag from the fort!`, gameState.currentPlayer);
+                        
+                        updateAllHealingStatus();
+                        severSupplyLinesForPlayer(enemyPlayer);
+                        
+                        const victimPlayerQueue = gameState.respawnQueue[`player${enemyPlayer}`];
+                        victimPlayerQueue.forEach(item => {
+                            if (!item.timerHalved) {
+                                item.turnsRemaining = Math.ceil(item.turnsRemaining / 2);
+                                item.timerHalved = true;
+                            }
+                        });
+                        updateRespawnQueueDisplay();
+                        updateSupplyPointsBasedOnFlagStatus(enemyPlayer);
+
+                        const unitPos = getUnitScreenPosition(unitToFortify);
+                        if (unitPos) {
+                            gameState.visualEffects.push({
+                                type: 'flag_capture_burst',
+                                x: unitPos.x,
+                                y: unitPos.y,
+                                player: enemyPlayer,
+                                startTime: Date.now(),
+                                duration: 500
+                            });
+                        }
+                    }
+                }
+            }
 
             const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
             if (playerFlag && playerFlag.status !== 'carried') {
@@ -1273,6 +1359,10 @@
         onComplete: async () => {
             const unfortifyingPlayer = unitToUnfortify.player;
             
+            gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
+            gameState.mustUnfortify = false;
+            ui.endTurnButton.disabled = false;
+
             unitToUnfortify.fortifyCooldown = unitToUnfortify.turnsFortified * 5; 
 
             unitToUnfortify.isFortified = false;
@@ -1287,7 +1377,6 @@
             unitToUnfortify.position = targetEdgeKey;
             unitToUnfortify.currentMove -= FORTIFY_UNFORTIFY_COST; 
             unitToUnfortify.hasPerformedMajorAction = true;
-            targetEdge.units.push(unitToUnfortify);
             if (typeof ActionManager !== 'undefined') {
                 ActionManager.submitAction({
                     type: "UNFORTIFY",
@@ -1391,7 +1480,7 @@
         duration: 500,
 
         onComplete: () => {
-            // These actions happen AFTER the animation finishes
+            gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
             edgeToBridge.bridge = true; 
             edgeToBridge.bridgeHp = BRIDGE_MAX_HP;
             logAction(`${selectedUnit.type.name} built bridge on ${targetEdgeKey.substring(0,7)}... HP: ${edgeToBridge.bridgeHp}`, gameState.currentPlayer, 3000);
@@ -2183,29 +2272,12 @@
     }
     const unit = masterUnit;
 
-    // 2. GLOBAL WIPE (FAILSAFE)
-    gameState.edges.forEach((edge) => {
-        if (edge.units.some(u => u.id === unit.id)) {
-            edge.units = edge.units.filter(u => u.id !== unit.id);
-        }
-    });
-
     const originPos = unit.position; 
 
-    // 3. UPDATE UNIT STATE
+    // 2. UPDATE UNIT STATE
     unit.position = targetEdgeKey;
     unit.positionType = 'edge';
     unit.currentMove -= costToMove;
-
-    // 4. ADD TO DESTINATION
-    const finalTargetEdgeData = gameState.edges.get(targetEdgeKey);
-    if (finalTargetEdgeData) {
-        finalTargetEdgeData.units.push(unit);
-    } else {
-        console.error("Target edge for move not found:", targetEdgeKey);
-    }
-
-    clearDebugPath();
 
     // FLAG CAPTURE LOGIC
     if (gameState.gameMode !== 'arcade') {
@@ -2233,7 +2305,38 @@
             logAction(`P${unit.player} ${unit.type.name} has picked up the flag!`, gameState.currentPlayer);
             updateAllHealingStatus();
             severSupplyLinesForPlayer(enemyPlayer);
+            
+            const victimPlayerQueue = gameState.respawnQueue[`player${enemyPlayer}`];
+            victimPlayerQueue.forEach(item => {
+                if (!item.timerHalved) {
+                    item.turnsRemaining = Math.ceil(item.turnsRemaining / 2);
+                    item.timerHalved = true;
+                }
+            });
+            updateRespawnQueueDisplay();
             updateSupplyPointsBasedOnFlagStatus(enemyPlayer);
+
+            const unitPos = getUnitScreenPosition(unit);
+            
+            // DIAGNOSTIC TRACE
+            console.group("FLAG CAPTURE DIAGNOSTICS");
+            console.trace("Capture Triggered");
+            console.log("Calculated unitPos:", unitPos);
+            
+            if (unitPos) {
+                gameState.visualEffects.push({
+                    type: 'flag_capture_burst',
+                    x: unitPos.x,
+                    y: unitPos.y,
+                    player: enemyPlayer,
+                    startTime: Date.now(),
+                    duration: 500
+                });
+                console.log("Pushed to visualEffects array. Current array:", gameState.visualEffects);
+            } else {
+                console.error("unitPos was null! Animation skipped.");
+            }
+            console.groupEnd();
         }
     }
 

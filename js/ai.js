@@ -1,5 +1,3 @@
-<<<<<<< Updated upstream
-=======
 // --- AI Memory System ---
 const DEFAULT_AI_BRAIN = {
     version: 5, 
@@ -498,14 +496,11 @@ function exportTrainingData() {
 }
 if (typeof window !== 'undefined') window.exportTrainingData = exportTrainingData;
 
->>>>>>> Stashed changes
 function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     if (unit.hasPerformedMajorAction) return null;
 
     let possibleActions = [];
 
-<<<<<<< Updated upstream
-=======
     const enemyPlayer = unit.player === 1 ? 2 : 1;
     const enemyBasePos = getBaseCenter(gameState.baseCampPositions[`player${enemyPlayer}`]);
     const myBasePos = getBaseCenter(gameState.baseCampPositions[`player${unit.player}`]);
@@ -539,68 +534,37 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     };
     let lastActionFeatures = {};
 
->>>>>>> Stashed changes
     // --- SUB-FUNCTION to score a potential attack ---
     const scoreAttack = (targetInfo) => {
         let score = 50.0;
         let predictedDmg = 0;
         if(targetInfo.unit){
-            if(targetInfo.unit.isCarryingFlag) score += 200;
+            if(targetInfo.unit.isCarryingFlag) score += aiBrain.weights.atk_flag_carrier; 
             
-<<<<<<< Updated upstream
-            // UPDATE: Use mutable stats for damage calculation
-            let predictedDmg = unit.stats.damage;
-=======
             predictedDmg = unit.stats.damage;
->>>>>>> Stashed changes
             
-            // Archer Fortification Bonus
-            if (unit.isFortified && unit.type.name === 'Archer') {
-                predictedDmg += 1;
-            }
-            
-            // Advantage/Disadvantage
-            if(unit.type.strengths.includes(targetInfo.unit.type.name)) predictedDmg += 1;
-            if(unit.type.weaknesses.includes(targetInfo.unit.type.name)) predictedDmg -= 1;
+            if (unit.isFortified && unit.type.name === 'Archer') predictedDmg += 1;
+            if (unit.type.strengths.includes(targetInfo.unit.type.name)) predictedDmg += 1;
+            if (unit.type.weaknesses.includes(targetInfo.unit.type.name)) predictedDmg -= 1;
 
-            // UPDATE: Account for Target Defense
             let targetDefense = targetInfo.unit.stats.defense;
             
-            // Fortification Check
             if (targetInfo.unit.isFortified) {
-                // Check Combined Arms (Simple check for AI)
                 const hasPartner = allAllies.some(u => 
                     u.position === unit.position && 
                     u.id !== unit.id && 
                     u.type.attackType !== unit.type.attackType
                 );
-                
                 if (hasPartner) {
-                    // Ignore positive defense
                     if (targetDefense < 0) predictedDmg -= targetDefense; 
                 } else {
-                    // Apply defense
                     predictedDmg -= targetDefense;
                 }
             } else {
-                // Not Fortified: Only apply vulnerability
                 if (targetDefense < 0) predictedDmg -= targetDefense;
             }
 
-            // Min Damage Cap
             predictedDmg = Math.max(1, predictedDmg);
-<<<<<<< Updated upstream
-
-            // Kill Priority
-            if(targetInfo.unit.hp <= predictedDmg) score += 100;
-            
-            // Damage Value
-            score += predictedDmg * 10;
-
-        } else { 
-            // Bridge Attack
-            score = 5; 
-=======
             if(targetInfo.unit.hp <= predictedDmg) score += aiBrain.weights.atk_secure_kill; 
             score += predictedDmg * aiBrain.weights.atk_damage_multiplier; 
         } else { 
@@ -613,7 +577,6 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                     score += 40.0;
                 }
             }
->>>>>>> Stashed changes
         } 
         // Press the advantage when ahead; hold back on marginal attacks when behind.
         score += absoluteAdvantage * 20 * (aiBrain.weights.aggression_scaling || 1) * (aiBrain.weights.press_advantage_weight || 1);
@@ -629,39 +592,30 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
 
     // --- SUB-FUNCTION to score a potential move ---
     const scoreMove = (edgeKey) => {
-<<<<<<< Updated upstream
-        let moveScore = 5.0; // Base incentive to not just stand still
-=======
         let moveScore = aiBrain.weights.move_base_score; 
->>>>>>> Stashed changes
         const unitPos = getUnitScreenPosition(unit);
         if (!unitPos) return 0;
         
         const moveMidPoint = getEdgeMidpoint(...parseEdgeKey(edgeKey).flatMap(c=>[c.q,c.r]));
         
-        // Role-based scoring for the move itself
-        if (unit.type.name === 'Pikeman' && strategy === 'IRON_WALL') {
-            const centerDist = axialDistance(...edgeKey.split('_')[0].split(',').map(Number), 0, 0);
-            moveScore += (4 - centerDist) * 5; // Move to the center to form the wall
-        } else if (unit.type.name === 'Horseman' && strategy === 'BLITZ') {
-            const flankTarget = allEnemies.find(e => e.type.name === 'Archer' || e.type.name === 'Melee');
-            if(flankTarget) {
-                const targetPos = getUnitScreenPosition(flankTarget);
-                const currentDist = pointDistance(unitPos, targetPos);
-                const afterDist = pointDistance(moveMidPoint, targetPos);
-                if(afterDist < currentDist) moveScore += (1 - (afterDist / currentDist)) * 40;
+        // --- 1. FIND CLOSEST ENEMY ---
+        let minDist = Infinity;
+        let actualClosest = null;
+        allEnemies.forEach(e => {
+            const ep = getUnitScreenPosition(e);
+            if (ep) {
+                const d = pointDistance(unitPos, ep);
+                if (d < minDist) { minDist = d; actualClosest = e; }
             }
-        } else { // Generic advance for others
-             const closestEnemy = allEnemies[0];
-             if(closestEnemy){
-                const targetPos = getUnitScreenPosition(closestEnemy);
-                const currentDist = pointDistance(unitPos, targetPos);
-                const afterDist = pointDistance(moveMidPoint, targetPos);
-                if(afterDist < currentDist) moveScore += (1 - (afterDist / currentDist)) * 20;
-             }
+        });
+
+        // --- 1.5. CHECK FLAG STATUS ---
+        const myFlag = (gameState.flags && gameState.gameMode !== 'arcade') ? gameState.flags[`p${unit.player}_flag`] : null;
+        const isMyFlagStolen = myFlag && myFlag.status === 'carried';
+        let myFlagCarrier = null;
+        if (isMyFlagStolen) {
+            myFlagCarrier = allEnemies.find(e => e.id === myFlag.carrierId);
         }
-<<<<<<< Updated upstream
-=======
 
         // --- 2. BASE MOVEMENT LOGIC ---
         
@@ -851,10 +805,8 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             nearbyAllyCount,
             minDistToEnemy: minDist === Infinity ? -1 : minDist
         };
->>>>>>> Stashed changes
         return moveScore;
     };
-
 
     // === ACTION GENERATION ===
 
@@ -866,8 +818,6 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             const atkScore = scoreAttack(targetInfo);
             possibleActions.push({ type: 'ATTACK_ONLY', unit, targetInfo, score: atkScore, features: { ...stateFeatures, ...lastActionFeatures, actionType: 'ATTACK_ONLY' } });
         });
-<<<<<<< Updated upstream
-=======
         
         // BUILD_BRIDGE
         if (unit.type.canBuildBridge && unit.currentMove >= BUILD_BRIDGE_COST && !unit.isCarryingFlag) {
@@ -889,23 +839,19 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             });
         }
 
->>>>>>> Stashed changes
         // FORTIFY_ONLY
-        if (unit.stats.defense > 0) {
+        if (unit.stats.defense > 0 && !unit.isCarryingFlag) {
              const edgeCoords = parseEdgeKey(unit.position);
              if (edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
+                
+                const myFlagTileKey = getFlagTileKey(unit.player);
+                const enemyPlayer = unit.player === 1 ? 2 : 1;
+                const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
+                const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+                const enemyBaseTileKeys = new Set(Array.isArray(enemyBaseData) ? enemyBaseData : []);
+
                 [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {
                     const tile = gameState.tiles.get(tileKey);
-<<<<<<< Updated upstream
-                    // Check logic for fortification
-                    // TODO: Check enemy base tiles if necessary (omitted for brevity in AI)
-                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null) {
-                         let score = 5 - unit.fortifyCooldown;
-                         if(strategy === 'IRON_WALL' && unit.type.name === 'Pikeman') score += 25;
-                         if(unit.hp < unit.maxHp) score+=20;
-                         if(axialDistance(...tileKey.split(',').map(Number),0,0) > 1) score-= 15;
-                         if(score > 0) possibleActions.push({ type: 'FORTIFY_ONLY', unit, targetTileKey: tileKey, score });
-=======
                     
                     if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey && (!enemyBaseTileKeys.has(tileKey) || tileKey === enemyFlagTileKey)) {
                          let score = aiBrain.weights.fortify_base_score - unit.fortifyCooldown;
@@ -917,22 +863,16 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                          // Behind on HP/headcount -> fortifying (digging in) becomes more attractive.
                          score += Math.max(0, -absoluteAdvantage) * 15 * (aiBrain.weights.aggression_scaling || 1);
                          if(score > 0) possibleActions.push({ type: 'FORTIFY_ONLY', unit, targetTileKey: tileKey, score, features: { ...stateFeatures, actionType: 'FORTIFY_ONLY' } });
->>>>>>> Stashed changes
                     }
                 });
              }
         }
-    } else { // Unit is fortified
+    } else { 
         // UNFORTIFY_ONLY
         const unfortifyTargets = getPotentialUnfortifyTargets(unit);
         if (unfortifyTargets.length > 0) {
-<<<<<<< Updated upstream
-            let score = (unit.hp >= unit.maxHp && unit.turnsFortified > 2) ? (unit.turnsFortified * 5) : 0;
-            if(score > 0) possibleActions.push({ type: 'UNFORTIFY_ONLY', unit, targetEdgeKey: unfortifyTargets[0], score });
-=======
             let score = (unit.hp >= unit.maxHp && unit.turnsFortified > 2) ? (unit.turnsFortified * aiBrain.weights.unfortify_full_hp_multiplier) : 0;
             if(score > 0) possibleActions.push({ type: 'UNFORTIFY_ONLY', unit, targetEdgeKey: unfortifyTargets[0], score, features: { ...stateFeatures, actionType: 'UNFORTIFY_ONLY' } });
->>>>>>> Stashed changes
         }
     }
 
@@ -942,16 +882,15 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         const moveScore = scoreMove(edgeKey);
         const moveFeatures = { ...stateFeatures, ...lastActionFeatures, actionType: 'MOVE_ONLY' }; // snapshot now - scoreAttack() below would otherwise clobber lastActionFeatures
         
-        // Ghost Unit for calculation: Update position AND Move Points
         const ghostUnit = { 
             ...unit, 
             position: edgeKey, 
             currentMove: unit.currentMove - moveData.cost,
-            positionType: 'edge' // Assume moving to edge
+            positionType: 'edge' 
         };
 
-        // MOVE_AND_ATTACK (for Horseman)
-        if (unit.type.canMoveAfterAttack && ghostUnit.currentMove >= ATTACK_COST) {
+        // MOVE_AND_ATTACK (Horseman hit & run)
+        if (unit.type.canMoveAfterAttack && ghostUnit.currentMove >= ATTACK_COST && !unit.isCarryingFlag) {
             const attackTargets = getValidMeleeAttackTargets(ghostUnit);
             if (attackTargets.length > 0) {
                 const bestTarget = attackTargets.sort((a,b) => scoreAttack(b) - scoreAttack(a))[0];
@@ -960,12 +899,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             }
         }
         
-<<<<<<< Updated upstream
-        // MOVE_ONLY is always an option
-        possibleActions.push({ type: 'MOVE_ONLY', unit, moveData, score: moveScore });
-=======
         possibleActions.push({ type: 'MOVE_ONLY', unit, moveData, score: moveScore, features: moveFeatures });
->>>>>>> Stashed changes
     });
     
     if (possibleActions.length === 0) return null;
@@ -973,23 +907,22 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         action.score += (Math.random() * 5.0) - 2.5;
     });
     
-    // Return the single best action for this unit
     possibleActions.sort((a, b) => b.score - a.score);
     return possibleActions[0];
 }
-
-// AI Executor: Takes a chosen action and performs it with animations.
 async function executeAIAction(action) {
     if (!action) return;
-    console.log(`AI Executing: ${action.type} for ${action.unit.type.name}`, `Score: ${action.score.toFixed(2)}`);
+    console.log(`[AI] Executing: ${action.type} for ${action.unit.type.name}`, `Score: ${action.score.toFixed(2)}`);
     gameState.selectedUnit = action.unit;
     updateSelectedUnitInfoPanel();
     await delay(400);
 
     const animateAndMove = async (unit, moveData) => {
-        gameState.potentialDebugPathToDraw = moveData.path;
-        gameState.debugPathHoverStartTime = Date.now() - PATH_DRAW_HOVER_DELAY_MS;
-        await delay(PATH_DRAW_ANIMATION_DURATION_MS + 200);
+        if (!gameState.isTrainingMode) {
+            gameState.potentialDebugPathToDraw = moveData.path;
+            gameState.debugPathHoverStartTime = Date.now() - PATH_DRAW_HOVER_DELAY_MS;
+            await delay(PATH_DRAW_ANIMATION_DURATION_MS + 200);
+        }
         handleMoveAction(unit, moveData.path[moveData.path.length - 1], moveData.cost);
     };
 
@@ -1009,6 +942,10 @@ async function executeAIAction(action) {
             completeUnfortify(action.unit, action.targetEdgeKey);
             await delay(700);
             break;
+        case 'BUILD_BRIDGE':
+            completeBuildBridge(action.targetEdgeKey);
+            await delay(500);
+            break;
         case 'MOVE_AND_ATTACK':
             await animateAndMove(action.unit, action.moveData);
             await delay(400);
@@ -1023,7 +960,6 @@ async function executeAIAction(action) {
 }
 
 
-// AI Turn Manager: The main loop that commands the AI turn.
 async function executeAITurn() {
     if (gameState.gameOver) return;
 
@@ -1037,7 +973,11 @@ async function executeAITurn() {
 
     console.log(`--- AI Turn ${gameState.globalTurnNumber} (Player ${gameState.currentPlayer}) using brain #${aiPopulation.indexOf(aiBrain)} ---`);
 
-    const aiStrategy = 'IRON_WALL'; // Will be dynamic later
+    // 1. Process Reinforcements / Promotions
+    await handleAIReinforcements();
+
+    // 2. Execute Unit Actions
+    const aiStrategy = 'STANDARD';
     const allEnemies = gameState.units.filter(u => u.player !== gameState.currentPlayer);
     const allAllies = gameState.units.filter(u => u.player === gameState.currentPlayer);
     
@@ -1059,7 +999,7 @@ async function executeAITurn() {
         }
         
         if (!bestActionOverall) {
-            console.log("AI has no more possible actions.");
+            console.log("[AI] No more possible actions.");
             break;
         }
 
@@ -1067,19 +1007,16 @@ async function executeAITurn() {
         logTrainingSample(bestActionOverall);
         await executeAIAction(bestActionOverall);
         
-        // This is the correct way to handle the action attempt.
         actingUnit.hasPerformedMajorAction = true;
         unitsToProcess = unitsToProcess.filter(u => u.id !== actingUnit.id);
     }
 
-    console.log("AI turn finished.");
+    console.log("--- AI Turn Finished ---");
     if (!gameState.gameOver) {
         ui.endTurnButton.disabled = false;
         ui.endTurnButton.click();
     }
 }
-<<<<<<< Updated upstream
-=======
 
 function evolveBrain(brain, aiVictory, victoryReason, aiPlayerNum, matchHistory) {
     const LEARNING_RATE = 0.05;
@@ -1281,4 +1218,3 @@ function evolveBrain(brain, aiVictory, victoryReason, aiPlayerNum, matchHistory)
 
     saveAIBrain();
 }
->>>>>>> Stashed changes

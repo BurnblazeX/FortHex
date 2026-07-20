@@ -1,4 +1,7 @@
 function delay(ms) {
+    if (gameState.isTrainingMode) {
+        return Promise.resolve(); 
+    }
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -41,8 +44,6 @@ function checkVictoryCondition() {
     if (gameState.gameOver) return true;
     let victoryText = null;
 
-<<<<<<< Updated upstream
-=======
     if (gameState.isTrainingMode && gameState.globalTurnNumber >= 50) {
         console.log("Stalemate reached. Forcing tiebreaker...");
         const p1HP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
@@ -53,7 +54,6 @@ function checkVictoryCondition() {
         else victoryText = "It's a Draw! (Timeout)";
     }
 
->>>>>>> Stashed changes
     if (gameState.gameMode === 'arcade') {
         const player1Units = gameState.units.filter(u => u.player === 1);
         const player2Units = gameState.units.filter(u => u.player === 2);
@@ -77,19 +77,34 @@ function checkVictoryCondition() {
 
                 if (Array.isArray(carrierHomeBaseData)) {
                     // Expansive Mode (Radius 4): Base is a list of tiles.
-                    // Victory condition: Unit is on an edge connecting two of these tiles (Internal Edge).
-                    const [h1, h2] = parseEdgeKey(unit.position);
-                    if (!isNaN(h1.q) && !isNaN(h2.q)) {
-                        const t1 = getTileKey(h1.q, h1.r);
-                        const t2 = getTileKey(h2.q, h2.r);
-                        if (carrierHomeBaseData.includes(t1) && carrierHomeBaseData.includes(t2)) {
+                    if (unit.positionType === 'center') {
+                        // WIN: Fortified directly on one of the home base tiles
+                        if (carrierHomeBaseData.includes(unit.position)) {
                             isHome = true;
+                        }
+                    } else {
+                        // WIN: Unit is on an edge connecting two of these tiles (Internal Edge).
+                        const [h1, h2] = parseEdgeKey(unit.position);
+                        if (!isNaN(h1.q) && !isNaN(h2.q)) {
+                            const t1 = getTileKey(h1.q, h1.r);
+                            const t2 = getTileKey(h2.q, h2.r);
+                            if (carrierHomeBaseData.includes(t1) && carrierHomeBaseData.includes(t2)) {
+                                isHome = true;
+                            }
                         }
                     }
                 } else {
                     // Standard Mode (Radius 3): Base is a specific edge key string.
                     if (unit.position === carrierHomeBaseData) {
                         isHome = true;
+                    } else if (unit.positionType === 'center') {
+                        // WIN: Fortified directly on one of the tiles touching the home edge
+                        const [h1, h2] = parseEdgeKey(carrierHomeBaseData);
+                        const t1 = getTileKey(h1.q, h1.r);
+                        const t2 = getTileKey(h2.q, h2.r);
+                        if (unit.position === t1 || unit.position === t2) {
+                            isHome = true;
+                        }
                     }
                 }
 
@@ -118,8 +133,6 @@ function checkVictoryCondition() {
     }
 
     if (victoryText) {
-<<<<<<< Updated upstream
-=======
         // --- NEW: TRAINING MODE INTERCEPT ---
         if (gameState.isTrainingMode) {
             console.log(`[TRAINING] ${victoryText}`);
@@ -197,7 +210,6 @@ function checkVictoryCondition() {
         }
 
         // --- STANDARD VICTORY LOGIC ---
->>>>>>> Stashed changes
         ui.victoryMessage.textContent = victoryText;
         ui.victoryMessage.style.display = 'block';
         triggerConfetti();
@@ -213,27 +225,23 @@ function checkVictoryCondition() {
         gameState.currentReachableMoves.clear(); 
         updateSelectedUnitInfoPanel();
 
-        // VICTORY SCREEN LOGIC
         const interactionBlocker = document.getElementById('victoryInteractionBlocker');
-        interactionBlocker.style.display = 'block'; // Block interactions immediately
+        interactionBlocker.style.display = 'block'; 
 
         const CONFETTI_DURATION = 7000;
         new Promise(resolve => setTimeout(resolve, CONFETTI_DURATION)).then(() => {
-            
             const restartGameOnClick = () => {
                 window.removeEventListener('click', restartGameOnClick);
                 window.removeEventListener('touchend', restartGameOnClick);
                 interactionBlocker.style.display = 'none'; 
                 location.reload();
             };
-
             window.addEventListener('click', restartGameOnClick);
             window.addEventListener('touchend', restartGameOnClick);
-
             showInstruction("Click anywhere to play again.", CONFETTI_DURATION);
         });
 
-        return true; // VICTORY!
+        return true; 
     }
 
     // No victory condition met
@@ -306,11 +314,11 @@ function proceedToEndTurn() {
             }
 
             // Check Cowardice (Fortified at base too long)
-            const playerBaseTiles = [DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[0], DEFAULT_FLAG_HOME_POSITIONS[`player${unit.player}`].split('_')[1]];
+            const playerBaseTiles = getBaseCampTiles(gameState.baseCampPositions[`player${unit.player}`]);
+            
             if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
                 unit.turnsFortifiedAtBase++;
                 if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
-                    logAction(`P${unit.player} ${unit.type.name} was destroyed for cowardice!`, gameState.currentPlayer);
                     handleUnitDeath(unit, "cowardice");
                 }
             }
@@ -352,13 +360,9 @@ function proceedToEndTurn() {
     // AI Handling (Singleplayer)
     if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
         ui.endTurnButton.disabled = true;
-<<<<<<< Updated upstream
-        setTimeout(() => { executeAITurn(); }, 1500);
-=======
         if (!gameState.isTrainingMode) {
             setTimeout(() => { executeAITurn(); }, 1500);
         }
->>>>>>> Stashed changes
     } else {
         ui.endTurnButton.disabled = false;
     }
@@ -421,55 +425,70 @@ function applyStartOfTurnZoCDamage() {
     if (Array.isArray(activePlayerBaseData)) {
         activePlayerBaseTiles = activePlayerBaseData;
     } else if (typeof activePlayerBaseData === 'string') {
+        // Splitting "1,2_2,1" safely gives us an array of the two tile keys: ['1,2', '2,1']
         activePlayerBaseTiles = activePlayerBaseData.split('_');
     }
 
     gameState.units.forEach(unit => {
-        if (unit.player !== enemyPlayer || unit.positionType !== 'edge' || unit.isFortified) return;
+        if (unit.player !== enemyPlayer) return;
         
-        const edgeKey = unit.position;
-        const edgeTileCoords = parseEdgeKey(edgeKey);
-        if (edgeTileCoords.some(coord => isNaN(coord.q))) return;
+        // --- 1. Edge ZoC (Original Logic) ---
+        if (unit.positionType === 'edge' && !unit.isFortified) {
+            const edgeKey = unit.position;
+            const edgeTileCoords = parseEdgeKey(edgeKey);
+            if (edgeTileCoords.some(coord => isNaN(coord.q))) return;
 
-        const tile1Key = getTileKey(edgeTileCoords[0].q, edgeTileCoords[0].r);
-        const tile2Key = getTileKey(edgeTileCoords[1].q, edgeTileCoords[1].r);
-        const tile1 = gameState.tiles.get(tile1Key);
-        const tile2 = gameState.tiles.get(tile2Key);
-        
-        // Helper to check if a specific tile deals ZoC
-        const checkTileZoC = (tile, tKey) => {
-            if (!tile) return false;
+            const tile1Key = getTileKey(edgeTileCoords[0].q, edgeTileCoords[0].r);
+            const tile2Key = getTileKey(edgeTileCoords[1].q, edgeTileCoords[1].r);
+            const tile1 = gameState.tiles.get(tile1Key);
+            const tile2 = gameState.tiles.get(tile2Key);
             
-            // Base Camps always deal ZoC (Unsuppressable)
-            if (activePlayerBaseTiles.includes(tKey)) return true;
+            const checkTileZoC = (tile, tKey) => {
+                if (!tile) return false;
+                if (activePlayerBaseTiles.includes(tKey)) return true; // Base Camp (Unsuppressable)
 
-            // Fortified Units deal ZoC unless Suppressed
-            if (tile.fortifiedByPlayer === activePlayer) {
-                const fortUnit = gameState.units.find(u => u.isFortified && u.position === tKey && u.player === activePlayer);
-                if (fortUnit) {
-                    if (isZoCSuppressed(fortUnit)) {
-                        // Optional: Log suppression once? (Can be spammy, maybe skip log)
-                        return false; 
-                    }
-                    return true;
+                if (tile.fortifiedByPlayer === activePlayer) {
+                    const fortUnit = gameState.units.find(u => u.isFortified && u.position === tKey && u.player === activePlayer);
+                    if (fortUnit && !isZoCSuppressed(fortUnit)) return true;
+                }
+                return false;
+            };
+
+            if (checkTileZoC(tile1, tile1Key) || checkTileZoC(tile2, tile2Key)) {
+                unit.hp -= FORTIFICATION_DAMAGE;
+                triggerDamageVisual(unit, 'normal'); // Added missing visual feedback
+                
+                zocEvents.push({
+                    unitId: unit.id,
+                    damage: FORTIFICATION_DAMAGE,
+                    remainingHp: unit.hp,
+                    isFatal: unit.hp <= 0
+                });
+
+                logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, activePlayer, 3500);
+                if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
+                    unitsToDestroy.push(unit);
                 }
             }
-            return false;
-        };
+        }
+        // --- 2. Center/Fortified Base Camp ZoC (NEW LOGIC) ---
+        else if (unit.positionType === 'center' && unit.isFortified) {
+            // If the enemy unit is fortified DIRECTLY ON the active player's base camp tile
+            if (activePlayerBaseTiles.includes(unit.fortifiedTileKey)) {
+                unit.hp -= FORTIFICATION_DAMAGE;
+                triggerDamageVisual(unit, 'normal'); // Added visual feedback
+                
+                zocEvents.push({
+                    unitId: unit.id,
+                    damage: FORTIFICATION_DAMAGE,
+                    remainingHp: unit.hp,
+                    isFatal: unit.hp <= 0
+                });
 
-        if (checkTileZoC(tile1, tile1Key) || checkTileZoC(tile2, tile2Key)) {
-            unit.hp -= FORTIFICATION_DAMAGE;
-            
-            zocEvents.push({
-                unitId: unit.id,
-                damage: FORTIFICATION_DAMAGE,
-                remainingHp: unit.hp,
-                isFatal: unit.hp <= 0
-            });
-
-            logAction(`P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, activePlayer, 3500);
-            if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
-                unitsToDestroy.push(unit);
+                logAction(`P${unit.player} ${unit.type.name} takes Base Camp ZoC. HP: ${unit.hp}`, activePlayer, 3500);
+                if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
+                    unitsToDestroy.push(unit);
+                }
             }
         }
     });
@@ -658,17 +677,23 @@ function logSiegeStatus() {
             });
 
             // Check front of queue
-            const firstItem = queue[0];
-            if (firstItem && firstItem.turnsRemaining <= 0) {
-                console.log(`[Respawn] Player ${player} unit ready.`);
-                try {
-                    showRespawnModal(player);
-                } catch (e) {
-                    console.error("Failed to open Respawn Modal:", e);
-                }
+        const firstItem = queue[0];
+        if (firstItem && firstItem.turnsRemaining <= 0) {
+            console.log(`[Respawn] Player ${player} unit ready.`);
+
+            if (gameState.isTrainingMode || (gameState.gameMode === 'singleplayer' && player !== gameState.playerSide)) {
+                updateRespawnQueueDisplay();
+                return; 
             }
-    
-            updateRespawnQueueDisplay();
+
+            try {
+                showRespawnModal(player);
+            } catch (e) {
+                console.error("Failed to open Respawn Modal:", e);
+            }
+        }
+
+        updateRespawnQueueDisplay();
         }
         
 function triggerConfetti() {
@@ -864,10 +889,6 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                     updateSelectedUnitInfoPanel();
                 }
                 gameState.currentReachableMoves = getPossibleMoves(unitToDrag);
-                if (unitToDrag.positionType === 'edge') {
-                    const edgeData = gameState.edges.get(unitToDrag.position);
-                    if (edgeData) edgeData.units = edgeData.units.filter(u => u.id !== unitToDrag.id);
-                }
                 canvas.style.cursor = 'grabbing'; 
             }
         }
@@ -949,8 +970,6 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                  const unit = gameState.draggingUnit;
                 if (unit) {
                     if (gameState.dragUnitOriginalType === 'edge' && gameState.dragUnitOriginalPosition) {
-                         const originalEdge = gameState.edges.get(gameState.dragUnitOriginalPosition);
-                         if (originalEdge && !originalEdge.units.find(u => u.id === unit.id)) originalEdge.units.push(unit);
                          unit.position = gameState.dragUnitOriginalPosition; unit.positionType = 'edge';
                      }
                      if (gameState.draggedDistance >= DRAGGED_DISTANCE_THRESHOLD) showInstruction("Invalid drop. Unit returned.", 2000);
@@ -977,8 +996,6 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             if (gameState.isDragging && gameState.draggingUnit) {
                  const unit = gameState.draggingUnit;
                  if (gameState.dragUnitOriginalType === 'edge' && gameState.dragUnitOriginalPosition) {
-                     const originalEdge = gameState.edges.get(gameState.dragUnitOriginalPosition);
-                     if (originalEdge && !originalEdge.units.find(u => u.id === unit.id)) originalEdge.units.push(unit);
                      unit.position = gameState.dragUnitOriginalPosition; unit.positionType = 'edge';
                  }
                 gameState.isDragging = false; 
@@ -997,6 +1014,14 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
 
         function handleTapLogic(x, y) {
             if (gameState.mapMakerMode) return; 
+
+            if (gameState.mustUnfortify) {
+                // allow clicking an action target
+                if (!handleActionTargetSelectionClick(x, y)) {
+                    showInstruction("You MUST select an edge to retreat to!", 2000);
+                }
+                return; // Block all other canvas interactions
+            }
 
             // --- DEBUG: Flag Selection ---
             if (gameSettings.debugModeEnabled) {
@@ -1064,154 +1089,8 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             }
         }
 
-        // --- Original Event Handlers (Now as Wrappers) ---
-        function handleCanvasMouseDown(event) {
-            if (event.button !== 0) return;
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            handleInteractionStart(x, y, false);
-        }
 
-        function handleCanvasMouseMove(event) {
-            if (gameState.gameOver) return;
-            const rect = canvas.getBoundingClientRect(); 
-            const x = event.clientX - rect.left; 
-            const y = event.clientY - rect.top;
 
-            if (gameState.isDragging) {
-                event.preventDefault();
-                handleInteractionMove(x, y);
-            } else {
-                let foundHoverable = false; let newHoveredUnitId = null; const edgeUnits = [];
-                gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
-                for(let i = edgeUnits.length -1; i >= 0; i--) {
-                    const {unit, edge} = edgeUnits[i]; if (unit.player !== gameState.currentPlayer) continue;
-                    const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                    let unitCenterX = mid.x, unitCenterY = mid.y;
-                    const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
-                    const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === unit.id);
-                    if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
-                        const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
-                        const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
-                        let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
-                        let perpX = -dy_val / len, perpY = dx_val / len;
-                        unitCenterX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); unitCenterY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
-                    }
-                    if (Math.sqrt((x - unitCenterX)**2 + (y - unitCenterY)**2) < (UNIT_CLICK_RADIUS * gameState.renderScale)) { newHoveredUnitId = unit.id; foundHoverable = true; break; }
-                }
-                 if (!foundHoverable) {
-                     for (const unit of gameState.units) {
-                         if (unit.isFortified && unit.positionType === 'center' && unit.player === gameState.currentPlayer) {
-                             const tile = gameState.tiles.get(unit.position);
-                             if (tile) {
-                                 const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
-                                 if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5) { newHoveredUnitId = unit.id; foundHoverable = true; break; }
-                             }
-                         }
-                     }
-                 }
-                if (gameState.hoveredUnitId !== newHoveredUnitId) gameState.hoveredUnitId = newHoveredUnitId;
-                canvas.style.cursor = foundHoverable ? 'pointer' : 'default';
-            }
-        }
-
-        function handleCanvasMouseUp(event) {
-            if (gameState.gameOver || !gameState.isDragging) return;
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            handleInteractionEnd(x, y, false);
-        }
-
-        function handleCanvasMouseLeave(event) {
-            handleInteractionCancel();
-            if (gameState.hoveredUnitId !== null) gameState.hoveredUnitId = null;
-            canvas.style.cursor = 'default';
-        }
-
-        function handleCanvasTouchStart(event) {
-            if (gameState.gameOver || event.touches.length !== 1) return;
-            event.preventDefault();
-            const touch = event.touches[0]; 
-            const rect = canvas.getBoundingClientRect();
-            const x = touch.clientX - rect.left;
-            const y = touch.clientY - rect.top;
-
-            if (gameState.mapMakerMode) {
-                const currentTime = Date.now();
-                const timeSinceLastTap = currentTime - lastTap;
-                const distance = pointDistance({x, y}, lastTapPosition);
-
-                if (timeSinceLastTap < DOUBLE_TAP_THRESHOLD_MS && distance < DOUBLE_TAP_MAX_DISTANCE) {
-                    eraseAt(x, y);
-                    lastTap = 0; 
-                    return;
-                } else {
-                    lastTap = currentTime;
-                    lastTapPosition = { x, y };
-                }
-            }
-            handleInteractionStart(x, y, true);
-        }
-
-        function handleCanvasTouchMove(event) {
-            if (gameState.isDragging && gameState.draggingUnit && event.touches.length === 1) {
-                event.preventDefault();
-                const touch = event.touches[0]; 
-                const rect = canvas.getBoundingClientRect();
-                const x = touch.clientX - rect.left;
-                const y = touch.clientY - rect.top;
-                handleInteractionMove(x, y);
-            }
-        }
-
-        function handleCanvasTouchEnd(event) {
-            if (gameState.gameOver) return;
-            const finalTouch = event.changedTouches[0]; 
-            if (!finalTouch) return;
-            
-            const rect = canvas.getBoundingClientRect();
-            const x = finalTouch.clientX - rect.left;
-            const y = finalTouch.clientY - rect.top;
-
-            const wasDragging = gameState.isDragging;
-            const wasShortDrag = gameState.draggedDistance < DRAGGED_DISTANCE_THRESHOLD;
-
-            if (wasDragging) {
-                handleInteractionEnd(x, y, true);
-            }
-            
-            if (!wasDragging || wasShortDrag) {
-                handleTapLogic(x, y);
-            }
-            
-            gameState.draggedDistance = 0;
-            updateSelectedUnitInfoPanel();
-        }
-
-        function handleCanvasTouchCancel(event) {
-            handleInteractionCancel();
-            gameState.draggedDistance = 0;
-        }
-
-        function handleCanvasClick(event) {
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-
-            if (gameState.mapMakerMode) {
-                return;
-            }
-
-            if (gameState.gameOver || event.button !== 0) return;
-            if (dragOperationJustConcluded) { 
-                dragOperationJustConcluded = false; 
-                return; 
-            }
-            
-            handleTapLogic(x, y);
-        }
 
         function handleMoveClick(x, y) {
     const { selectedUnit } = gameState;
@@ -1455,26 +1334,31 @@ function handleUnitSelectionClick(x, y) {
     
         function handleFortifyActionLogic() {
             const { selectedUnit } = gameState;
-             if (!selectedUnit || selectedUnit.hasPerformedMajorAction || selectedUnit.isFortified || selectedUnit.positionType !== 'edge') { showInstruction("Cannot fortify.", 2000); return; }
+            if (!selectedUnit || selectedUnit.hasPerformedMajorAction || selectedUnit.isFortified || selectedUnit.positionType !== 'edge') { 
+                showInstruction("Cannot fortify.", 2000); 
+                return; 
+            }
+            
             const edgeCoords = parseEdgeKey(selectedUnit.position);
-             if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { showInstruction("Unit not on valid edge.", 2000); return; }
+            if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { 
+                showInstruction("Unit not on valid edge.", 2000); 
+                return; 
+            }
 
             const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
-            
-            // --- FIX: Correctly identify Base Camp tiles for both map types ---
             const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
             const enemyBaseTileKeys = new Set();
             
             if (Array.isArray(enemyBaseData)) {
-                // Expansive Mode: Array of Tile Keys
                 enemyBaseData.forEach(k => enemyBaseTileKeys.add(k));
             } else if (typeof enemyBaseData === 'string') {
-                // Standard Mode: Edge Key String
                 const [h1, h2] = parseEdgeKey(enemyBaseData);
                 if (!isNaN(h1.q)) enemyBaseTileKeys.add(getTileKey(h1.q, h1.r));
                 if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
             }
-            // -----------------------------------------------------------------
+
+            const myFlagTileKey = getFlagTileKey(selectedUnit.player);
+            const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
 
             const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); 
             const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
@@ -1482,17 +1366,20 @@ function handleUnitSelectionClick(x, y) {
             const tile2 = gameState.tiles.get(tile2Key);
             
             gameState.validFortifyTargetTileKeys = [];
-            if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key)) {
+
+            if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey)) {
                 gameState.validFortifyTargetTileKeys.push(tile1Key);
             }
-            if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key)) {
+            if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey)) {
                 gameState.validFortifyTargetTileKeys.push(tile2Key);
             }
 
-            if (gameState.validFortifyTargetTileKeys.length === 0) { showInstruction("No valid adjacent tile to fortify.", 2000); return; }
+            if (gameState.validFortifyTargetTileKeys.length === 0) { 
+                showInstruction("No valid adjacent tile to fortify.", 2000); 
+                return; 
+            }
             
             if (gameState.validFortifyTargetTileKeys.length === 1) {
-                // We now pass both the selected unit and the target tile key, as required.
                 completeFortify(selectedUnit, gameState.validFortifyTargetTileKeys[0]);
             } else { 
                 gameState.currentActionState = ACTION_STATES.SELECTING_FORTIFY_TILE;
@@ -1601,9 +1488,14 @@ function handleUnitSelectionClick(x, y) {
             updateSelectedUnitInfoPanel();
         }
 
-        function initializeGrid(tileLayoutMap = null, customUnits = null) {
+        function initializeGrid(tileLayoutMap = null, customUnits = null, baseCampData = null) {
     // 1. Setup Base Camp Defaults if needed
-    if (!tileLayoutMap && !customUnits) {
+    if (baseCampData) {
+        gameState.baseCampPositions = JSON.parse(JSON.stringify(baseCampData));
+    } else if (!tileLayoutMap && !customUnits) {
+        gameState.baseCampPositions = JSON.parse(JSON.stringify(DEFAULT_FLAG_HOME_POSITIONS));
+    } else if (tileLayoutMap === DEFAULT_MAP_LAYOUT_RADIUS_3) {
+        // --- FIX: Force base camps to reset if we switch from a custom map to Singleplayer ---
         gameState.baseCampPositions = JSON.parse(JSON.stringify(DEFAULT_FLAG_HOME_POSITIONS));
     }
 
@@ -1631,18 +1523,8 @@ function handleUnitSelectionClick(x, y) {
     gameState.currentReachableMoves.clear();
     resetActionSelectionStates();
     gameState.actionLog = [];
-<<<<<<< Updated upstream
-    gameState.matchHistory = []; 
-    gameState.unitIdCounter = 0; 
-    gameState.actionLog = [];
-    gameState.respawnQueue = {
-        player1: [],
-        player2: []
-    };
-=======
     gameState.matchHistory = [];
     gameState.respawnQueue = { player1: [], player2: [] };
->>>>>>> Stashed changes
     updateActionLogDisplay();
     updateRespawnQueueDisplay();
 
@@ -1683,33 +1565,55 @@ function handleUnitSelectionClick(x, y) {
             const keyStr = String(key); 
             const [q, r] = keyStr.split(',').map(Number);
             
+            // Filter out messy Volcano Island configs so the renderer doesn't get confused
+            let finalType = value;
+            if (value && value.name === 'Plains' && value.isBaseCampTile !== undefined) {
+                finalType = TILE_TYPES.PLAINS;
+            }
+
             if (isComplexObject) {
-                if (value.type && value.type.name) {
-                    const typeName = value.type.name.toUpperCase();
+                if (finalType.type && finalType.type.name) {
+                    const typeName = finalType.type.name.toUpperCase();
                     const rehydratedType = TILE_TYPES[typeName] || TILE_TYPES.PLAINS;
-                    gameState.tiles.set(keyStr, { q, r, type: rehydratedType, fortifiedByPlayer: null });
+                    gameState.tiles.set(keyStr, { q, r, type: rehydratedType, fortifiedByPlayer: null, isBaseCampTile: false });
                 }
             } else {
-                gameState.tiles.set(keyStr, { q, r, type: value, fortifiedByPlayer: null });
+                gameState.tiles.set(keyStr, { q, r, type: finalType, fortifiedByPlayer: null, isBaseCampTile: false });
             }
         });
     } else {
         DEFAULT_MAP_LAYOUT_RADIUS_3.forEach((type, key) => {
             const [q, r] = key.split(',').map(Number);
-            gameState.tiles.set(key, { q, r, type, fortifiedByPlayer: null });
+            gameState.tiles.set(key, { q, r, type, fortifiedByPlayer: null, isBaseCampTile: false });
+        });
+    }
+
+    // BASE CAMP FLAGGING
+    if (gameState.gridRadius !== 2) { 
+        const p1Tiles = getBaseCampTiles(gameState.baseCampPositions?.player1);
+        const p2Tiles = getBaseCampTiles(gameState.baseCampPositions?.player2);
+        
+        [...p1Tiles, ...p2Tiles].forEach(key => {
+            const tile = gameState.tiles.get(key);
+            if (tile) {
+                tile.type = TILE_TYPES.PLAINS; 
+                tile.isBaseCampTile = true;    
+            }
         });
     }
 
     // 7. Generate Edges
     gameState.tiles.forEach(tile => {
-        const { q, r } = tile;
-        getNeighbors(q, r).forEach(n_coord => {
+        getNeighbors(tile.q, tile.r).forEach(n_coord => {
             if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
-                const edgeKey = getEdgeKey(q, r, n_coord.q, n_coord.r);
+                const edgeKey = getEdgeKey(tile.q, tile.r, n_coord.q, n_coord.r);
                 if (!gameState.edges.has(edgeKey)) {
                     gameState.edges.set(edgeKey, {
-                        q1: q, r1: r, q2: n_coord.q, r2: n_coord.r,
-                        units: [], bridge: false, bridgeHp: null, isPathway: true
+                        q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r,
+                        get units() { 
+                            return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!gameState.draggingUnit || u.id !== gameState.draggingUnit.id)); 
+                        },
+                        bridge: false, bridgeHp: null, isPathway: true
                     });
                 }
             }
@@ -1751,19 +1655,13 @@ function handleUnitSelectionClick(x, y) {
         }
     }
 
-    // 9. Link Units to Edges
-    gameState.units.forEach(unit => {
-        const edge = gameState.edges.get(unit.position);
-        if (edge) edge.units.push(unit);
-    });
-
-    // 10. Initialize Unit State
+    // 9. Initialize Unit State
     gameState.units.forEach(unit => {
         unit.currentMove = unit.stats.speed; 
         unit.hasPerformedMajorAction = false;
     });
 
-    // 11. Initialize Flags
+    // 10. Initialize Flags
     if (gameState.gameMode !== 'arcade') {
         if (gameState.baseCampPositions.player1 && gameState.baseCampPositions.player2) {
             gameState.flags = {
@@ -2058,13 +1956,53 @@ canvas.addEventListener('contextmenu', (event) => {
     if (gameState.mapMakerMode) {
         event.preventDefault();
         const rect = canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
+        const { x, y } = getRelativeCoordinates(event.clientX, event.clientY); 
         eraseAt(x, y);
+
     }
 });
 
         window.onload = function () {
+
+            function showCalibrationCard() {
+                const dummyMaxUnit = {
+                    player: 1,
+                    typeId: 'MELEE',
+                    type: { name: 'Melee' },
+                    level: 3,
+                    stats: { hp: 12, maxHp: 12, speed: 4, damage: 3, defense: 1 },
+                    // Force 3 in all upgrades to fill every single pip slot visually
+                    upgrades: { health: 3, speed: 3, damage: 3, defense: 3 }
+                };
+
+                const calibrationDiv = document.createElement('div');
+                calibrationDiv.id = 'calibrationCardContainer';
+                calibrationDiv.style.position = 'fixed';
+                calibrationDiv.style.top = '20px';
+                calibrationDiv.style.left = '20px';
+                calibrationDiv.style.zIndex = '99999';
+                calibrationDiv.style.backgroundColor = 'rgba(48, 64, 80, 0.95)';
+                calibrationDiv.style.padding = '20px';
+                calibrationDiv.style.borderRadius = '12px';
+                calibrationDiv.style.border = '2px solid #FFC020';
+                calibrationDiv.style.boxShadow = '0 10px 30px rgba(0,0,0,0.8)';
+                calibrationDiv.style.cursor = 'move'; // Indicates it's draggable
+
+                // Note: font-size is strictly locked to 10px here so 1em = exactly 10px for your math!
+                calibrationDiv.innerHTML = `
+                    <h3 style="color: #FFC020; margin-top: 0; margin-bottom: 15px; font-family: 'Geostar', cursive; text-align: center; pointer-events: none;">Card Calibrator</h3>
+                    <div class="unit-card" style="font-size: 10px; margin: 0 auto; pointer-events: none;">
+                        ${getUnitCardHTML(dummyMaxUnit, false)}
+                    </div>
+                `;
+
+                document.body.appendChild(calibrationDiv);
+
+                // Re-use your existing drag code to make it movable
+                makeElementDraggable(calibrationDiv);
+            }
+            
+            showCalibrationCard();
 
             // --- Initialize Debug Console System Immediately ---
             setupDebugConsoleSystem();
@@ -2141,6 +2079,7 @@ canvas.addEventListener('contextmenu', (event) => {
 
             document.getElementById('playAsBlueButton').addEventListener('click', () => startSingleplayerGame(1));
             document.getElementById('playAsRedButton').addEventListener('click', () => startSingleplayerGame(2));
+            document.getElementById('trainingModeButton').addEventListener('click', startTrainingMode);
 
             document.getElementById('localMultiplayerButton').addEventListener('click', () => {
                 // First, completely exit the map maker mode, which restores the UI.
@@ -2292,6 +2231,7 @@ canvas.addEventListener('contextmenu', (event) => {
             animationsCheckbox.addEventListener('change', (e) => {
                 gameSettings.animationsEnabled = e.target.checked;
                 saveSettings();
+                gameState.needsRedraw = true;
             });
 
             passTurnCheckbox.addEventListener('change', (e) => {
@@ -2302,6 +2242,7 @@ canvas.addEventListener('contextmenu', (event) => {
             fancyVisualsCheckbox.addEventListener('change', (e) => {
                 gameSettings.fancyVisualsEnabled = e.target.checked;
                 saveSettings();
+                gameState.needsRedraw = true;
             });
 
             tooltipsCheckbox.addEventListener('change', (e) => {
@@ -2314,6 +2255,7 @@ canvas.addEventListener('contextmenu', (event) => {
                 gameSettings.uiScale = scaleValue;
                 applyUiScale(); 
                 saveSettings(); 
+                gameState.needsRedraw = true;
             });
 
             // --- Debug Mode Toggle ---
@@ -2322,32 +2264,45 @@ canvas.addEventListener('contextmenu', (event) => {
             
             // Set initial console visibility based on loaded settings
             const consoleModal = document.getElementById('debugConsoleModal');
+            const trainingBtn = document.getElementById('trainingModeButton'); // <-- ADD THIS
+
             if (gameSettings.debugModeEnabled) {
                 consoleModal.style.display = 'flex';
                 // Reset position to top-right default on load
                 consoleModal.style.top = '10px';
                 consoleModal.style.right = '10px';
                 consoleModal.style.left = 'auto';
+                
+                toggleCalibrationCard(true); 
+                if (trainingBtn) trainingBtn.style.display = 'block'; // <-- ADD THIS
             } else {
                 consoleModal.style.display = 'none';
+                
+                toggleCalibrationCard(false);
+                if (trainingBtn) trainingBtn.style.display = 'none'; // <-- ADD THIS
             }
 
             debugModeCheckbox.addEventListener('change', (e) => {
                 gameSettings.debugModeEnabled = e.target.checked;
                 saveSettings();
+                const trainingBtn = document.getElementById('trainingModeButton'); 
+
                 if (!gameSettings.debugModeEnabled) {
                     clearSelectionAndDebugState(); 
                     consoleModal.style.display = 'none';
+                    toggleCalibrationCard(false); 
+                    if(trainingBtn) trainingBtn.style.display = 'none'; 
                 } else {
                     consoleModal.style.display = 'flex';
-                    // Reset position to top-right
                     consoleModal.style.top = '10px';
                     consoleModal.style.right = '10px';
                     consoleModal.style.left = 'auto';
+                    toggleCalibrationCard(true);
+                    if(trainingBtn) trainingBtn.style.display = 'block'; 
                 }
                 console.log(`Debug Mode: ${gameSettings.debugModeEnabled ? 'ON' : 'OFF'}`);
             });
-            // ------------------------
+
 
             const customConfirmModalOverlay = document.getElementById('customConfirmModal');
             customConfirmModalOverlay.addEventListener('click', (event) => {
@@ -2707,8 +2662,6 @@ document.querySelectorAll('.swap-choice').forEach(btn => {
 
         }
 
-<<<<<<< Updated upstream
-=======
 //  AI TRAINING SIMULATOR FUNCTIONS
 
 function abortTrainingMode() {
@@ -2888,4 +2841,3 @@ function startTrainingMode() {
     
     runTrainingHyperLoop();
 }
->>>>>>> Stashed changes

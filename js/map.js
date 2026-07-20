@@ -432,7 +432,8 @@ function performFloodFill(startQ, startR) {
             }
         }
     }
-    autoSaveMap(); // Save the result of the fill
+    autoSaveMap();
+    gameState.needsRedraw = true;
 }
 
 function updateMainButtonsForTestMode(isTesting) {
@@ -1017,7 +1018,11 @@ function buildMapMakerControls() {
         const newRadius = parseInt(event.target.value, 10);
         if (newRadius !== gameState.gridRadius) {
             document.getElementById('customConfirmMessage').textContent = 'Resizing the map will clear all units and terrain. Are you sure?';
-            currentConfirmAction = () => { resizeMapGrid(newRadius); currentCancelAction = null; };
+            currentConfirmAction = () => { 
+                resizeMapGrid(newRadius); 
+                autoSaveMap(); 
+                currentCancelAction = null; 
+            };
             currentCancelAction = () => { sizeSlider.value = gameState.gridRadius; updateSizeLabel(gameState.gridRadius); };
             const confirmModal = document.getElementById('customConfirmModal');
             if (confirmModal) {
@@ -1148,7 +1153,10 @@ function resizeMapGrid(newRadius) {
                 if (!gameState.edges.has(edgeKey)) {
                     gameState.edges.set(edgeKey, {
                         q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r,
-                        units: [], bridge: false, bridgeHp: null, isPathway: true
+                        get units() { 
+                            return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!gameState.draggingUnit || u.id !== gameState.draggingUnit.id)); 
+                        },
+                        bridge: false, bridgeHp: null, isPathway: true
                     });
                 }
             }
@@ -1167,11 +1175,9 @@ function resizeMapGrid(newRadius) {
              gameState.flags.p2_flag.homePosition = null;
         }
     }
-
-    if (gameState.mapMakerMode) {
-        autoSaveMap();
-    }
     
+    gameState.needsRedraw = true;
+
     showInstruction(`Map resized to ${newRadius === 2 ? 'Compact (Arcade)' : newRadius === 3 ? 'Normal' : 'Expansive'}.`, 2500);
 }
 
@@ -1184,7 +1190,7 @@ function eraseAt(x, y) {
     
     // Prioritize erasing units if clicking near an edge with units on it
     if (edge && edge.units.length > 0 && distance < (HEX_SIZE * 0.4)) {
-        const unitToRemove = edge.units.pop(); // Remove the last unit added
+        const unitToRemove = edge.units[edge.units.length - 1]; 
         gameState.units = gameState.units.filter(u => u.id !== unitToRemove.id);
     } else {
         // Otherwise, erase the tile by setting it to plains
@@ -1198,6 +1204,7 @@ function eraseAt(x, y) {
         }
     }
     autoSaveMap();
+    gameState.needsRedraw = true;
 }
 
 function clearMapForMaker() {
@@ -1208,10 +1215,7 @@ function clearMapForMaker() {
     });
 
     // Clear all units
-    gameState.units = [];
-    gameState.edges.forEach(edge => {
-        edge.units = [];
-    });
+    gameState.units = [];   
 
     // Reset Base Camp Data
     if (gameState.gridRadius === 3) {
@@ -1231,6 +1235,7 @@ function clearMapForMaker() {
 
     showInstruction('Map Cleared!', 2000);
     autoSaveMap(); // Autosave the cleared state
+    gameState.needsRedraw = true;
 }
 
 function updateBaseCampLocations(sliderValue) {
@@ -1397,17 +1402,16 @@ function applyMapMakerBrush(x, y) {
                         const otherTile = gameState.tiles.get(getTileKey(otherTileQ, otherTileR));
                         
                         if (otherTile && otherTile.type === TILE_TYPES.WATER) {
-                            edge.units.forEach(unitToRemove => {
-                                gameState.units = gameState.units.filter(u => u.id !== unitToRemove.id);
-                            });
-                            edge.units = [];
+                            // Filter via master array, don't try to clear the getter array!
+                            const unitsToRemove = edge.units;
+                            gameState.units = gameState.units.filter(u => !unitsToRemove.some(rem => rem.id === u.id));
                         }
                     }
                 });
             }
         }
 
-    // --- UNIT BRUSH LOGIC ---
+ // --- UNIT BRUSH LOGIC ---
     } else if (brush.type === 'unit') {
         const { key: closestEdgeKey } = findClosestEdgeToPoint(x, y);
         if (!closestEdgeKey) return;
@@ -1417,7 +1421,6 @@ function applyMapMakerBrush(x, y) {
             return;
         }
 
-        // ... (Rest of unit logic remains the same) ...
         if (!isEdgePlaceable(closestEdgeKey)) {
             showInstruction("Cannot place a unit on this edge.", 1500);
             return;
@@ -1448,7 +1451,8 @@ function applyMapMakerBrush(x, y) {
 
         const newUnit = createUnit(brush.player, brush.value, closestEdgeKey);
         gameState.units.push(newUnit);
-        edge.units.push(newUnit);
     }
+    
     autoSaveMap();
+    gameState.needsRedraw = true;
 }

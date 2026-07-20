@@ -74,15 +74,22 @@
             return tileType === TILE_TYPES.PLAINS || tileType === TILE_TYPES.FOREST || tileType === TILE_TYPES.MOUNTAIN;
         }
 
-        // Function to set CSS Variables from the TEAM_COLORS object
-        function updateCssVariables() {
+        // Function to set CSS Variables from a colors object (defaults to TEAM_COLORS)
+        function updateCssVariables(sourceColors = TEAM_COLORS) {
             const root = document.documentElement;
-            root.style.setProperty('--p1-color-secondary', TEAM_COLORS.player1.secondary);
-            root.style.setProperty('--p2-color-secondary', TEAM_COLORS.player2.secondary);
+            root.style.setProperty('--p1-color-primary', sourceColors.player1.primary);
+            root.style.setProperty('--p2-color-primary', sourceColors.player2.primary);
+            
+            root.style.setProperty('--p1-color-secondary', sourceColors.player1.secondary);
+            root.style.setProperty('--p2-color-secondary', sourceColors.player2.secondary);
+            
+            root.style.setProperty('--p1-color-accent', sourceColors.player1.accent);
+            root.style.setProperty('--p2-color-accent', sourceColors.player2.accent);
         }
 
         function updateTurnDisplay() {
             // This function is now ONLY responsible for text updates.
+            gameState.needsRedraw = true;
             // The canvas outline color is handled in the gameLoop.
             if (gameState.mapMakerMode) {
                 // If we enter map maker mode, we still want to hide the turn text.
@@ -96,6 +103,7 @@
         }
 
         function updateGlobalTurnDisplay() {
+            gameState.needsRedraw = true;   
             if (ui.globalTurnCounterDisplay) {
                 ui.globalTurnCounterDisplay.textContent = `Turn: ${gameState.globalTurnNumber}`;
             }
@@ -112,6 +120,7 @@
         }
 
         function updateSelectedUnitInfoPanel() {
+            gameState.needsRedraw = true;
     if (gameState.mapMakerMode) return;
     
     const { selectedUnit, currentActionState } = gameState;
@@ -141,6 +150,9 @@
                 if (!isSelectingUnfortify) {
                    fortifyDisabledCondition = getPotentialUnfortifyTargets(selectedUnit).length === 0;
                 }
+                if (gameState.mustUnfortify) {
+                    fortifyDisabledCondition = true;
+                }
                 updateActionButtonState(ui.fortifyUnfortifyButton, "Unfortify", "Cancel Unfortify", isSelectingUnfortify, canPerformMajorAction && canAffordFortify, fortifyDisabledCondition);
             } else { 
                 if (!isSelectingFortify) {
@@ -162,8 +174,14 @@
                             if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
                         }
 
-                        const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile1Key);
-                        const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && !enemyBaseTileKeys.has(tile2Key);
+                        // Get the single specific flag tiles for both players
+                        const myFlagTileKey = getFlagTileKey(selectedUnit.player);
+                        const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
+
+                        // Block enemy bases, block friendly FLAG tile (UNLESS carrying flag), but ALLOW friendly BASE tiles AND enemy FLAG tile
+                        const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey);
+                        const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey);
+                        
                         fortifyDisabledCondition = !(canFortifyTile1 || canFortifyTile2) || selectedUnit.positionType === 'center';
                     } else {
                         fortifyDisabledCondition = true;
@@ -763,16 +781,14 @@
                     resizeMapGrid(3);
                 }   
 
-                initializeGrid(mapData.tiles, mapData.units);
+                initializeGrid(mapData.tiles, mapData.units, mapData.baseCampPositions);
         
-                gameState.baseCampPositions = JSON.parse(JSON.stringify(mapData.baseCampPositions));
-        
-                if (gameState.flags && mapData.baseCampPositions.player1) {
-                    gameState.flags.p1_flag.homePosition = gameState.baseCampPositions.player1;
-                    gameState.flags.p2_flag.homePosition = gameState.baseCampPositions.player2;
-                }
+        if (gameState.flags && mapData.baseCampPositions.player1) {
+            gameState.flags.p1_flag.homePosition = gameState.baseCampPositions.player1;
+            gameState.flags.p2_flag.homePosition = gameState.baseCampPositions.player2;
+        }
 
-                showInstruction(`Preset map '${mapData.name}' loaded. Player 1's turn.`, 4000);
+        showInstruction(`Preset map '${mapData.name}' loaded. Player 1's turn.`, 4000); 
             } catch (error) {
                 console.error("[CRITICAL FAILURE] loadPresetMap crashed:", error);
                 alert("Error loading preset map. Check console.");
@@ -970,14 +986,37 @@
         </div>
     `;
     
-    // Attach Listeners DIRECTLY to the pulsing pips!
+    // Attach Listeners to the pulsing pips
     container.querySelectorAll('.pip-upgrade-target').forEach(pip => {
         pip.addEventListener('click', (e) => {
             const stat = e.target.dataset.upgradeStat;
             const success = applyUnitUpgrade(unit, stat);
+            
             if (success) {
                 consumeRespawnCharge(unit.player);
                 hideRespawnModal();
+
+                // FORCED UNFORTIFY
+                if (unit.isFortified && unit.stats.defense <= 0) {
+                    const validTargets = getPotentialUnfortifyTargets(unit);
+                    
+                    if (validTargets.length === 0) {
+                        // Anti-Soft-Lock: If they are 100% surrounded, the unit is crushed.
+                        handleUnitDeath(unit, "crushed");
+                    } 
+                    else if (validTargets.length === 1) {
+                        // Quality of Life: If there is only 1 valid edge, do it automatically
+                        showInstruction(`${unit.type.name} can no longer hold the fort!`, 3000);
+                        completeUnfortify(unit, validTargets[0]);
+                    } 
+                    else {
+                        // Force the player to choose where to retreat
+                        gameState.mustUnfortify = true;
+                        gameState.selectedUnit = unit;
+                        handleUnfortifyActionLogic();
+                        showInstruction(`Defense critical! You MUST select an edge to retreat to.`, 4000);
+                    }
+                }
             }
         });
     });
@@ -995,13 +1034,90 @@
             gameState.respawnQueue[queueKey].shift(); // Remove used charge
             updateRespawnQueueDisplay(); 
             
-            // Check if NEXT charge is also ready (Rare, but possible)
-            const queue = gameState.respawnQueue[queueKey];
-            if (queue.length > 0 && queue[0].turnsRemaining <= 0) {
-                // Re-open for next charge? Maybe wait a beat.
-                setTimeout(() => showRespawnModal(player), 500);
+        // Check if NEXT charge is also ready (Rare, but possible)
+        const queue = gameState.respawnQueue[queueKey];
+        if (queue.length > 0 && queue[0].turnsRemaining <= 0) {
+            // --- FIX: Prevent AI from opening the modal ---
+            if (gameState.isTrainingMode || (gameState.gameMode === 'singleplayer' && player !== gameState.playerSide)) {
+                return; // AI handles its own loop
+            }
+            // Re-open for next charge
+            setTimeout(() => showRespawnModal(player), 500);
+        }
+        }
+
+        // DEBUG: CALIBRATION CARD TOOL
+        function toggleCalibrationCard(forceShow) {
+            let calibrationDiv = document.getElementById('calibrationCardContainer');
+
+            // 1. Create the card if it doesn't exist yet
+            if (!calibrationDiv) {
+                const dummyMaxUnit = {
+                    player: 1,
+                    typeId: 'MELEE',
+                    type: { name: 'Melee' },
+                    level: 3,
+                    stats: { hp: 12, maxHp: 12, speed: 4, damage: 3, defense: 1 },
+                    upgrades: { health: 3, speed: 3, damage: 3, defense: 3 }
+                };
+
+                calibrationDiv = document.createElement('div');
+                calibrationDiv.id = 'calibrationCardContainer';
+                calibrationDiv.style.position = 'fixed';
+                calibrationDiv.style.top = '20px';
+                calibrationDiv.style.left = '20px';
+                calibrationDiv.style.zIndex = '99999';
+                calibrationDiv.style.backgroundColor = 'rgba(48, 64, 80, 0.95)';
+                calibrationDiv.style.padding = '15px';
+                calibrationDiv.style.borderRadius = '12px';
+                calibrationDiv.style.border = '2px solid #FFC020';
+                calibrationDiv.style.boxShadow = '0 10px 30px rgba(0,0,0,0.8)';
+                
+                calibrationDiv.innerHTML = `
+                    <div id="calibrationCardContainerHeader" style="cursor: move; padding-bottom: 10px; border-bottom: 1px solid #4a6075; margin-bottom: 15px; text-align: center;">
+                        <h3 style="color: #FFC020; margin: 0; font-family: 'Geostar', cursive; pointer-events: none; font-size: 1.2em;">UI Calibrator</h3>
+                    </div>
+                    
+                    <button id="calibrationCardCloseBtn" style="position: absolute; top: 10px; right: 10px; background: none; border: none; cursor: pointer; padding: 5px; z-index: 9999; pointer-events: auto; display: block;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F0F0F0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+
+                    <div class="unit-card" style="font-size: 10px; margin: 0 auto; pointer-events: none;">
+                        ${getUnitCardHTML(dummyMaxUnit, false)}
+                    </div>
+                    <p style="color: #bdc3c7; font-size: 12px; max-width: 225px; margin-top: 15px; margin-bottom: 0; text-align: center; pointer-events: none;">
+                        Adjust <b>cards.css</b> and refresh.
+                    </p>
+                `;
+
+                document.body.appendChild(calibrationDiv);
+
+                // --- FIX: Add stopPropagation so dragging doesn't steal the click ---
+                const closeBtn = document.getElementById('calibrationCardCloseBtn');
+                
+                closeBtn.addEventListener('mousedown', (e) => {
+                    e.stopPropagation(); // Prevent the drag logic from triggering
+                });
+                
+                closeBtn.addEventListener('click', () => {
+                    calibrationDiv.style.display = 'none';
+                });
+
+                // Attach your existing drag logic to the header
+                makeElementDraggable(calibrationDiv);
+            }
+
+            // 2. Toggle visibility
+            if (forceShow !== undefined) {
+                calibrationDiv.style.display = forceShow ? 'block' : 'none';
+            } else {
+                calibrationDiv.style.display = calibrationDiv.style.display === 'none' ? 'block' : 'none';
             }
         }
+
 
         // --- DEBUG CONSOLE SYSTEM ---
         function setupDebugConsoleSystem() {
@@ -1052,8 +1168,9 @@
                 document.getElementById('debugConsoleModal').style.display = 'none';
             });
 
-            // Alt + C Toggle
+            // Alt + C Toggle Console & Alt + X Abort Training
             document.addEventListener('keydown', (e) => {
+                // Console toggle
                 if (e.altKey && (e.key === 'c' || e.key === 'C')) {
                     if (gameSettings.debugModeEnabled) {
                         const modal = document.getElementById('debugConsoleModal');
@@ -1062,6 +1179,52 @@
                         } else {
                             modal.style.display = 'none';
                         }
+                    }
+                }
+                // Abort Training
+                if (e.altKey && (e.key === 'x' || e.key === 'X')) {
+                    if (gameState.isTrainingMode) {
+                        console.log("--- TRAINING SIMULATION ABORTED BY USER ---");
+                        gameState.isTrainingMode = false;
+                        gameState.gameOver = true; // Kills the execution loop
+                        document.getElementById('trainingBanner').style.display = 'none';
+                        
+                        const blocker = document.getElementById('trainingInteractionBlocker');
+                        if (blocker) blocker.style.display = 'none';
+
+                        showInstruction("Training Aborted. Brain Saved.", 3000);
+                        if (typeof saveAIBrain === 'function') saveAIBrain();
+                        
+                        // --- PROPER SETTINGS RESTORATION ---
+                        if (gameState.preTrainingSettings) {
+                            gameSettings.animationsEnabled = gameState.preTrainingSettings.animations;
+                            gameSettings.fancyVisualsEnabled = gameState.preTrainingSettings.fancy;
+                        } else {
+                            loadSettings(); // Safe fallback
+                        }
+                        
+                        // --- FULL BOARD SANITIZATION ---
+                        setTimeout(() => { 
+                            // Reset game configuration strictly back to default Local Multiplayer
+                            gameState.gameMode = 'local';
+                            gameState.playerSide = null;
+                            gameState.gameOver = false;
+                            
+                            // This completely clears ghost interactions, dragging, and hover states
+                            clearSelectionAndDebugState(); 
+                            
+                            // Re-build the grid properly for a human
+                            initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+                            
+                            const modal = document.getElementById('gameMenuModal');
+                            document.getElementById('mainMenuContent').style.display = 'block';
+                            document.getElementById('singleplayerMenuContent').style.display = 'none';
+                            document.getElementById('multiplayerMenuContent').style.display = 'none';
+                            if (modal) {
+                                modal.style.display = 'flex';
+                                setTimeout(() => modal.classList.add('modal-visible'), 10);
+                            }
+                        }, 100); // 100ms ensures the AI async loop has fully bled out before rebuilding
                     }
                 }
             });
@@ -1147,8 +1310,8 @@ function getUnitCardHTML(unit, isUpgradeMode = false) {
     const spdUp = unit.upgrades.speed || 0;
     const hpUp = unit.upgrades.health || 0;
 
-    const teamPrimary = unit.player === 1 ? TEAM_COLORS.player1.primary : TEAM_COLORS.player2.primary;
-    const teamAccent = unit.player === 1 ? TEAM_COLORS.player1.accent : TEAM_COLORS.player2.accent;
+    const teamPrimary = unit.player === 1 ? 'var(--p1-color-primary)' : 'var(--p2-color-primary)';
+    const teamAccent = unit.player === 1 ? 'var(--p1-color-accent)' : 'var(--p2-color-accent)';
     const borderColor = unit.level > 0 ? PALETTE.YELLOW_GOLD : '#FFF';
     
     const levelText = unit.level > 0 ? `+${unit.level}` : '0';
@@ -1165,20 +1328,20 @@ function getUnitCardHTML(unit, isUpgradeMode = false) {
             </div>
         </div>
 
-        <img src="assets/icons/Attack.png" class="card-icon c-ic-atk" alt="Atk">
+        <img src="assets/icons/attack.png" class="card-icon c-ic-atk" alt="Atk">
         <div class="card-val c-val-atk">${unit.stats.damage}</div>
         <div class="card-pips-row c-pips-atk">${genPips(atkUp, 'damage')}</div>
 
-        <img src="assets/icons/Defense.png" class="card-icon c-ic-def" alt="Def">
+        <img src="assets/icons/defense.png" class="card-icon c-ic-def" alt="Def">
         <div class="card-val c-val-def">${unit.stats.defense}</div>
         <div class="card-pips-row c-pips-def">${genPips(defUp, 'defense')}</div>
 
-        <img src="assets/icons/Speed.png" class="card-icon c-ic-spd" alt="Spd">
+        <img src="assets/icons/speed.png" class="card-icon c-ic-spd" alt="Spd">
         <div class="card-val c-val-spd">${unit.stats.speed}</div>
         <div class="card-pips-row c-pips-spd">${genPips(spdUp, 'speed')}</div>
 
         <div class="card-pips-col">${genPips(hpUp, 'health')}</div>
-        <img src="assets/icons/Health.png" class="card-icon c-ic-hp" alt="HP">
+        <img src="assets/icons/health.png" class="card-icon c-ic-hp" alt="HP">
         <div class="card-val c-val-hp">${unit.stats.maxHp}</div>
     `;
 }
@@ -1217,3 +1380,169 @@ function createCardBackDOM() {
     div.className = 'card-back';
     return div;
 }
+
+        // HELPER: Relative Coordinate Translation
+        function getRelativeCoordinates(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            
+            // 1. Internal resolution of the game
+            const internalW = canvas.width;
+            const internalH = canvas.height;
+            
+            // 2. CSS bounding box dimensions
+            const cssW = rect.width;
+            const cssH = rect.height;
+            
+            // 3. Determine the uniform scale factor applied by 'object-fit: contain'
+            const scaleX = cssW / internalW;
+            const scaleY = cssH / internalH;
+            const scale = Math.min(scaleX, scaleY); // object-fit: contain uses the smallest scale
+            
+            // 4. Calculate the actual rendered dimensions of the image on screen
+            const renderedW = internalW * scale;
+            const renderedH = internalH * scale;
+            
+            // 5. Calculate letterboxing offsets (empty space added by the browser)
+            const offsetX = (cssW - renderedW) / 2;
+            const offsetY = (cssH - renderedH) / 2;
+            
+            // 6. Translate the raw click, subtracting the padding, then scaling up to internal resolution
+            return {
+                x: (clientX - rect.left - offsetX) / scale,
+                y: (clientY - rect.top - offsetY) / scale
+            };
+        }
+
+        function handleCanvasMouseDown(event) {
+            if (event.button !== 0) return;
+            const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
+            handleInteractionStart(x, y, false);
+        }
+
+        function handleCanvasMouseMove(event) {
+            if (gameState.gameOver) return;
+            const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
+
+            if (gameState.isDragging) {
+                event.preventDefault();
+                handleInteractionMove(x, y);
+            } else {
+                let foundHoverable = false; let newHoveredUnitId = null; const edgeUnits = [];
+                gameState.edges.forEach(edge => { 
+                    if (edge.units) edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }); 
+                });
+                for(let i = edgeUnits.length -1; i >= 0; i--) {
+                    const {unit, edge} = edgeUnits[i]; if (unit.player !== gameState.currentPlayer) continue;
+                    const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                    let unitCenterX = mid.x, unitCenterY = mid.y;
+                    const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
+                    const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === unit.id);
+                    if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
+                        const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
+                        const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
+                        let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
+                        let perpX = -dy_val / len, perpY = dx_val / len;
+                        unitCenterX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); unitCenterY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
+                    }
+                    if (Math.sqrt((x - unitCenterX)**2 + (y - unitCenterY)**2) < (UNIT_CLICK_RADIUS * gameState.renderScale)) { newHoveredUnitId = unit.id; foundHoverable = true; break; }
+                }
+                 if (!foundHoverable) {
+                     for (const unit of gameState.units) {
+                         if (unit.isFortified && unit.positionType === 'center' && unit.player === gameState.currentPlayer) {
+                             const tile = gameState.tiles.get(unit.position);
+                             if (tile) {
+                                 const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
+                                 if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5) { newHoveredUnitId = unit.id; foundHoverable = true; break; }
+                             }
+                         }
+                     }
+                 }
+                if (gameState.hoveredUnitId !== newHoveredUnitId) {
+                    gameState.hoveredUnitId = newHoveredUnitId;
+                    gameState.needsRedraw = true; 
+                }
+                canvas.style.cursor = foundHoverable ? 'pointer' : 'default';
+            }
+        }
+
+        function handleCanvasMouseUp(event) {
+            if (gameState.gameOver || !gameState.isDragging) return;
+            const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
+            handleInteractionEnd(x, y, false);
+        }
+
+        function handleCanvasMouseLeave(event) {
+            handleInteractionCancel();
+            if (gameState.hoveredUnitId !== null) gameState.hoveredUnitId = null;
+            canvas.style.cursor = 'default';
+        }
+
+        function handleCanvasTouchStart(event) {
+            if (gameState.gameOver || event.touches.length !== 1) return;
+            // Removed preventDefault() here to allow scrolling on canvas if needed
+            const touch = event.touches[0]; 
+            const { x, y } = getRelativeCoordinates(touch.clientX, touch.clientY);
+
+            if (gameState.mapMakerMode) {
+                const currentTime = Date.now();
+                const timeSinceLastTap = currentTime - lastTap;
+                const distance = pointDistance({x, y}, lastTapPosition);
+
+                if (timeSinceLastTap < DOUBLE_TAP_THRESHOLD_MS && distance < DOUBLE_TAP_MAX_DISTANCE) {
+                    eraseAt(x, y);
+                    lastTap = 0; 
+                    return;
+                } else {
+                    lastTap = currentTime;
+                    lastTapPosition = { x, y };
+                }
+            }
+            handleInteractionStart(x, y, true);
+        }
+
+        function handleCanvasTouchMove(event) {
+            if (gameState.isDragging && gameState.draggingUnit && event.touches.length === 1) {
+                event.preventDefault(); // Only prevent scroll if ACTIVELY dragging a unit
+                const touch = event.touches[0]; 
+                const { x, y } = getRelativeCoordinates(touch.clientX, touch.clientY);
+                handleInteractionMove(x, y);
+            }
+        }
+
+        function handleCanvasTouchEnd(event) {
+            if (gameState.gameOver) return;
+            const finalTouch = event.changedTouches[0]; 
+            if (!finalTouch) return;
+            
+            const { x, y } = getRelativeCoordinates(finalTouch.clientX, finalTouch.clientY);
+
+            const wasDragging = gameState.isDragging;
+            const wasShortDrag = gameState.draggedDistance < DRAGGED_DISTANCE_THRESHOLD;
+
+            if (wasDragging) {
+                handleInteractionEnd(x, y, true);
+            }
+            
+            if (!wasDragging || wasShortDrag) {
+                handleTapLogic(x, y);
+            }
+            
+            gameState.draggedDistance = 0;
+            updateSelectedUnitInfoPanel();
+        }
+
+        function handleCanvasTouchCancel(event) {
+            handleInteractionCancel();
+            gameState.draggedDistance = 0;
+        }
+
+        function handleCanvasClick(event) {
+            if (gameState.mapMakerMode) return;
+            if (gameState.gameOver || event.button !== 0) return;
+            if (dragOperationJustConcluded) { 
+                dragOperationJustConcluded = false; 
+                return; 
+            }
+            const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
+            handleTapLogic(x, y);
+        }

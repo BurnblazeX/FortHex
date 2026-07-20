@@ -36,6 +36,7 @@ let gameState = {
     
     // Logical Game State
     currentActionState: ACTION_STATES.IDLE,
+    mustUnfortify: false,
     mapMakerMode: false,
     mapMakerBrush: { type: 'tile', value: TILE_TYPES.PLAINS, player: null },
     mapMakerLastPaintedHexKey: null,
@@ -60,6 +61,7 @@ let gameState = {
     playerActionTaken: { player1: false, player2: false },
     isTestingMap: false,
     fillToolActive: false,
+    needsRedraw: true, 
 };
 
 let currentDrawingColors = JSON.parse(JSON.stringify(TEAM_COLORS));
