@@ -1509,32 +1509,34 @@ function createCardBackDOM() {
             }
         }
 
-        function handleCanvasTouchEnd(event) {
-            if (gameState.gameOver) return;
-            const finalTouch = event.changedTouches[0]; 
-            if (!finalTouch) return;
-            
-            const { x, y } = getRelativeCoordinates(finalTouch.clientX, finalTouch.clientY);
+function handleCanvasTouchEnd(event) {
+    if (gameState.gameOver) return;
+    const finalTouch = event.changedTouches[0]; 
+    if (!finalTouch) return;
+    
+    const { x, y } = getRelativeCoordinates(finalTouch.clientX, finalTouch.clientY);
 
-            const wasDragging = gameState.isDragging;
-            const wasShortDrag = gameState.draggedDistance < DRAGGED_DISTANCE_THRESHOLD;
+    const wasDragging = gameState.isDragging;
+    const wasShortDrag = gameState.draggedDistance < DRAGGED_DISTANCE_THRESHOLD;
 
-            if (wasDragging) {
-                handleInteractionEnd(x, y, true);
-            }
-            
-            if (!wasDragging || wasShortDrag) {
-                handleTapLogic(x, y);
-            }
-            
-            gameState.draggedDistance = 0;
-            updateSelectedUnitInfoPanel();
-        }
+    if (wasDragging) {
+        handleInteractionEnd(x, y, true);
+    }
+    
+    if (!wasDragging || wasShortDrag) {
+        handleTapLogic(x, y);
+    }
+    
+    gameState.draggedDistance = 0;
+    dragOperationJustConcluded = true; 
+    updateSelectedUnitInfoPanel();
+}
 
-        function handleCanvasTouchCancel(event) {
-            handleInteractionCancel();
-            gameState.draggedDistance = 0;
-        }
+function handleCanvasTouchCancel(event) {
+    handleInteractionCancel();
+    gameState.draggedDistance = 0;
+    dragOperationJustConcluded = true; // same ghost-click guard on cancel
+}
 
         function handleCanvasClick(event) {
             if (gameState.mapMakerMode) return;

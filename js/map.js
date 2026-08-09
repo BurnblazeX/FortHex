@@ -1311,6 +1311,8 @@ function updateBaseCampLocations(sliderValue) {
             tile.isBaseCampTile = true; // Set the property
         }
     });
+
+    gameState.needsRedraw = true;
 }
 
 function applyMapMakerBrush(x, y) {

@@ -1608,13 +1608,15 @@ function handleUnitSelectionClick(x, y) {
             if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
                 const edgeKey = getEdgeKey(tile.q, tile.r, n_coord.q, n_coord.r);
                 if (!gameState.edges.has(edgeKey)) {
-                    gameState.edges.set(edgeKey, {
-                        q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r,
-                        get units() { 
+                    const newEdge = { q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r, bridge: false, bridgeHp: null, isPathway: true };
+                    Object.defineProperty(newEdge, 'units', {
+                        get: function() { 
                             return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!gameState.draggingUnit || u.id !== gameState.draggingUnit.id)); 
                         },
-                        bridge: false, bridgeHp: null, isPathway: true
+                        configurable: true,
+                        enumerable: false
                     });
+                    gameState.edges.set(edgeKey, newEdge);
                 }
             }
         });
@@ -1963,47 +1965,7 @@ canvas.addEventListener('contextmenu', (event) => {
 });
 
         window.onload = function () {
-
-            function showCalibrationCard() {
-                const dummyMaxUnit = {
-                    player: 1,
-                    typeId: 'MELEE',
-                    type: { name: 'Melee' },
-                    level: 3,
-                    stats: { hp: 12, maxHp: 12, speed: 4, damage: 3, defense: 1 },
-                    // Force 3 in all upgrades to fill every single pip slot visually
-                    upgrades: { health: 3, speed: 3, damage: 3, defense: 3 }
-                };
-
-                const calibrationDiv = document.createElement('div');
-                calibrationDiv.id = 'calibrationCardContainer';
-                calibrationDiv.style.position = 'fixed';
-                calibrationDiv.style.top = '20px';
-                calibrationDiv.style.left = '20px';
-                calibrationDiv.style.zIndex = '99999';
-                calibrationDiv.style.backgroundColor = 'rgba(48, 64, 80, 0.95)';
-                calibrationDiv.style.padding = '20px';
-                calibrationDiv.style.borderRadius = '12px';
-                calibrationDiv.style.border = '2px solid #FFC020';
-                calibrationDiv.style.boxShadow = '0 10px 30px rgba(0,0,0,0.8)';
-                calibrationDiv.style.cursor = 'move'; // Indicates it's draggable
-
-                // Note: font-size is strictly locked to 10px here so 1em = exactly 10px for your math!
-                calibrationDiv.innerHTML = `
-                    <h3 style="color: #FFC020; margin-top: 0; margin-bottom: 15px; font-family: 'Geostar', cursive; text-align: center; pointer-events: none;">Card Calibrator</h3>
-                    <div class="unit-card" style="font-size: 10px; margin: 0 auto; pointer-events: none;">
-                        ${getUnitCardHTML(dummyMaxUnit, false)}
-                    </div>
-                `;
-
-                document.body.appendChild(calibrationDiv);
-
-                // Re-use your existing drag code to make it movable
-                makeElementDraggable(calibrationDiv);
-            }
-            
-            showCalibrationCard();
-
+        
             // --- Initialize Debug Console System Immediately ---
             setupDebugConsoleSystem();
 

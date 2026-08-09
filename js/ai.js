@@ -185,7 +185,11 @@ function loadPopulation() {
 
 function savePopulation() {
     if (!aiPopulation) return;
-    localStorage.setItem(AI_POP_STORAGE_KEY, JSON.stringify(aiPopulation));
+    try {
+        localStorage.setItem(AI_POP_STORAGE_KEY, JSON.stringify(aiPopulation));
+    } catch (e) {
+        console.error('[AI] Failed to save population (localStorage full?).', e);
+    }
 }
 
 // Kept so any existing call site (e.g. abortTrainingMode) that still calls saveAIBrain() keeps working.

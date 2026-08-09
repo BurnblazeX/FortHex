@@ -576,6 +576,7 @@
                 gameState.units.push(newUnit);
                 const edge = gameState.edges.get(spawnEdgeKey);
                 logAction(`P${player} ${unitType.name} has returned to the fight!`, player);
+                gameState.needsRedraw = true; 
                 return true;
             }
             
@@ -1063,6 +1064,7 @@
         }
 
         function attemptToResupplyForts(playerNum) {
+            if (gameState.gameMode === 'arcade' || !gameState.flags) return;
             const playerSupplyKey = `player${playerNum}`;
             const unsuppliedForts = gameState.units.filter(u => 
                 u.player === playerNum && 
@@ -1214,7 +1216,7 @@
             }
             logAction(`${unitToFortify.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
 
-            if (gameState.gameMode !== 'arcade') {
+            if (gameState.gameMode !== 'arcade' && gameState.flags) {
                 const enemyPlayer = unitToFortify.player === 1 ? 2 : 1;
                 const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
                 
@@ -2280,7 +2282,7 @@
     unit.currentMove -= costToMove;
 
     // FLAG CAPTURE LOGIC
-    if (gameState.gameMode !== 'arcade') {
+    if (gameState.gameMode !== 'arcade' && gameState.flags) {
         const enemyPlayer = unit.player === 1 ? 2 : 1;
         
         let enemyFlagHome = null;

@@ -250,7 +250,7 @@ function createMapDataObject() {
         units: gameState.units.map(u => ({
             id: u.id,
             player: u.player,
-            typeName: u.type.name.toUpperCase(), 
+            typeName: (u.type && u.type.name) ? u.type.name.toUpperCase() : (u.typeId || 'MELEE'),
             position: u.position
         })),
         baseCampPositions: gameState.baseCampPositions
@@ -379,6 +379,8 @@ function rehydrateGameState() {
             }
         }
 
+        gameState.activeAnimations = [];
+
         // 5. Restore Unit Logic (Getters & Stats)
         gameState.units.forEach(unit => {
             // Re-attach 'type' getter
@@ -411,7 +413,7 @@ function rehydrateGameState() {
                     return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && u.id !== gameState.draggingUnit?.id); 
                 },
                 configurable: true,
-                enumerable: true
+                enumerable: false
             });
         });
 
