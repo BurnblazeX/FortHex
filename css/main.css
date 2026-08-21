@@ -1,3 +1,9 @@
+.text-4xl { font-size: 2.25rem; line-height: 2.5rem; }
+.font-bold { font-weight: 700; }
+.mb-6 { margin-bottom: 1.5rem; }
+.text-center { text-align: center; }
+.text-amber-400 { color: #fbbf24; }
+
 /* ==========================================================================
    CSS VARIABLES & THEME
    ========================================================================== */

@@ -515,6 +515,7 @@
                 canHeal: true,
                 supplyLine: null,
                 lastAttackedByHostileOnTurn: 0,
+                spearWalled: false,
                 
                 // VETERANCY
                 level: 0,
@@ -777,6 +778,7 @@
                 return new Map(); 
             }
             if (!unit || unit.currentMove < 1 || unit.isFortified) return new Map();
+            if (unit.spearWalled) return new Map(); // Spear Wall persists for the rest of the turn
     
             if (unit.hasPerformedMajorAction) {
                 if (!unit.type.canMoveAfterAttack) {
@@ -1258,14 +1260,15 @@
                 }
             }
 
-            const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
-            if (playerFlag && playerFlag.status !== 'carried') {
-                // Instead of funding one fort, recalculate the entire player's network
-                // to account for shared supply lines.
-                recalculatePlayerSupplyNetwork(fortifyingPlayer);
-
-            } else {
-                logAction(`P${unitToFortify.player} ${unitToFortify.type.name} fortified, but is unsupplied due to stolen flag.`, fortifyingPlayer, 3000);
+            if (gameState.gameMode !== 'arcade') {
+                const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
+                if (playerFlag && playerFlag.status !== 'carried') {
+                    // Instead of funding one fort, recalculate the entire player's network
+                    // to account for shared supply lines.
+                    recalculatePlayerSupplyNetwork(fortifyingPlayer);
+                } else {
+                    logAction(`P${unitToFortify.player} ${unitToFortify.type.name} fortified, but is unsupplied due to stolen flag.`, fortifyingPlayer, 3000);
+                }
             }
 
             let unitsToDestroy = [];
@@ -1796,6 +1799,7 @@
                 const spearWallOnTarget = targetUnitInfo.edgeKey ? isEdgeAdjacentToSpearWall(attackingUnit, targetUnitInfo.edgeKey) : false;
                 if (spearWallOnAttacker || spearWallOnTarget) {
                     hitAndRunMessage = "Spear Wall prevents further movement!";
+                    attackingUnit.spearWalled = true;
                     gameState.currentReachableMoves.clear();
                 } else if (attackingUnit.currentMove > 0) {
                     hitAndRunMessage = "Horseman can move again!";

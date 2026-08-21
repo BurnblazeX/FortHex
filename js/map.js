@@ -205,6 +205,20 @@ function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
                 }
             });
 
+            // Read each player's actual home side from their real base camp tiles rather
+            // than assuming P1=left/P2=right, which breaks for maps whose base camps were
+            // set up on the opposite/rotated hemisphere.
+            const getPlayerHomeQ = (player) => {
+                const tiles = getBaseCampTiles(gameState.baseCampPositions[`player${player}`]);
+                if (tiles.length === 0) return null;
+                const sumQ = tiles.reduce((sum, key) => sum + Number(key.split(',')[0]), 0);
+                return sumQ / tiles.length;
+            };
+            const p1HomeQ = getPlayerHomeQ(1);
+            const p2HomeQ = getPlayerHomeQ(2);
+            const useDynamicHemisphere = p1HomeQ !== null && p2HomeQ !== null && p1HomeQ !== p2HomeQ;
+            const p1IsLeft = useDynamicHemisphere ? (p1HomeQ < p2HomeQ) : true;
+
             if (landEdges.length < unitLimit * 2) {
                 console.error(`CRITICAL: Not enough land edges (${landEdges.length}). Placing randomly.`);
                 landEdges.sort(() => 0.5 - Math.random());
@@ -238,15 +252,18 @@ function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
                 landEdges.forEach(edgeKey => {
                     const coords = parseEdgeKey(edgeKey);
                     const avgQ = (coords[0].q + coords[1].q) / 2;
-                    if (avgQ < hemisphereThresholdQ) {
+                    const belongsToP1 = useDynamicHemisphere
+                        ? (p1IsLeft ? avgQ < hemisphereThresholdQ : avgQ >= hemisphereThresholdQ)
+                        : avgQ < hemisphereThresholdQ;
+                    if (belongsToP1) {
                         p1CandidateEdges.push({ key: edgeKey, q: avgQ });
                     } else {
                         p2CandidateEdges.push({ key: edgeKey, q: avgQ });
                     }
                 });
 
-                p1CandidateEdges.sort((a, b) => a.q - b.q);
-                p2CandidateEdges.sort((a, b) => b.q - a.q);
+                p1CandidateEdges.sort((a, b) => p1IsLeft ? a.q - b.q : b.q - a.q);
+                p2CandidateEdges.sort((a, b) => p1IsLeft ? b.q - a.q : a.q - b.q);
 
                 const usedEdges = new Set();
                 const allUnitTypes = [UNIT_TYPES.MELEE, UNIT_TYPES.ARCHER, UNIT_TYPES.PIKEMAN, UNIT_TYPES.HORSEMAN];
@@ -1457,4 +1474,30 @@ function applyMapMakerBrush(x, y) {
     
     autoSaveMap();
     gameState.needsRedraw = true;
+}
+
+function computeRotatedBaseCampPositions(radius, sliderValue) {
+    const sliderToRotations = [3, 2, 1, 0, -1, -2];
+    const rotations = sliderToRotations[parseInt(sliderValue, 10)];
+    const defaults = BASE_CAMP_DEFAULTS[radius];
+    if (!defaults) return null;
+
+    const rotateTiles = (tileKeys) => tileKeys.map(key => {
+        const [q, r] = key.split(',').map(Number);
+        const rotated = rotateAxial(q, r, rotations);
+        return getTileKey(rotated.q, rotated.r);
+    });
+
+    const p1Tiles = rotateTiles(defaults.player1.tiles);
+    const p2Tiles = rotateTiles(defaults.player2.tiles);
+
+    if (radius === 3) {
+        const p1c = p1Tiles.map(k => { const [q, r] = k.split(',').map(Number); return { q, r }; });
+        const p2c = p2Tiles.map(k => { const [q, r] = k.split(',').map(Number); return { q, r }; });
+        return {
+            player1: p1c.length >= 2 ? getEdgeKey(p1c[0].q, p1c[0].r, p1c[1].q, p1c[1].r) : null,
+            player2: p2c.length >= 2 ? getEdgeKey(p2c[0].q, p2c[0].r, p2c[1].q, p2c[1].r) : null
+        };
+    }
+    return { player1: p1Tiles, player2: p2Tiles };
 }

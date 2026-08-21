@@ -299,6 +299,7 @@ function proceedToEndTurn() {
     gameState.units.forEach(unit => {
         if (unit.player === gameState.currentPlayer) {
             unit.hasPerformedMajorAction = false; 
+            unit.spearWalled = false;
             
             // UPDATE: Use unit.stats.speed instead of type.baseMove
             let baseMoveForTurn = unit.stats.speed;
@@ -369,19 +370,22 @@ function proceedToEndTurn() {
 }
 
 function handleGenerateNewMap() {
-             gameState.isDragging = false; 
-             gameState.draggingUnit = null;
+            gameState.isDragging = false; 
+            gameState.draggingUnit = null;
             
             // 1. Generate the map tiles
             const newLayout = generateImprovedMap(gameState.gridRadius);
             
-            // 2. Initialize the grid with these tiles
-            initializeGrid(newLayout); 
-            
-            // 3. Explicitly update base camp positions based on the current slider and radius
-            // This ensures the game logic matches the visual map size.
+            // 2. Resolve the correct base camps for the current slider/radius BEFORE placing
+            // units, so procedural placement lines up with the actual bases instead of
+            // whatever a previously-loaded preset (River Fork/Volcano Island - which put P1/P2
+            // on opposite hemispheres) left behind in gameState.baseCampPositions.
             const sliderVal = document.getElementById('baseCampSlider').value;
-            updateBaseCampLocations(sliderVal);
+            
+            const correctedBaseCamps = computeRotatedBaseCampPositions(gameState.gridRadius, sliderVal);
+
+            // 3. Initialize the grid with these tiles and the corrected base camps
+            initializeGrid(newLayout, null, correctedBaseCamps);
             
             showInstruction("New map generated. Player 1's Turn.", 3000);
         }
@@ -847,11 +851,12 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
             
             for (let i = edgeUnits.length - 1; i >= 0; i--) {
-                 const {unit, edge} = edgeUnits[i];
-                 if (unit.player !== gameState.currentPlayer) continue;
+                const {unit, edge} = edgeUnits[i];
+                if (unit.player !== gameState.currentPlayer) continue;
                 if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; 
                 if (unit.isFortified || unit.currentMove < 1) continue;
-                 if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
+                if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
+                if (unit.spearWalled) continue;
                  
                  const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                  let unitCenterX = mid.x, unitCenterY = mid.y;
@@ -1318,7 +1323,7 @@ function handleUnitSelectionClick(x, y) {
                     console.log(`[Selection] Unit Selected: ${gameState.selectedUnit.id}`);
                     resetActionSelectionStates();
                     const unit = gameState.selectedUnit;
-                    const canPhysicallyMove = !unit.isFortified && unit.positionType === 'edge' && unit.currentMove >= 1;
+                    const canPhysicallyMove = !unit.isFortified && unit.positionType === 'edge' && unit.currentMove >= 1 && !unit.spearWalled;
                     const isAllowedToMove = !unit.hasPerformedMajorAction || unit.type.canMoveAfterAttack;
                     if (canPhysicallyMove && isAllowedToMove) {
                         gameState.currentReachableMoves = getPossibleMoves(unit);

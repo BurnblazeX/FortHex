@@ -193,6 +193,7 @@ function attemptLegacyConversion(data) {
             if (u.turnsFortifiedAtBase === undefined) u.turnsFortifiedAtBase = 0;
             if (u.fortifyCooldown === undefined) u.fortifyCooldown = 0;
             if (u.level === undefined) u.level = 0;
+            if (u.spearWalled === undefined) u.spearWalled = false;
             if (!u.upgrades) u.upgrades = { health: 0, speed: 0, damage: 0, defense: 0 };
 
             return u;
