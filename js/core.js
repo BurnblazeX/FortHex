@@ -1184,6 +1184,9 @@
     //Immediately clear move highlights so they don't persist during animation
     gameState.currentReachableMoves.clear();
 
+    unitToFortify.hasPerformedMajorAction = true;
+
+
     const animation = {
         type: 'fortify',
         unit: unitToFortify,
@@ -1352,6 +1355,8 @@
         oldFortifiedTile.fortifiedByPlayer = null;
     }
     unitToUnfortify.supplyLine = null;
+    unitToUnfortify.hasPerformedMajorAction = true;
+
 
     const animation = {
         type: 'unfortify',
@@ -1749,6 +1754,9 @@
     const liveAttacker = gameState.units.find(u => u.id === attackingUnit.id);
     if (!liveAttacker) { console.error("Attacker missing from master list"); return; }
     attackingUnit = liveAttacker;
+
+    attackingUnit.hasPerformedMajorAction = true;
+    gameState.currentReachableMoves.clear();
 
     // 3. Calculate Base Damage (Robust Fallback)
     // Check if .stats exists (New System) or fallback to .type (Old System) to prevent NaN

@@ -82,6 +82,7 @@ let currentCancelAction = null;
 let dragOperationJustConcluded = false;
 let lastTap = 0;
 let lastTapPosition = { x: 0, y: 0 };
+let lastTouchInteractionTime = 0;
 let fileLoadContext = 'game_save';
 
 const ActionManager = {

@@ -55,7 +55,7 @@ const THEME = {
 };
         
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B29//2d"; // Updated to reflect the latest build version
+        const BUILD_VERSION = "B29//2e"; 
         const HEX_SIZE = 70; 
         const CANVAS_WIDTH_NORMAL = (2 * 3 + 1.5) * (HEX_SIZE * Math.sqrt(3));
         const CANVAS_HEIGHT_NORMAL = (2 * 3 + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;

@@ -1413,8 +1413,14 @@ function createCardBackDOM() {
             };
         }
 
+        const SYNTHETIC_MOUSE_EVENT_GUARD_MS = 500;
+        function isLikelySyntheticFromTouch() {
+            return Date.now() - lastTouchInteractionTime < SYNTHETIC_MOUSE_EVENT_GUARD_MS;
+        }
+
         function handleCanvasMouseDown(event) {
             if (event.button !== 0) return;
+            if (isLikelySyntheticFromTouch()) return;
             const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
             handleInteractionStart(x, y, false);
         }
@@ -1467,6 +1473,7 @@ function createCardBackDOM() {
 
         function handleCanvasMouseUp(event) {
             if (gameState.gameOver || !gameState.isDragging) return;
+            if (isLikelySyntheticFromTouch()) return;
             const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
             handleInteractionEnd(x, y, false);
         }
@@ -1479,7 +1486,8 @@ function createCardBackDOM() {
 
         function handleCanvasTouchStart(event) {
             if (gameState.gameOver || event.touches.length !== 1) return;
-            // Removed preventDefault() here to allow scrolling on canvas if needed
+            event.preventDefault();  
+            lastTouchInteractionTime = Date.now();
             const touch = event.touches[0]; 
             const { x, y } = getRelativeCoordinates(touch.clientX, touch.clientY);
 
@@ -1513,7 +1521,7 @@ function handleCanvasTouchEnd(event) {
     if (gameState.gameOver) return;
     const finalTouch = event.changedTouches[0]; 
     if (!finalTouch) return;
-    
+    lastTouchInteractionTime = Date.now();
     const { x, y } = getRelativeCoordinates(finalTouch.clientX, finalTouch.clientY);
 
     const wasDragging = gameState.isDragging;
@@ -1535,12 +1543,14 @@ function handleCanvasTouchEnd(event) {
 function handleCanvasTouchCancel(event) {
     handleInteractionCancel();
     gameState.draggedDistance = 0;
-    dragOperationJustConcluded = true; // same ghost-click guard on cancel
+    dragOperationJustConcluded = true; 
+    lastTouchInteractionTime = Date.now();
 }
 
         function handleCanvasClick(event) {
             if (gameState.mapMakerMode) return;
             if (gameState.gameOver || event.button !== 0) return;
+            if (isLikelySyntheticFromTouch()) return;
             if (dragOperationJustConcluded) { 
                 dragOperationJustConcluded = false; 
                 return; 
