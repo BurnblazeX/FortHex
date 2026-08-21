@@ -17,7 +17,11 @@ function checkArcadeVictoryCondition() {
     ui.victoryMessage.textContent = victoryText;
     ui.victoryMessage.style.display = 'block';
     gameState.gameOver = true;
+    gameState.currentActionState = ACTION_STATES.IDLE;
+    gameState.selectedUnit = null;
+    gameState.currentReachableMoves.clear();
     ui.endTurnButton.disabled = true;
+    canvas.style.cursor = 'default';
     triggerConfetti();
     
     // Block interaction immediately
@@ -380,7 +384,8 @@ function handleGenerateNewMap() {
             // units, so procedural placement lines up with the actual bases instead of
             // whatever a previously-loaded preset (River Fork/Volcano Island - which put P1/P2
             // on opposite hemispheres) left behind in gameState.baseCampPositions.
-            const sliderVal = document.getElementById('baseCampSlider').value;
+            const sliderEl = document.getElementById('baseCampSlider');
+            const sliderVal = sliderEl ? sliderEl.value : '3';
             
             const correctedBaseCamps = computeRotatedBaseCampPositions(gameState.gridRadius, sliderVal);
 
@@ -1178,14 +1183,14 @@ function handleActionTargetSelectionClick(x, y) {
                     const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
 
                     if (len_perp_vec > 0) {
-                        const scale = HEX_SIZE / 2;
+                        const scale = (HEX_SIZE * gameState.renderScale) / 2;
                         perp_dx = (perp_dx / len_perp_vec) * scale;
                         perp_dy = (perp_dy / len_perp_vec) * scale;
                         const v = { x: edgeMidX + perp_dx, y: edgeMidY + perp_dy };
                         const w = { x: edgeMidX - perp_dx, y: edgeMidY - perp_dy };
 
                         // --- Check distance from click to the line segment ---
-                        if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * 2)**2) {
+                        if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * gameState.renderScale * 2)**2) {
                             completeBuildBridge(edgeKey);
                             clickedValidTarget = true;
                             break;
@@ -1212,13 +1217,13 @@ function handleActionTargetSelectionClick(x, y) {
                         const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
 
                         if (len_perp_vec > 0) {
-                            const scale = HEX_SIZE / 2;
+                            const scale = (HEX_SIZE * gameState.renderScale) / 2;
                             perp_dx = (perp_dx / len_perp_vec) * scale;
                             perp_dy = (perp_dy / len_perp_vec) * scale;
                             const v = { x: edgeMidX + perp_dx, y: edgeMidY + perp_dy };
                             const w = { x: edgeMidX - perp_dx, y: edgeMidY - perp_dy };
 
-                            if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * 2)**2) {
+                            if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * gameState.renderScale * 2)**2) {
                                 completeAttack(selectedUnit, targetInfo, attackType);
                                 clickedValidTarget = true;
                                 break;
@@ -1226,10 +1231,10 @@ function handleActionTargetSelectionClick(x, y) {
                         }
                     }
                 } else if (targetInfo.unit) {
-                    const targetUnit = targetInfo.unit; let unitX_val, unitY_val, clickRadius = UNIT_CLICK_RADIUS;
+                    const targetUnit = targetInfo.unit; let unitX_val, unitY_val, clickRadius = UNIT_CLICK_RADIUS * gameState.renderScale;
                     if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
                         const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
-                        if (tile) { const centerPixel = axialToPixel(tile.q, tile.r); unitX_val = centerPixel.x; unitY_val = centerPixel.y; clickRadius = FORTIFIED_UNIT_DRAW_SIZE * 1.5; }
+                        if (tile) { const centerPixel = axialToPixel(tile.q, tile.r); unitX_val = centerPixel.x; unitY_val = centerPixel.y; clickRadius = (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5; }
                         else continue;
                     } else if (targetInfo.edgeKey) {
                         const edgeOfTarget = gameState.edges.get(targetInfo.edgeKey); if (!edgeOfTarget) continue;
@@ -1241,7 +1246,7 @@ function handleActionTargetSelectionClick(x, y) {
                             const p1 = axialToPixel(edgeOfTarget.q1, edgeOfTarget.r1); const p2 = axialToPixel(edgeOfTarget.q2, edgeOfTarget.r2);
                             let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
                             let perpX = -dy_val / len, perpY = dx_val / len;
-                            unitX_val += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5); unitY_val += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+                            unitX_val += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); unitY_val += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
                         }
                     } else continue;
                     if (Math.sqrt((x - unitX_val)**2 + (y - unitY_val)**2) < clickRadius) { 
