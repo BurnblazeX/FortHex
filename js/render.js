@@ -435,11 +435,10 @@ function getPerspectivePlayer() {
             ctx.lineCap = originalLineCap;
         }
 
-        function drawFortificationOutlines() {
-            if (gameState.isPassDeviceTransition) return;
-            const currentHexSize = HEX_SIZE * gameState.renderScale; 
-            const fortifiedTilesP1 = new Set();
-            const fortifiedTilesP2 = new Set();
+function drawFortificationOutlines() {
+    const currentHexSize = HEX_SIZE * gameState.renderScale; 
+    const fortifiedTilesP1 = new Set();
+    const fortifiedTilesP2 = new Set();
 
     gameState.tiles.forEach((tile, key) => {
         if (tile.fortifiedByPlayer === 1) fortifiedTilesP1.add(key);
@@ -460,30 +459,12 @@ function getPerspectivePlayer() {
 
     const drawBordersForPlayer = (tileSet, color, playerOwner) => {
         tileSet.forEach(tileKey => {
-            
             const tile = gameState.tiles.get(tileKey);
             if (!tile) return;
 
-            // --- REVISED FOG CHECK (Base Camps Immune) ---
-            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                if (playerOwner !== getPerspectivePlayer() && !tile.isBaseCampTile) {
-                    let isAnyPartVisible = gameState.visionCache.tiles.has(tileKey);
-                    
-                    // If center isn't visible, check if ANY edge is visible
-                    if (!isAnyPartVisible) {
-                        const [q, r] = tileKey.split(',').map(Number);
-                        for (const dir of AXIAL_DIRECTIONS) {
-                            if (gameState.visionCache.edges.has(getEdgeKey(q, r, q + dir.q, r + dir.r))) {
-                                isAnyPartVisible = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!isAnyPartVisible) return; // Completely hidden
-                }
-            }
-            
             const { x: centerX, y: centerY } = axialToPixel(tile.q, tile.r);
+            const isCenterVisible = gameState.visionCache ? gameState.visionCache.tiles.has(tileKey) : true;
+            const applyFog = gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache;
 
             for (let i = 0; i < 6; i++) {
                 const neighborDir = AXIAL_DIRECTIONS[i];
@@ -493,23 +474,36 @@ function getPerspectivePlayer() {
 
                 // Only draw edge if neighbor is NOT in the same set (internal edges hidden)
                 if (!tileSet.has(neighborKey)) {
-                     const v1_idx = MAP_DIRECTION_TO_EDGE_INDEX[i];
-                     const v2_idx = (v1_idx + 1) % 6;
-                     
-                     const vert1_angle = Math.PI / 180 * (60 * v1_idx - 30);
-                     const edge_v1_x = centerX + currentHexSize * Math.cos(vert1_angle);
-                     const edge_v1_y = centerY + currentHexSize * Math.sin(vert1_angle);
+                    
+                    // --- PER-SEGMENT FOG CHECK ---
+                    if (applyFog && playerOwner !== getPerspectivePlayer() && !tile.isBaseCampTile) {
+                        const edgeKey = getEdgeKey(tile.q, tile.r, neighborQ, neighborR);
+                        const isEdgeVisible = gameState.visionCache.edges.has(edgeKey);
+                        
+                        // If this specific edge isn't visible, skip drawing this line!
+                        // (Even if the center is visible, we don't draw hidden borders)
+                        if (!isEdgeVisible) {
+                            continue;
+                        }
+                    }
 
-                     const vert2_angle = Math.PI / 180 * (60 * v2_idx - 30);
-                     const edge_v2_x = centerX + currentHexSize * Math.cos(vert2_angle);
-                     const edge_v2_y = centerY + currentHexSize * Math.sin(vert2_angle);
-                     
-                     ctx.beginPath();
-                     ctx.moveTo(edge_v1_x, edge_v1_y);
-                     ctx.lineTo(edge_v2_x, edge_v2_y);
-                     ctx.strokeStyle = color;
-                     ctx.lineWidth = 5;
-                     ctx.stroke();
+                    const v1_idx = MAP_DIRECTION_TO_EDGE_INDEX[i];
+                    const v2_idx = (v1_idx + 1) % 6;
+                    
+                    const vert1_angle = Math.PI / 180 * (60 * v1_idx - 30);
+                    const edge_v1_x = centerX + currentHexSize * Math.cos(vert1_angle);
+                    const edge_v1_y = centerY + currentHexSize * Math.sin(vert1_angle);
+
+                    const vert2_angle = Math.PI / 180 * (60 * v2_idx - 30);
+                    const edge_v2_x = centerX + currentHexSize * Math.cos(vert2_angle);
+                    const edge_v2_y = centerY + currentHexSize * Math.sin(vert2_angle);
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(edge_v1_x, edge_v1_y);
+                    ctx.lineTo(edge_v2_x, edge_v2_y);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 5;
+                    ctx.stroke();
                 }
             }
         });

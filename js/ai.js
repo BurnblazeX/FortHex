@@ -353,7 +353,6 @@ function getEdgeInfluence(influenceMap, edgeKey) {
     return (influenceMap.get(k1) || 0) + (influenceMap.get(k2) || 0);
 }
 
-// --- AI Reinforcements System ---
 async function handleAIReinforcements() {
     const player = gameState.currentPlayer;
     const queueKey = `player${player}`;
@@ -366,22 +365,16 @@ async function handleAIReinforcements() {
         let actionTaken = false;
 
         const promotableUnits = gameState.units.filter(u => u.player === player && u.level < 3);
-        
-        // AI Logic: Promote if army is full, or 30% chance to promote anyway if units are available
         const shouldPromote = (armySize >= maxUnits) || (promotableUnits.length > 0 && Math.random() < aiBrain.weights.promote_tendency);
 
         if (shouldPromote && promotableUnits.length > 0) {
-            // Pick a random eligible unit
             const targetUnit = promotableUnits[Math.floor(Math.random() * promotableUnits.length)];
-            
-            // Smart stat selection based on class
             let statPool = ['health', 'defense', 'damage', 'speed'];
             if (targetUnit.type.name === 'Archer') statPool = ['damage', 'speed'];
             if (targetUnit.type.name === 'Pikeman') statPool = ['health', 'defense'];
             if (targetUnit.type.name === 'Horseman') statPool = ['speed', 'damage'];
             
             const statToUpgrade = statPool[Math.floor(Math.random() * statPool.length)];
-            
             console.log(`[AI] Promoted ${targetUnit.type.name} (+${statToUpgrade})`);
             applyUnitUpgrade(targetUnit, statToUpgrade);
             consumeRespawnCharge(player);
@@ -389,17 +382,19 @@ async function handleAIReinforcements() {
             await delay(800);
 
         } else if (armySize < maxUnits) {
-// Recruit missing units based on Brain Weights
-const counts = getUnitCountsForPlayer(player);
+            // --- BULLETPROOF UNIT COUNTER ---
+            const counts = { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
+            gameState.units.forEach(u => {
+                if (u.player === player && u.type && u.type.name) {
+                    counts[u.type.name] = (counts[u.type.name] || 0) + 1;
+                }
+            });
 
-        // Sort classes dynamically based on their learned weight (Highest weight first)
-        const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
-            const weightA = (aiBrain.weights[`recruit_${a.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
-            const weightB = (aiBrain.weights[`recruit_${b.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
-            return weightB - weightA; 
-        });
-
-console.log(`[AI] Recruitment preferred order:`, preferredOrder);
+            const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
+                const weightA = (aiBrain.weights[`recruit_${a.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
+                const weightB = (aiBrain.weights[`recruit_${b.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
+                return weightB - weightA; 
+            });
             
             for (const typeKey of preferredOrder) {
                 const unitName = UNIT_TYPES[typeKey].name;
@@ -417,10 +412,9 @@ console.log(`[AI] Recruitment preferred order:`, preferredOrder);
 
         if (!actionTaken) {
             console.log("[AI] Base blocked or unable to use reinforcement charge. Holding.");
-            break; // Prevents infinite loop if base is blocked and all units are level 3
+            break; 
         }
-
-        queue = gameState.respawnQueue[queueKey]; // Refresh queue for next while loop check
+        queue = gameState.respawnQueue[queueKey]; 
     }
 }
 
