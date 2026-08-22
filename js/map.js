@@ -1199,6 +1199,7 @@ function resizeMapGrid(newRadius) {
     gameState.needsRedraw = true;
 
     showInstruction(`Map resized to ${newRadius === 2 ? 'Compact (Arcade)' : newRadius === 3 ? 'Normal' : 'Expansive'}.`, 2500);
+    buildFineGridIndex();
 }
 
 function eraseAt(x, y) {

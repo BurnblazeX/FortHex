@@ -1866,6 +1866,7 @@ function handleUnitSelectionClick(x, y) {
     updateSelectedUnitInfoPanel();
     checkVictoryCondition();
     updateSupplyPointsDisplay();
+    buildFineGridIndex();
 }
 
 ui.endTurnButton.addEventListener('click', () => {

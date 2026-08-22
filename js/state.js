@@ -62,6 +62,7 @@ let gameState = {
     isTestingMap: false,
     fillToolActive: false,
     needsRedraw: true, 
+    fineGrid: new Map(),
     visionCache: { player: null, tiles: new Set(), edges: new Set() },
     visionDirty: true, 
     isPassDeviceTransition: false

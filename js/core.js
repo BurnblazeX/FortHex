@@ -46,6 +46,185 @@
             return (Math.abs(dq) + Math.abs(dr) + Math.abs(ds)) / 2;
         }
 
+ // === Fine Grid System ===
+
+function buildFineGridIndex() {
+    gameState.fineGrid = new Map();
+    
+    // Tiles map to (2q, 2r)
+    gameState.tiles.forEach(tile => {
+        const fq = 2 * tile.q;
+        const fr = 2 * tile.r;
+        const tileKey = getTileKey(tile.q, tile.r);
+        gameState.fineGrid.set(`${fq},${fr}`, { type: 'tile', key: tileKey });
+    });
+
+    // Edges map to (q1+q2, r1+r2)
+    gameState.edges.forEach((edge, edgeKey) => {
+        const fq = edge.q1 + edge.q2;
+        const fr = edge.r1 + edge.r2;
+        gameState.fineGrid.set(`${fq},${fr}`, { type: 'edge', key: edgeKey });
+    });
+}
+
+function getFineCoordForTile(tileKey) {
+    const [q, r] = tileKey.split(',').map(Number);
+    return { fq: 2 * q, fr: 2 * r };
+}
+
+function getFineCoordForEdge(edgeKey) {
+    const [h1, h2] = parseEdgeKey(edgeKey);
+    return { fq: h1.q + h2.q, fr: h1.r + h2.r };
+}
+
+function getFineCoordForUnit(unit) {
+    if (unit.positionType === 'center') {
+        return getFineCoordForTile(unit.position);
+    } else {
+        return getFineCoordForEdge(unit.position);
+    }
+}
+
+function fineDistance(a, b) {
+    return axialDistance(a.fq, a.fr, b.fq, b.fr);
+}
+
+function getFineNeighbors(fq, fr) {
+    return AXIAL_DIRECTIONS.map(dir => ({ fq: fq + dir.q, fr: fr + dir.r }));
+}
+
+function resolveFineCoord(fq, fr) {
+    return gameState.fineGrid.get(`${fq},${fr}`) || null;
+}
+
+function fineRangeQuery(startFine, maxRange, options = {}) {
+    const visited = new Map();
+    const startKeyStr = `${startFine.fq},${startFine.fr}`;
+    const startEntity = resolveFineCoord(startFine.fq, startFine.fr);
+
+    // If the starting coordinate is off-board, return empty immediately
+    if (!startEntity) return visited;
+
+    // Record the starting cell
+    visited.set(startKeyStr, {
+        distance: 0,
+        type: startEntity.type,
+        key: startEntity.key
+    });
+
+    const queue = [{ coord: startFine, distance: 0, entity: startEntity }];
+
+    while (queue.length > 0) {
+        const { coord, distance, entity } = queue.shift();
+
+        // If this entity blocks vision/range beyond it, stop expanding from it.
+        // (It is still included in `visited`, but its neighbors won't be queued).
+        if (options.blocksBeyond && options.blocksBeyond(entity, distance)) {
+            continue;
+        }       
+
+        // Stop expanding if we've reached max range
+        if (distance >= maxRange) {
+            continue;
+        }
+
+        const nextDistance = distance + 1;
+        const neighbors = getFineNeighbors(coord.fq, coord.fr);
+
+        for (const neighbor of neighbors) {
+            const neighborKeyStr = `${neighbor.fq},${neighbor.fr}`;
+
+            if (!visited.has(neighborKeyStr)) {
+                const neighborEntity = resolveFineCoord(neighbor.fq, neighbor.fr);
+                
+                // Only add if it's on the board
+                if (neighborEntity) {
+                    visited.set(neighborKeyStr, {
+                        distance: nextDistance,
+                        type: neighborEntity.type,
+                        key: neighborEntity.key
+                    });
+                    
+                    queue.push({ coord: neighbor, distance: nextDistance, entity: neighborEntity });
+                }
+            }
+        }
+    }
+
+    return visited;
+}
+
+function getVisibleKeysFromUnitFine(unit) {
+    if (!unit) return { edges: new Set(), tiles: new Set() };
+
+    const startCoord = getFineCoordForUnit(unit);
+    
+    // Callback: Mountains AND Forests (vis <= 1) block vision from passing through them.
+    const blocksBeyond = (entity, distance) => {
+        if (distance === 0) return false;
+
+        if (entity.type === 'tile') {
+            const tile = gameState.tiles.get(entity.key);
+            if (tile && getTileVisibility(tile) <= 1) { // Blocks through Mountain AND Forest
+                return true;
+            }
+        } else if (entity.type === 'edge') {
+            const [h1, h2] = parseEdgeKey(entity.key);
+            const t1 = !isNaN(h1.q) ? gameState.tiles.get(getTileKey(h1.q, h1.r)) : null;
+            const t2 = !isNaN(h2.q) ? gameState.tiles.get(getTileKey(h2.q, h2.r)) : null;
+            if ((t1 && getTileVisibility(t1) <= 1) || (t2 && getTileVisibility(t2) <= 1)) {
+                return true;
+            }
+        }
+        return false; 
+    };
+
+    const rangeResult = fineRangeQuery(startCoord, 2, { blocksBeyond });
+    
+    const visibleEdges = new Set();
+    const visibleTiles = new Set();
+    
+    rangeResult.forEach((data) => {
+        if (data.type === 'edge') {
+            const [h1, h2] = parseEdgeKey(data.key);
+            const t1Key = !isNaN(h1.q) ? getTileKey(h1.q, h1.r) : null;
+            const t2Key = !isNaN(h2.q) ? getTileKey(h2.q, h2.r) : null;
+            const t1 = t1Key ? gameState.tiles.get(t1Key) : null;
+            const t2 = t2Key ? gameState.tiles.get(t2Key) : null;
+
+            let isShadowed = false;
+
+            const checkMountainShadow = (tile, tKey) => {
+                // ONLY Mountains (vis === 0) cast the strict side-edge shadow.
+                // Forests (vis === 1) leave their side edges visible.
+                if (tile && getTileVisibility(tile) === 0) {
+                    const mountainFine = getFineCoordForTile(tKey);
+                    const mountainDist = fineDistance(startCoord, mountainFine);
+                    
+                    if (data.distance >= mountainDist) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            if (checkMountainShadow(t1, t1Key) || checkMountainShadow(t2, t2Key)) {
+                isShadowed = true;
+            }
+
+            if (!isShadowed) {
+                visibleEdges.add(data.key);
+            }
+        } else if (data.type === 'tile') {
+            visibleTiles.add(data.key);
+        }
+    });
+
+    return { edges: visibleEdges, tiles: visibleTiles };
+}
+
+// ========================
+
         function calculateBaseCentroid(baseTileKeys) {
             if (!Array.isArray(baseTileKeys) || baseTileKeys.length !== 3) return null;
 

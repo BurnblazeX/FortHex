@@ -1424,6 +1424,63 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             ctx.restore();
         }
 
+function drawFineGridVisibilityComparison() {
+    if (!gameSettings.debugModeEnabled || !gameState.selectedUnit) return;
+
+    const oldVis = getVisibleKeysFromUnit(gameState.selectedUnit);
+    const newVis = getVisibleKeysFromUnitFine(gameState.selectedUnit);
+
+    const currentHexSize = HEX_SIZE * gameState.renderScale;
+    const fineHexRadius = currentHexSize * 0.5; 
+
+    ctx.save();
+
+    // Helper to draw a mini-hex exactly on the fine grid lattice
+    const drawMiniHex = (fq, fr, color) => {
+        // The magic trick: dividing fine coords by 2 gives the exact axial pixel midpoint!
+        const { x, y } = axialToPixel(fq / 2, fr / 2);
+        
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = Math.PI / 180 * (60 * i - 30);
+            const vx = x + fineHexRadius * Math.cos(angle);
+            const vy = y + fineHexRadius * Math.sin(angle);
+            if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // Light border to show the grid
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    };
+
+    // Draw the entire NEW system's vision as a blue honeycomb
+    newVis.tiles.forEach(t => {
+        const f = getFineCoordForTile(t);
+        drawMiniHex(f.fq, f.fr, 'rgba(0, 100, 255, 0.6)');
+    });
+    newVis.edges.forEach(e => {
+        const f = getFineCoordForEdge(e);
+        drawMiniHex(f.fq, f.fr, 'rgba(0, 100, 255, 0.6)');
+    });
+
+    // If the old system grabbed something the new one missed, flag it RED
+    const oldOnlyTiles = [...oldVis.tiles].filter(t => !newVis.tiles.has(t));
+    const oldOnlyEdges = [...oldVis.edges].filter(e => !newVis.edges.has(e));
+
+    oldOnlyTiles.forEach(t => {
+        const f = getFineCoordForTile(t);
+        drawMiniHex(f.fq, f.fr, 'rgba(255, 0, 0, 0.8)');
+    });
+    oldOnlyEdges.forEach(e => {
+        const f = getFineCoordForEdge(e);
+        drawMiniHex(f.fq, f.fr, 'rgba(255, 0, 0, 0.8)');
+    });
+
+    ctx.restore();
+}
+
         function triggerDamageVisual(targetUnit, attackStatus = 'normal') {
             if (gameState.isTrainingMode || !gameSettings.animationsEnabled) return;
             // Get the unit's screen position and size for the effect
@@ -2044,6 +2101,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             drawFogOfWar();
             drawSupplyLines();
             drawDebugVisibilityHighlights(); 
+            drawFineGridVisibilityComparison();
             drawDebugAttackRangeHighlights(); 
 
             if (!gameState.isDragging) {
