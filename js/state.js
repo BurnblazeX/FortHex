@@ -62,6 +62,9 @@ let gameState = {
     isTestingMap: false,
     fillToolActive: false,
     needsRedraw: true, 
+    visionCache: { player: null, tiles: new Set(), edges: new Set() },
+    visionDirty: true, 
+    isPassDeviceTransition: false
 };
 
 let currentDrawingColors = JSON.parse(JSON.stringify(TEAM_COLORS));
@@ -72,6 +75,8 @@ let gameSettings = {
     passTurnConfirmationEnabled: true, 
     tooltipsEnabled: true, 
     debugModeEnabled: false, 
+    fogOfWarEnabled: false,
+    passDeviceBlurEnabled: true,
     uiScale: 1.0
 };
 

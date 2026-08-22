@@ -516,6 +516,7 @@
                 supplyLine: null,
                 lastAttackedByHostileOnTurn: 0,
                 spearWalled: false,
+                ambushed: false,
                 
                 // VETERANCY
                 level: 0,
@@ -577,6 +578,7 @@
                 gameState.units.push(newUnit);
                 const edge = gameState.edges.get(spawnEdgeKey);
                 logAction(`P${player} ${unitType.name} has returned to the fight!`, player);
+                gameState.visionDirty = true;
                 gameState.needsRedraw = true; 
                 return true;
             }
@@ -686,9 +688,9 @@
                 canvas.style.cursor = 'default';
             }
 
+            gameState.visionDirty = true;
             checkVictoryCondition();
             
-            // --- GUARANTEE REDRAW ---
             gameState.needsRedraw = true;
         }
         
@@ -778,7 +780,8 @@
                 return new Map(); 
             }
             if (!unit || unit.currentMove < 1 || unit.isFortified) return new Map();
-            if (unit.spearWalled) return new Map(); // Spear Wall persists for the rest of the turn
+            if (unit.spearWalled) return new Map(); //Spear Wall Prevents Movement
+            if (unit.ambushed) return new Map(); //Ambush Prevents Movement
     
             if (unit.hasPerformedMajorAction) {
                 if (!unit.type.canMoveAfterAttack) {
@@ -830,8 +833,20 @@
             // -------------------------------------------------------
 
             if (nextAdjacentEdgeKey === unit.position && current.pathTaken.length === 1) continue;
-            const nextAdjacentEdgeObject = gameState.edges.get(nextAdjacentEdgeKey); if (!nextAdjacentEdgeObject) continue;
-            if (nextAdjacentEdgeObject.units.some(u => u.player !== unit.player)) continue;
+            const nextAdjacentEdgeObject = gameState.edges.get(nextAdjacentEdgeKey); 
+            if (!nextAdjacentEdgeObject) continue;
+            
+            let enemyBlocks = false;
+            if (nextAdjacentEdgeObject.units.some(u => u.player !== unit.player)) {
+                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                    if (gameState.visionCache.edges.has(nextAdjacentEdgeKey)) {
+                        enemyBlocks = true;
+                    }
+                } else {
+                    enemyBlocks = true; 
+                }
+            }
+            if (enemyBlocks) continue;
             const friendlyUnitsOnNext = nextAdjacentEdgeObject.units.filter(u => u.player === unit.player);
             if (friendlyUnitsOnNext.length >= 2 && !friendlyUnitsOnNext.find(u => u.id === unit.id)) continue;
             const costToTraverseNextEdge = getEdgeCost(unit, nextAdjacentEdgeKey); if (costToTraverseNextEdge === Infinity) continue;
@@ -1314,6 +1329,7 @@
 
             unitsToDestroy.forEach(u => handleUnitDeath(u, "zoc_fort"));
 
+            gameState.visionDirty = true; 
             gameState.currentReachableMoves.clear();
             resetActionSelectionStates();
             updateSelectedUnitInfoPanel();
@@ -1403,6 +1419,7 @@
             }
             logAction(`${unitToUnfortify.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, unfortifyingPlayer, 2500);
             
+            gameState.visionDirty = true;
             recalculatePlayerSupplyNetwork(unfortifyingPlayer);
 
             resetActionSelectionStates();
@@ -1865,7 +1882,7 @@
                         const isBeach = (tile1 && tile1.type !== TILE_TYPES.WATER) || (tile2 && tile2.type !== TILE_TYPES.WATER);
                         [...bridgeEdge.units].forEach(unitOnCollapse => {
                             if (isBeach) {
-                                const fallDamage = 3;
+                                const fallDamage = 5;
                                 unitOnCollapse.hp -= fallDamage;
                                 logParts.push(`P${unitOnCollapse.player} ${unitOnCollapse.type.name} fell as the bridge collapsed and takes ${fallDamage} damage! HP: ${unitOnCollapse.hp}`);
                                 if (unitOnCollapse.hp <= 0) handleUnitDeath(unitOnCollapse, "bridge_collapse");
@@ -2275,39 +2292,73 @@
             return totalEnemyCount >= 2 && occupiedEdgesCount >= 2;
         }
 
-        function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
+function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
     gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
 
-    // 1. MASTER REFERENCE CHECK
     const masterUnit = gameState.units.find(u => u.id === unitToMove.id);
-    if (!masterUnit) {
-        console.error("CRITICAL: Unit not found in master list during move.");
-        return;
-    }
+    if (!masterUnit) { console.error("CRITICAL: Unit not found."); return; }
     const unit = masterUnit;
-
     const originPos = unit.position; 
 
-    // 2. UPDATE UNIT STATE
-    unit.position = targetEdgeKey;
+    // --- AMBUSH RESOLUTION ---
+    let actualTarget = targetEdgeKey;
+    let actualCost = costToMove;
+    let ambushed = false;
+
+    if (path && path.length > 1) {
+        let accumulatedCost = 0;
+        let lastValidEdge = path[0];
+
+        for (let i = 1; i < path.length; i++) {
+            const stepEdgeKey = path[i];
+            const stepEdgeObj = gameState.edges.get(stepEdgeKey);
+            const stepCost = getEdgeCost(unit, stepEdgeKey);
+            
+            const hasEnemy = stepEdgeObj && stepEdgeObj.units.some(u => u.player !== unit.player);
+            const friendlyCount = stepEdgeObj ? stepEdgeObj.units.filter(u => u.player === unit.player).length : 0;
+            const isFull = friendlyCount >= 2 && !stepEdgeObj.units.some(u => u.id === unit.id);
+
+            if (hasEnemy || isFull) {
+                ambushed = true;
+                actualTarget = lastValidEdge;
+                accumulatedCost += stepCost; 
+                break;
+            }
+            
+            accumulatedCost += stepCost;
+            lastValidEdge = stepEdgeKey;
+        }
+
+        if (ambushed) {
+            actualCost = accumulatedCost;
+            unit.ambushed = true; // <-- APPLY THE PENALTY FLAG
+            if (actualTarget === originPos) {
+                logAction(`P${unit.player} ${unit.type.name} was ambushed and halted immediately!`, gameState.currentPlayer, 3000);
+            } else {
+                logAction(`P${unit.player} ${unit.type.name} was ambushed and halted at ${actualTarget.substring(0,5)}...`, gameState.currentPlayer, 3000);
+            }
+        }
+    }
+
+    // UPDATE UNIT STATE
+    unit.position = actualTarget;
     unit.positionType = 'edge';
-    unit.currentMove -= costToMove;
+    unit.currentMove = Math.max(0, unit.currentMove - actualCost); 
 
     // FLAG CAPTURE LOGIC
     if (gameState.gameMode !== 'arcade' && gameState.flags) {
         const enemyPlayer = unit.player === 1 ? 2 : 1;
-        
         let enemyFlagHome = null;
         if (gameState.gridRadius === 4) {
-             if (isInternalBaseEdge(targetEdgeKey)) {
-                const [h1, h2] = parseEdgeKey(targetEdgeKey);
+             if (isInternalBaseEdge(actualTarget)) {
+                const [h1, h2] = parseEdgeKey(actualTarget);
                 const t1 = getTileKey(h1.q, h1.r);
                 const enemyBase = gameState.baseCampPositions[`player${enemyPlayer}`];
                 if (Array.isArray(enemyBase) && enemyBase.includes(t1)) enemyFlagHome = true;
             }
         } else {
             const flagObj = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
-            if (flagObj && flagObj.homePosition === targetEdgeKey) enemyFlagHome = true;
+            if (flagObj && flagObj.homePosition === actualTarget) enemyFlagHome = true;
         }
         
         const enemyFlagObj = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
@@ -2331,50 +2382,33 @@
             updateSupplyPointsBasedOnFlagStatus(enemyPlayer);
 
             const unitPos = getUnitScreenPosition(unit);
-            
-            // DIAGNOSTIC TRACE
-            console.group("FLAG CAPTURE DIAGNOSTICS");
-            console.trace("Capture Triggered");
-            console.log("Calculated unitPos:", unitPos);
-            
             if (unitPos) {
                 gameState.visualEffects.push({
-                    type: 'flag_capture_burst',
-                    x: unitPos.x,
-                    y: unitPos.y,
-                    player: enemyPlayer,
-                    startTime: Date.now(),
-                    duration: 500
+                    type: 'flag_capture_burst', x: unitPos.x, y: unitPos.y,
+                    player: enemyPlayer, startTime: Date.now(), duration: 500
                 });
-                console.log("Pushed to visualEffects array. Current array:", gameState.visualEffects);
-            } else {
-                console.error("unitPos was null! Animation skipped.");
             }
-            console.groupEnd();
         }
     }
 
+    gameState.visionDirty = true;
+    gameState.needsRedraw = true;
+
     checkVictoryCondition();
-    const unitDestroyedByZoC = applyFortificationDamageOnMove(unit, targetEdgeKey);
+    const unitDestroyedByZoC = applyFortificationDamageOnMove(unit, actualTarget);
 
     if (typeof ActionManager !== 'undefined') {
         ActionManager.submitAction({
-            type: "MOVE",
-            turn: gameState.globalTurnNumber,
-            player: gameState.currentPlayer,
-            actorId: unit.id,
-            payload: {
-                from: originPos,
-                to: targetEdgeKey,
-                cost: costToMove,
-                unitState: getUnitSnapshot(unit)
-            }
+            type: "MOVE", turn: gameState.globalTurnNumber, player: gameState.currentPlayer,
+            actorId: unit.id, payload: { from: originPos, to: actualTarget, cost: actualCost, unitState: getUnitSnapshot(unit) }
         });
     }
 
     if (!unitDestroyedByZoC && unit.hp > 0) {
-        logAction(`${unit.type.name} moved. MP: ${Math.floor(unit.currentMove)}`, gameState.currentPlayer);
-        if (unit.currentMove >= 1 && (!unit.hasPerformedMajorAction || unit.type.canMoveAfterAttack)) {
+        if (!ambushed) logAction(`${unit.type.name} moved. MP: ${Math.floor(unit.currentMove)}`, gameState.currentPlayer);
+        
+        // --- PREVENT NEW MOVEMENT HIGHLIGHTS IF AMBUSHED ---
+        if (unit.currentMove >= 1 && (!unit.hasPerformedMajorAction || unit.type.canMoveAfterAttack) && !unit.ambushed) {
             if (gameState.gameMode !== 'singleplayer' || unit.player === gameState.playerSide) {
                 gameState.currentReachableMoves = getPossibleMoves(unit);
             }
@@ -2509,6 +2543,10 @@ function getVisibleKeysFromUnit(unit) {
 
         visibleEdges.add(unit.position);
 
+        getRotationallyAdjacentEdges(unit.position).forEach(adjKey => {
+            visibleEdges.add(adjKey); 
+        });
+
         if (!isNaN(h1.q) && !isNaN(h2.q)) {
             const n1_neighbors = getNeighbors(h1.q, h1.r);
             const commonNeighbors = [];
@@ -2525,22 +2563,6 @@ function getVisibleKeysFromUnit(unit) {
                     if (vis > 0) {
                         visibleTiles.add(endTileKey);
                         
-                        if (vis >= 3) {
-                            const dirToA = { q: h1.q - n.q, r: h1.r - n.r };
-                            const dirToB = { q: h2.q - n.q, r: h2.r - n.r };
-                            const idxA = findDirectionIndex(dirToA);
-                            const idxB = findDirectionIndex(dirToB);
-                            const forbiddenIdx1 = (idxA + 3) % 6;
-                            const forbiddenIdx2 = (idxB + 3) % 6;
-                            
-                            for(let i=0; i<6; i++) {
-                                if (i !== forbiddenIdx1 && i !== forbiddenIdx2) {
-                                    const neighborDir = AXIAL_DIRECTIONS[i];
-                                    const eKey = getEdgeKey(n.q, n.r, n.q + neighborDir.q, n.r + neighborDir.r);
-                                    safeAddEdge(eKey);
-                                }
-                            }
-                        }
                     }
                 }
             });
@@ -2562,3 +2584,56 @@ function getVisibleKeysFromUnit(unit) {
     return { edges: visibleEdges, tiles: visibleTiles };
 }
 
+function computePlayerVision(player) {
+    const visibleTiles = new Set();
+    const visibleEdges = new Set();
+
+    // 1. Add Base Camp Visibility (Force fully visible)
+    const baseData = gameState.baseCampPositions[`player${player}`];
+    let baseTiles = [];
+    if (Array.isArray(baseData)) {
+        baseTiles = baseData;
+    } else if (typeof baseData === 'string') {
+        const [h1, h2] = parseEdgeKey(baseData);
+        if (!isNaN(h1.q)) baseTiles.push(getTileKey(h1.q, h1.r));
+        if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
+    }
+
+    baseTiles.forEach(tileKey => {
+        visibleTiles.add(tileKey);
+        const [q, r] = tileKey.split(',').map(Number);
+        // Force all 6 geometric edges to be visible to clear boundary fog
+        AXIAL_DIRECTIONS.forEach(dir => {
+            visibleEdges.add(getEdgeKey(q, r, q + dir.q, r + dir.r));
+        });
+    });
+
+    const baseVis = getBaseVisibility(player);
+    baseVis.tiles.forEach(t => visibleTiles.add(t));
+    baseVis.edges.forEach(e => visibleEdges.add(e));
+
+    // 2. Add Unit Visibility
+    gameState.units.forEach(unit => {
+        if (unit.player === player) {
+            if (unit.positionType === 'center') {
+                visibleTiles.add(unit.position);
+                const [q, r] = unit.position.split(',').map(Number);
+                // Force all 6 geometric edges to be visible to clear boundary fog
+                AXIAL_DIRECTIONS.forEach(dir => {
+                    visibleEdges.add(getEdgeKey(q, r, q + dir.q, r + dir.r));
+                });
+            } else if (unit.positionType === 'edge') {
+                visibleEdges.add(unit.position);
+                const [h1, h2] = parseEdgeKey(unit.position);
+                if (!isNaN(h1.q)) visibleTiles.add(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) visibleTiles.add(getTileKey(h2.q, h2.r));
+            }
+
+            const vis = getVisibleKeysFromUnit(unit);
+            vis.tiles.forEach(t => visibleTiles.add(t));
+            vis.edges.forEach(e => visibleEdges.add(e));
+        }
+    });
+
+    return { tiles: visibleTiles, edges: visibleEdges };
+}

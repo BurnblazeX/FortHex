@@ -1,8 +1,7 @@
         function drawHexFill(q, r, tileType) {
             const { x, y } = axialToPixel(q, r);
-            const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
-
-            // If we are in map maker mode, force fancy visuals to be off for this draw call.
+            const currentHexSize = HEX_SIZE * gameState.renderScale; 
+            const tileKey = getTileKey(q, r);
             const useFancyVisuals = gameSettings.fancyVisualsEnabled && !gameState.mapMakerMode;
 
             if (useFancyVisuals) {
@@ -223,7 +222,168 @@
              });
         }
 
+        function drawFogOfWar() {
+            // Initialize Animation State Tracker
+            if (!gameState.fogAnimState) {
+                gameState.fogAnimState = { tiles: new Map(), edges: new Map(), lastTime: Date.now() };
+            }
+
+            const now = Date.now();
+            // Cap dt to prevent massive jumps if tab was backgrounded
+            const dt = Math.min((now - gameState.fogAnimState.lastTime) / 1000, 0.1);
+            gameState.fogAnimState.lastTime = now;
+
+            const ANIM_SPEED = 2.0
+            let isAnimating = false;
+
+            // Determine if the system is globally active
+            const isSystemActive = gameState.isPassDeviceTransition || (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode);
+
+            // If system is disabled, check if there's lingering fog left to animate out
+            let hasLingeringFog = false;
+            if (!isSystemActive) {
+                for (let val of gameState.fogAnimState.tiles.values()) if (val > 0) { hasLingeringFog = true; break; }
+                if (!hasLingeringFog) {
+                    for (let val of gameState.fogAnimState.edges.values()) if (val > 0) { hasLingeringFog = true; break; }
+                }
+                if (!hasLingeringFog) return; // Completely clear, safe to abort rendering
+            }
+
+            const currentHexSize = HEX_SIZE * gameState.renderScale;
+            const r_center = currentHexSize * 0.55; 
+            const r_trap_in = currentHexSize * 0.45;
+            const r_trap_out = currentHexSize * 1.05; 
+
+            ctx.save();
+            ctx.beginPath(); // Main path for fully static fog (prevents seams)
+            let hasStaticFog = false;
+            const animatingPieces = [];
+
+            // Helper to interpolate current fog value
+            const getAnimValue = (map, key, target) => {
+                if (!gameSettings.animationsEnabled) return target;
+                let current = map.has(key) ? map.get(key) : (isSystemActive ? 1.0 : 0.0);
+                
+                if (current !== target) {
+                    if (current < target) current = Math.min(target, current + ANIM_SPEED * dt);
+                    else current = Math.max(target, current - ANIM_SPEED * dt);
+                    
+                    map.set(key, current);
+                    if (current !== target) isAnimating = true;
+                }
+                return current;
+            };
+
+            gameState.tiles.forEach(tile => {
+                const { q, r } = tile;
+                const tileKey = getTileKey(q, r);
+                const { x, y } = axialToPixel(q, r);
+
+                let targetCenter = 1.0;
+                let targetEdges = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+
+                if (gameState.isPassDeviceTransition) {
+                    // Targets remain 1.0
+                } else if (isSystemActive && gameState.visionCache) {
+                    if (gameState.visionCache.tiles.has(tileKey)) targetCenter = 0.0;
+                    for (let k = 0; k < 6; k++) {
+                        const dirIdx = MAP_DIRECTION_TO_EDGE_INDEX.indexOf(k);
+                        const neighborDir = AXIAL_DIRECTIONS[dirIdx];
+                        const edgeKey = getEdgeKey(q, r, q + neighborDir.q, r + neighborDir.r);
+                        if (gameState.visionCache.edges.has(edgeKey)) targetEdges[k] = 0.0;
+                    }
+                } else {
+                    targetCenter = 0.0;
+                    targetEdges = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+                }
+
+                const currentCenter = getAnimValue(gameState.fogAnimState.tiles, tileKey, targetCenter);
+
+                const v_center = [];
+                const v_trap_in = [];
+                const v_trap_out = [];
+                
+                for (let i = 0; i < 6; i++) {
+                    const angle = Math.PI / 180 * (60 * i - 30);
+                    v_center.push({ x: x + r_center * Math.cos(angle), y: y + r_center * Math.sin(angle) });
+                    v_trap_in.push({ x: x + r_trap_in * Math.cos(angle), y: y + r_trap_in * Math.sin(angle) });
+                    v_trap_out.push({ x: x + r_trap_out * Math.cos(angle), y: y + r_trap_out * Math.sin(angle) });
+                }
+
+                // --- 1. Center Fog Processing ---
+                if (currentCenter > 0) {
+                    if (currentCenter === 1.0) {
+                        ctx.moveTo(v_center[0].x, v_center[0].y);
+                        for (let i = 1; i < 6; i++) ctx.lineTo(v_center[i].x, v_center[i].y);
+                        ctx.closePath();
+                        hasStaticFog = true;
+                    } else {
+                        animatingPieces.push({ val: currentCenter, pts: v_center, cx: x, cy: y });
+                    }
+                }
+
+                // --- 2. Edge Trapezoid Fog Processing ---
+                for (let i = 0; i < 6; i++) {
+                    const dirIdx = MAP_DIRECTION_TO_EDGE_INDEX.indexOf(i);
+                    const neighborDir = AXIAL_DIRECTIONS[dirIdx];
+                    const edgeKey = getEdgeKey(q, r, q + neighborDir.q, r + neighborDir.r);
+                    
+                    const currentEdge = getAnimValue(gameState.fogAnimState.edges, edgeKey, targetEdges[i]);
+
+                    if (currentEdge > 0) {
+                        const next_i = (i + 1) % 6;
+                        const pts = [v_trap_in[i], v_trap_out[i], v_trap_out[next_i], v_trap_in[next_i]];
+
+                        if (currentEdge === 1.0) {
+                            ctx.moveTo(pts[0].x, pts[0].y);
+                            ctx.lineTo(pts[1].x, pts[1].y);
+                            ctx.lineTo(pts[2].x, pts[2].y);
+                            ctx.lineTo(pts[3].x, pts[3].y);
+                            ctx.closePath();
+                            hasStaticFog = true;
+                        } else {
+                            const p1 = axialToPixel(q, r);
+                            const p2 = axialToPixel(q + neighborDir.q, r + neighborDir.r);
+                            animatingPieces.push({ val: currentEdge, pts: pts, cx: (p1.x + p2.x) / 2, cy: (p1.y + p2.y) / 2 });
+                        }
+                    }
+                }
+            });
+
+            // Draw Static Seamless Fog
+            if (hasStaticFog) {
+                ctx.fillStyle = '#182830'; 
+                ctx.globalAlpha = 0.70;    
+                ctx.fill();
+            }
+
+            // Draw Animating Fractured Fog
+            animatingPieces.forEach(piece => {
+                ctx.beginPath();
+                ctx.fillStyle = '#182830'; 
+                ctx.globalAlpha = 0.70 * piece.val; // Fades out smoothly
+                
+                const scale = Math.pow(piece.val, 0.5); // Non-linear geometric scaling
+
+                piece.pts.forEach((pt, idx) => {
+                    const sx = piece.cx + (pt.x - piece.cx) * scale;
+                    const sy = piece.cy + (pt.y - piece.cy) * scale;
+                    if (idx === 0) ctx.moveTo(sx, sy);
+                    else ctx.lineTo(sx, sy);
+                });
+                ctx.closePath();
+                ctx.fill();
+            });
+
+            ctx.restore();
+
+            if (isAnimating) {
+                gameState.needsRedraw = true; 
+            }
+        }
+
         function drawUnitHealthBar(ctx, unitX, unitY, ringOuterRadius, ringThickness, currentHp, maxHp) {
+            if (gameState.isPassDeviceTransition) return;
             if (maxHp <= 0) return;
             
             const displayHpPercentage = Math.max(0, Math.min(1, currentHp / maxHp)); 
@@ -259,70 +419,92 @@
         }
 
         function drawFortificationOutlines() {
+            if (gameState.isPassDeviceTransition) return;
             const currentHexSize = HEX_SIZE * gameState.renderScale; 
             const fortifiedTilesP1 = new Set();
             const fortifiedTilesP2 = new Set();
 
-            gameState.tiles.forEach((tile, key) => {
-                if (tile.fortifiedByPlayer === 1) fortifiedTilesP1.add(key);
-                else if (tile.fortifiedByPlayer === 2) fortifiedTilesP2.add(key);
-            });
+    gameState.tiles.forEach((tile, key) => {
+        if (tile.fortifiedByPlayer === 1) fortifiedTilesP1.add(key);
+        else if (tile.fortifiedByPlayer === 2) fortifiedTilesP2.add(key);
+    });
 
-            // --- Handle Base Camp Tiles (Array or String) ---
-            const addBaseTiles = (baseData, set) => {
-                if (Array.isArray(baseData)) {
-                    baseData.forEach(key => set.add(key));
-                } else if (baseData) {
-                    const [h1, h2] = parseEdgeKey(baseData);
-                    if (!isNaN(h1.q)) set.add(getTileKey(h1.q, h1.r));
-                    if (!isNaN(h2.q)) set.add(getTileKey(h2.q, h2.r));
-                }
-            };
-            addBaseTiles(gameState.baseCampPositions.player1, fortifiedTilesP1);
-            addBaseTiles(gameState.baseCampPositions.player2, fortifiedTilesP2);
+    const addBaseTiles = (baseData, set) => {
+        if (Array.isArray(baseData)) {
+            baseData.forEach(key => set.add(key));
+        } else if (baseData) {
+            const [h1, h2] = parseEdgeKey(baseData);
+            if (!isNaN(h1.q)) set.add(getTileKey(h1.q, h1.r));
+            if (!isNaN(h2.q)) set.add(getTileKey(h2.q, h2.r));
+        }
+    };
+    addBaseTiles(gameState.baseCampPositions.player1, fortifiedTilesP1);
+    addBaseTiles(gameState.baseCampPositions.player2, fortifiedTilesP2);
 
-            const drawBordersForPlayer = (tileSet, color) => {
-                tileSet.forEach(tileKey => {
-                    const tile = gameState.tiles.get(tileKey);
-                    if (!tile) return;
+    const drawBordersForPlayer = (tileSet, color, playerOwner) => {
+        tileSet.forEach(tileKey => {
+            
+            const tile = gameState.tiles.get(tileKey);
+            if (!tile) return;
 
-                    const { x: centerX, y: centerY } = axialToPixel(tile.q, tile.r);
-
-                    for (let i = 0; i < 6; i++) {
-                        const neighborDir = AXIAL_DIRECTIONS[i];
-                        const neighborQ = tile.q + neighborDir.q;
-                        const neighborR = tile.r + neighborDir.r;
-                        const neighborKey = getTileKey(neighborQ, neighborR);
-
-                        // Only draw edge if neighbor is NOT in the same set (internal edges hidden)
-                        if (!tileSet.has(neighborKey)) {
-                             const v1_idx = MAP_DIRECTION_TO_EDGE_INDEX[i];
-                             const v2_idx = (v1_idx + 1) % 6;
-                             
-                             const vert1_angle = Math.PI / 180 * (60 * v1_idx - 30);
-                             const edge_v1_x = centerX + currentHexSize * Math.cos(vert1_angle);
-                             const edge_v1_y = centerY + currentHexSize * Math.sin(vert1_angle);
-
-                             const vert2_angle = Math.PI / 180 * (60 * v2_idx - 30);
-                             const edge_v2_x = centerX + currentHexSize * Math.cos(vert2_angle);
-                             const edge_v2_y = centerY + currentHexSize * Math.sin(vert2_angle);
-                             
-                             ctx.beginPath();
-                             ctx.moveTo(edge_v1_x, edge_v1_y);
-                             ctx.lineTo(edge_v2_x, edge_v2_y);
-                             ctx.strokeStyle = color;
-                             ctx.lineWidth = 5;
-                             ctx.stroke();
+            // --- REVISED FOG CHECK (Base Camps Immune) ---
+            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                // If it's an enemy tile AND it's NOT a base camp...
+                if (playerOwner !== gameState.currentPlayer && !tile.isBaseCampTile) {
+                    let isAnyPartVisible = gameState.visionCache.tiles.has(tileKey);
+                    
+                    // If center isn't visible, check if ANY edge is visible
+                    if (!isAnyPartVisible) {
+                        const [q, r] = tileKey.split(',').map(Number);
+                        for (const dir of AXIAL_DIRECTIONS) {
+                            if (gameState.visionCache.edges.has(getEdgeKey(q, r, q + dir.q, r + dir.r))) {
+                                isAnyPartVisible = true;
+                                break;
+                            }
                         }
                     }
-                });
-            };
+                    if (!isAnyPartVisible) return; // Completely hidden
+                }
+            }
+            
+            const { x: centerX, y: centerY } = axialToPixel(tile.q, tile.r);
 
-            drawBordersForPlayer(fortifiedTilesP1, currentDrawingColors.player1.primary);
-            drawBordersForPlayer(fortifiedTilesP2, currentDrawingColors.player2.primary);
-        }
+            for (let i = 0; i < 6; i++) {
+                const neighborDir = AXIAL_DIRECTIONS[i];
+                const neighborQ = tile.q + neighborDir.q;
+                const neighborR = tile.r + neighborDir.r;
+                const neighborKey = getTileKey(neighborQ, neighborR);
+
+                // Only draw edge if neighbor is NOT in the same set (internal edges hidden)
+                if (!tileSet.has(neighborKey)) {
+                     const v1_idx = MAP_DIRECTION_TO_EDGE_INDEX[i];
+                     const v2_idx = (v1_idx + 1) % 6;
+                     
+                     const vert1_angle = Math.PI / 180 * (60 * v1_idx - 30);
+                     const edge_v1_x = centerX + currentHexSize * Math.cos(vert1_angle);
+                     const edge_v1_y = centerY + currentHexSize * Math.sin(vert1_angle);
+
+                     const vert2_angle = Math.PI / 180 * (60 * v2_idx - 30);
+                     const edge_v2_x = centerX + currentHexSize * Math.cos(vert2_angle);
+                     const edge_v2_y = centerY + currentHexSize * Math.sin(vert2_angle);
+                     
+                     ctx.beginPath();
+                     ctx.moveTo(edge_v1_x, edge_v1_y);
+                     ctx.lineTo(edge_v2_x, edge_v2_y);
+                     ctx.strokeStyle = color;
+                     ctx.lineWidth = 5;
+                     ctx.stroke();
+                }
+            }
+        });
+    };
+
+    drawBordersForPlayer(fortifiedTilesP1, currentDrawingColors.player1.primary, 1);
+    drawBordersForPlayer(fortifiedTilesP2, currentDrawingColors.player2.primary, 2);
+}
 
         function drawContestedEdgeIndicator() {
+            if (gameState.isPassDeviceTransition) return;
             const CONTESTED_EDGE_COLOR = '#C440C4';
             const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
 
@@ -345,6 +527,9 @@
                                   (tile2 && tile2.fortifiedByPlayer === opponentPlayer);
 
                 if (isContested) {
+                    if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                        if (!gameState.visionCache.edges.has(edgeKey)) return;
+                    }
                     const p1_center = axialToPixel(edge.q1, edge.r1);
                     const p2_center = axialToPixel(edge.q2, edge.r2);
                     const edgeMidX = (p1_center.x + p2_center.x) / 2;
@@ -579,6 +764,7 @@
         }
 
         function drawUnitAttackHighlightsOnly(targetsToHighlight) {
+            if (gameState.isPassDeviceTransition) return;
             if (!targetsToHighlight || targetsToHighlight.length === 0) return;
 
             const baseSizeToHighlight = (HEX_SIZE * 0.3) * gameState.renderScale;
@@ -686,6 +872,7 @@ const UNIT_IMAGE_CONFIG = {
 };
 
 function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
+    if (gameState.isPassDeviceTransition) return;
     const typeKey = unit.typeId || unit.type.name.toUpperCase();
     
     // Uses the low-res map assets
@@ -790,6 +977,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
         }
 
         function drawUnits() {
+            if (gameState.isPassDeviceTransition) return;
             const isEffectivelyDragging = gameState.isDragging && !gameState.mapMakerMode;
             const animatedUnitIds = new Set(gameState.activeAnimations.map(a => (a.unit || a.attacker).id));
             const offsetDistance = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
@@ -805,6 +993,9 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     
                     edgeUnitsOnly.forEach((unit, index) => {
                         if (animatedUnitIds.has(unit.id)) return;
+                        if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                            if (unit.player !== gameState.currentPlayer && !gameState.visionCache.edges.has(unit.position)) return;
+                        }
                         let unitX = mid.x, unitY = mid.y;
                         if (edgeUnitsOnly.length > 1) {
                             const offsetSign = (index % 2 === 0) ? -1 : 1;
@@ -819,6 +1010,9 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             gameState.units.forEach(unit => {
                 if (animatedUnitIds.has(unit.id)) return;
                 if (unit.isFortified && unit.positionType === 'center' && (!isEffectivelyDragging || unit.id !== gameState.draggingUnit.id)) {
+                    if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                        if (unit.player !== gameState.currentPlayer && !gameState.visionCache.tiles.has(unit.position)) return;
+                    }
                     const tile = gameState.tiles.get(unit.position);
                     if (tile) {
                         const {x, y} = axialToPixel(tile.q, tile.r);
@@ -898,9 +1092,27 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 const edge = gameState.edges.get(edgeKey);
                 if (edge) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-                    ctx.beginPath(); ctx.arc(mid.x, mid.y, highlightRadius, 0, 2 * Math.PI);
-                    ctx.fillStyle = 'rgba(0, 255, 0, 0.4)'; ctx.fill();
-                    ctx.strokeStyle = 'rgba(0, 100, 0, 0.6)'; ctx.lineWidth = 2; ctx.stroke();
+                    ctx.beginPath(); 
+                    ctx.arc(mid.x, mid.y, highlightRadius, 0, 2 * Math.PI);
+                    
+                    let isObscured = false;
+                    if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                        if (!gameState.visionCache.edges.has(edgeKey)) {
+                            isObscured = true;
+                        }
+                    }
+
+                    if (isObscured) {
+                        ctx.fillStyle = 'rgba(255, 255, 0, 0.4)'; // Yellow fill (Obscured)
+                        ctx.strokeStyle = 'rgba(150, 150, 0, 0.6)'; // Yellow stroke
+                    } else {
+                        ctx.fillStyle = 'rgba(0, 255, 0, 0.4)'; // Green fill (Clear)
+                        ctx.strokeStyle = 'rgba(0, 100, 0, 0.6)'; // Green stroke
+                    }
+                    
+                    ctx.fill();
+                    ctx.lineWidth = 2; 
+                    ctx.stroke();
                 }
             });
         }
@@ -1456,6 +1668,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
         }
 
         function drawAnimations() {
+            if (gameState.isPassDeviceTransition) return;
             if (gameState.activeAnimations.length === 0) return; 
     
             const stillAnimating = [];
@@ -1727,6 +1940,19 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 }
             }
 
+            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode) {
+                if (gameState.visionDirty || !gameState.visionCache || gameState.visionCache.player !== gameState.currentPlayer) {
+                    const newVision = computePlayerVision(gameState.currentPlayer);
+                    gameState.visionCache = {
+                        player: gameState.currentPlayer,
+                        tiles: newVision.tiles,
+                        edges: newVision.edges
+                    };
+                    gameState.visionDirty = false;
+                    gameState.needsRedraw = true; // Force redraw if vision shifted
+                }
+            }
+
             // 3. PERFORMANCE: DIRTY FLAG RENDERING
             let needsDraw = gameState.needsRedraw ||
                 gameState.activeAnimations.length > 0 ||
@@ -1804,6 +2030,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             drawPulsatingBridgeHighlights();
             drawFlags();
             drawBridges();
+            drawFogOfWar();
             drawSupplyLines();
             drawDebugVisibilityHighlights(); 
             drawDebugAttackRangeHighlights(); 
@@ -1881,11 +2108,20 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             requestAnimationFrame(gameLoop);
         }
 
-        function drawBridges() { 
-    gameState.edges.forEach(edge => { if (edge.bridge) drawBridge(edge); }); 
+function drawBridges() { 
+    if (gameState.isPassDeviceTransition) return;
+    gameState.edges.forEach((edge, edgeKey) => { 
+        if (edge.bridge) {
+            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                if (!gameState.visionCache.edges.has(edgeKey)) return; // Skip drawing
+            }
+            drawBridge(edge); 
+        }
+    }); 
 }
 
 function drawSupplyLines() {
+    if (gameState.isPassDeviceTransition) return;
     if (gameState.gameMode === 'arcade') return;
     const currentTime = Date.now();
     const currentHexSize = HEX_SIZE * gameState.renderScale;
@@ -1896,10 +2132,10 @@ function drawSupplyLines() {
             if (path.length === 0) return;
 
             const isIntercepted = path.some(edgeKey => {
-            const edge = gameState.edges.get(edgeKey);
-            if (!edge) return false;
-            return edge.units.some(u => u.player !== unit.player && (!gameState.isDragging || u.id !== gameState.draggingUnit.id));
-        });
+                const edge = gameState.edges.get(edgeKey);
+                if (!edge) return false;
+                return edge.units.some(u => u.player !== unit.player && (!gameState.isDragging || u.id !== gameState.draggingUnit.id));
+            });
 
             let lineColor, lineWidth, isDashed;
             if (isIntercepted) {
@@ -1922,6 +2158,12 @@ function drawSupplyLines() {
             }
 
             path.forEach(edgeKey => {
+                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                    if (unit.player !== gameState.currentPlayer && !gameState.visionCache.edges.has(edgeKey)) {
+                        return; // Skip drawing this specific unseen segment
+                    }
+                }
+
                 const edge = gameState.edges.get(edgeKey);
                 if(edge) {
                     const p1_center = axialToPixel(edge.q1, edge.r1);

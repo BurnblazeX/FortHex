@@ -256,22 +256,148 @@ function checkVictoryCondition() {
         ui.fortifyUnfortifyButton.addEventListener('click', handleFortifyUnfortifyButtonClick);
         ui.buildBridgeButton.addEventListener('click', handleBuildBridgeAction);
         ui.attackButton.addEventListener('click', handleAttackAction);
+        
+// Global reference to prevent overlapping timers
+window.resolvePassDeviceOverlay = null;
+
+function showPassDeviceOverlay(nextPlayer, callback) {
+    console.trace("[Handoff] showPassDeviceOverlay triggered. Next player:", nextPlayer);
+
+    let overlay = document.getElementById('passDeviceOverlay');
+    if (!overlay) {
+        console.log("[Handoff] Creating overlay DOM element.");
+        overlay = document.createElement('div');
+        overlay.id = 'passDeviceOverlay';
+        
+        overlay.style.cssText = `
+            display: none; position: fixed; z-index: 2147483647; 
+            background-color: rgba(24, 40, 48, 0.6); 
+            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); 
+            align-items: center; justify-content: center; flex-direction: column; 
+            cursor: pointer; border-radius: 10px; pointer-events: auto;
+        `;
+        
+        overlay.innerHTML = `
+            <h2 id="passDeviceText" style="font-family: 'Geostar', cursive; font-size: clamp(2em, 6vw, 3.5em); margin-bottom: 10px; text-align: center; text-shadow: 0 4px 10px rgba(0,0,0,0.9); font-weight: bold;">Pass to Player X</h2>
+            <div id="passDeviceCountdown" style="font-size: clamp(3em, 8vw, 5em); font-weight: bold; color: #FFFFFF; margin-bottom: 20px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">5</div>
+            <p style="font-size: clamp(1.2em, 4vw, 1.5em); color: #FFFFFF; opacity: 0.9; text-align: center; text-shadow: 0 2px 5px rgba(0,0,0,0.9);">Tap anywhere to continue</p>
+        `;
+        document.body.appendChild(overlay);
+    }
+
+    // --- SPAM FIX: FORCE RESOLVE EXISTING OVERLAY ---
+    if (window.resolvePassDeviceOverlay) {
+        console.log("[Handoff] Force-resolving previous overlay due to rapid click.");
+        window.resolvePassDeviceOverlay(true); // true = isForceAbort
+    }
+
+    const countdownEl = document.getElementById('passDeviceCountdown');
+    const textEl = document.getElementById('passDeviceText');
+    const canvasEl = document.getElementById('gameCanvas'); 
+    
+    if (!canvasEl) {
+        console.error("[Handoff] Canvas missing! Aborting transition.");
+        if (callback) callback();
+        return;
+    }
+
+    // --- FORCE FULL MAP FOG ---
+    gameState.isPassDeviceTransition = true;
+    gameState.needsRedraw = true;
+    
+    const syncOverlaySize = () => {
+        const rect = canvasEl.getBoundingClientRect();
+        overlay.style.top = rect.top + 'px';
+        overlay.style.left = rect.left + 'px';
+        overlay.style.width = rect.width + 'px';
+        overlay.style.height = rect.height + 'px';
+    };
+    
+    syncOverlaySize();
+    window.addEventListener('resize', syncOverlaySize);
+    
+    textEl.textContent = `Pass to Player ${nextPlayer}`;
+    textEl.style.color = nextPlayer === 1 ? 'var(--p1-color-primary)' : 'var(--p2-color-primary)';
+    
+    let timeLeft = 5;
+    countdownEl.textContent = timeLeft;
+    overlay.style.display = 'flex';
+
+    if (gameSettings.animationsEnabled) {
+        overlay.animate([
+            { opacity: 0 },
+            { opacity: 1 }
+        ], {
+            duration: 400,
+            easing: 'ease-out'
+        });
+    }
+    
+    let intervalId = setInterval(() => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+            resolveOverlay();
+        } else {
+            countdownEl.textContent = timeLeft;
+        }
+    }, 1000);
+    
+    let isResolving = false; 
+    
+    const resolveOverlay = (isForceAbort = false) => {
+        if (isResolving) return;
+        isResolving = true;
+        
+        window.resolvePassDeviceOverlay = null; // Clear global reference
+        
+        console.trace("[Handoff] resolveOverlay triggered. Clearing overlay and lifting fog.");
+        clearInterval(intervalId);
+        overlay.removeEventListener('click', overlayClickHandler);
+        window.removeEventListener('resize', syncOverlaySize);
+        
+        gameState.isPassDeviceTransition = false;
+        gameState.visionDirty = true;
+        gameState.needsRedraw = true;
+        
+        const finishResolve = () => {
+            overlay.style.display = 'none';
+            if (callback) callback();
+        };
+
+        // Skip exit animation if force aborted to prevent graphical glitches during spam
+        if (gameSettings.animationsEnabled && !isForceAbort) {
+            const anim = overlay.animate([
+                { opacity: 1 },
+                { opacity: 0 }
+            ], {
+                duration: 300,
+                easing: 'ease-in'
+            });
+            anim.onfinish = finishResolve;
+        } else {
+            finishResolve();
+        }
+    };
+
+    window.resolvePassDeviceOverlay = resolveOverlay;
+    
+    // Use a named handler so we can cleanly remove it later
+    const overlayClickHandler = () => resolveOverlay(false);
+    overlay.addEventListener('click', overlayClickHandler);
+}
 
 function proceedToEndTurn() {
     if (gameState.isDragging || gameState.gameOver) return;
     
-    // --- ARCADE PHASE CHECK (Block if swap is needed) ---
+    // --- ARCADE PHASE CHECK ---
     if (gameState.gameMode === 'arcade') {
-        // Only enforce swap requirement if we are past Turn 1
         if (gameState.globalTurnNumber >= 2) {
             if (gameState.swapState === 'selecting_unit' || gameState.swapState === 'selecting_class') {
                 showInstruction("You must swap a unit first!", 2000);
-                return; // STOP: Player tried to skip swap
+                return; 
             }
         }
-        
-        // Check Arcade Turn Limit Victory
-        if (gameState.currentPlayer === 2) { // End of round
+        if (gameState.currentPlayer === 2) { 
             gameState.arcadeTotalTurns++;
             if (gameState.arcadeTotalTurns >= ARCADE_MAX_TURNS) {
                 checkArcadeVictoryCondition();
@@ -292,22 +418,21 @@ function proceedToEndTurn() {
         updateGlobalTurnDisplay();
     }
     
-    // --- RESET SELECTIONS & MOUSE ---
+    // --- RESET SELECTIONS ---
     gameState.selectedUnit = null; 
     gameState.currentReachableMoves.clear();
     gameState.hoveredUnitId = null; 
     canvas.style.cursor = 'default';
     resetActionSelectionStates();
     
-    // --- RESET UNITS FOR NEW TURN ---
+    // --- RESET UNITS ---
     gameState.units.forEach(unit => {
         if (unit.player === gameState.currentPlayer) {
             unit.hasPerformedMajorAction = false; 
             unit.spearWalled = false;
+            unit.ambushed = false;
             
-            // UPDATE: Use unit.stats.speed instead of type.baseMove
             let baseMoveForTurn = unit.stats.speed;
-            
             if (unit.isCarryingFlag) { baseMoveForTurn -= 1; }
             unit.currentMove = Math.max(0, baseMoveForTurn); 
             
@@ -318,9 +443,7 @@ function proceedToEndTurn() {
                 if (unit.fortifyCooldown > 0) unit.fortifyCooldown = Math.max(0, unit.fortifyCooldown - 5);
             }
 
-            // Check Cowardice (Fortified at base too long)
             const playerBaseTiles = getBaseCampTiles(gameState.baseCampPositions[`player${unit.player}`]);
-            
             if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
                 unit.turnsFortifiedAtBase++;
                 if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
@@ -334,42 +457,47 @@ function proceedToEndTurn() {
     applyStartOfTurnZoCDamage(); 
     logSiegeStatus();
     applyStartOfTurnHealing(); 
-    updateTurnDisplay();
-    updateSelectedUnitInfoPanel(); 
-    
-    // CRITICAL FIX: Update HP display after turn start effects
-    updateSupplyPointsDisplay();
-    
-    // --- ARCADE TIMER RESET & STATE SETUP ---
-    if (gameState.gameMode === 'arcade') {
-        // 1. RESET THE TIMER
-        gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
-        gameState.hasSwappedThisTurn = false; // Reset swap flag
 
-        // 2. SET SWAP PHASE (Only for Turn 2+)
-        if (gameState.globalTurnNumber >= 2) {
-            gameState.swapState = 'selecting_unit';
-            showInstruction(`Player ${gameState.currentPlayer}'s Turn. SELECT UNIT TO SWAP.`, 4000);
+    // --- VISUAL REVEAL CALLBACK (Runs after overlay clears) ---
+    const finalizeVisuals = () => {
+        updateTurnDisplay();
+        updateSelectedUnitInfoPanel(); 
+        updateSupplyPointsDisplay();
+        
+        if (gameState.gameMode === 'arcade') {
+            gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
+            gameState.hasSwappedThisTurn = false; 
+
+            if (gameState.globalTurnNumber >= 2) {
+                gameState.swapState = 'selecting_unit';
+                showInstruction(`Player ${gameState.currentPlayer}'s Turn. SELECT UNIT TO SWAP.`, 4000);
+            } else {
+                gameState.swapState = 'none'; 
+                showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
+            }
         } else {
-            gameState.swapState = 'none'; // Turn 1: No swap needed
             showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
         }
-    } else {
-        showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
-    }
-    
-    logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
-    autoSaveGame(true);
-    checkVictoryCondition();
+        
+        logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
+        autoSaveGame(true);
+        checkVictoryCondition();
 
-    // AI Handling (Singleplayer)
-    if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
-        ui.endTurnButton.disabled = true;
-        if (!gameState.isTrainingMode) {
-            setTimeout(() => { executeAITurn(); }, 1500);
+        if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
+            ui.endTurnButton.disabled = true;
+            if (!gameState.isTrainingMode) {
+                setTimeout(() => { executeAITurn(); }, 1500);
+            }
+        } else {
+            ui.endTurnButton.disabled = false;
         }
+    };
+
+    // --- TRIGGER OVERLAY IF ENABLED ---
+    if (gameState.gameMode === 'local' && gameSettings.passDeviceBlurEnabled) {
+        showPassDeviceOverlay(gameState.currentPlayer, finalizeVisuals);
     } else {
-        ui.endTurnButton.disabled = false;
+        finalizeVisuals();
     }
 }
 
@@ -964,10 +1092,21 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                     const mid = getEdgeMidpoint(finalTargetEdgeData.q1, finalTargetEdgeData.r1, finalTargetEdgeData.q2, finalTargetEdgeData.r2);
                     if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < dropRadius) {
                         const costToMove = moveData.cost; 
-                        if (finalTargetEdgeData.units.some(u => u.player !== gameState.draggingUnit.player)) { showInstruction("Cannot move to enemy edge."); break; }
+                        
+                        let isTargetKnownEnemy = false;
+                        if (finalTargetEdgeData.units.some(u => u.player !== gameState.draggingUnit.player)) {
+                            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                                if (gameState.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
+                            } else {
+                                isTargetKnownEnemy = true;
+                            }
+                        }
+                        if (isTargetKnownEnemy) { showInstruction("Cannot move to enemy edge."); break; }
                         if (finalTargetEdgeData.units.filter(u => u.player === gameState.draggingUnit.player).length >= 2) { showInstruction("Target edge full."); break; }
+                        
+                        // Pass moveData.path
                         if (costToMove <= gameState.draggingUnit.currentMove && costToMove !== Infinity) { 
-                            handleMoveAction(gameState.draggingUnit, targetEdgeKey, costToMove); 
+                            handleMoveAction(gameState.draggingUnit, targetEdgeKey, costToMove, moveData.path); 
                             droppedOnValidTarget = true; 
                         }
                         else { showInstruction(`Cannot move. Cost: ${costToMove.toFixed(1)}, Have: ${gameState.draggingUnit.currentMove.toFixed(1)}`); }
@@ -1123,9 +1262,21 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         
         if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < scaledClickRadius) {
             const costToMove = moveData.cost;
-            if (finalTargetEdgeData.units.some(u => u.player !== selectedUnit.player)) { showInstruction("Cannot move to enemy edge."); return true; }
+            
+            // Bypass enemy block if they are hidden in fog
+            let isTargetKnownEnemy = false;
+            if (finalTargetEdgeData.units.some(u => u.player !== selectedUnit.player)) {
+                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                    if (gameState.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
+                } else {
+                    isTargetKnownEnemy = true;
+                }
+            }
+            if (isTargetKnownEnemy) { showInstruction("Cannot move to enemy edge."); return true; }
             if (finalTargetEdgeData.units.filter(u => u.player === selectedUnit.player).length >= 2) { showInstruction("Target edge full."); return true; }
-            if (costToMove <= selectedUnit.currentMove && costToMove !== Infinity) handleMoveAction(selectedUnit, targetEdgeKey, costToMove);
+            
+            // Pass moveData.path to handleMoveAction for ambush resolution
+            if (costToMove <= selectedUnit.currentMove && costToMove !== Infinity) handleMoveAction(selectedUnit, targetEdgeKey, costToMove, moveData.path);
             else showInstruction(`Cannot move. Cost: ${costToMove.toFixed(1)}, Have: ${selectedUnit.currentMove.toFixed(1)}`);
             return true;
         }
@@ -1272,39 +1423,55 @@ function handleActionTargetSelectionClick(x, y) {
 
 function handleUnitSelectionClick(x, y) {
             let clickedOnUnit = null;
+            
             for (const unit of gameState.units) {
                 if (unit.isFortified && unit.positionType === 'center') {
                     const tile = gameState.tiles.get(unit.position);
                     if (tile) {
                         const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
                         if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5) {
-                             if (unit.player === gameState.currentPlayer) {
+                            if (unit.player === gameState.currentPlayer) {
                                 if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
                                     showInstruction(`That is an AI unit.`);
                                     return true;
                                 }
                                 clickedOnUnit = unit;
                                 break;
-                            } else { showInstruction(`Enemy ${unit.type.name} fortified.`); return true; }
+                            } else { 
+                                // --- FOG CHECK ---
+                                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                                    if (!gameState.visionCache.tiles.has(unit.position)) continue; // Treat as empty space
+                                }
+                                showInstruction(`Enemy ${unit.type.name} fortified.`); 
+                                return true; 
+                            }
                         }
                     }
                 }
             }
+            
             if (!clickedOnUnit) {
                  const unitEdgePairs = [];
                  gameState.edges.forEach((edge, edgeKey) => { edge.units.forEach(u => { if (u.positionType === 'edge') unitEdgePairs.push({ unit: u, edge: edge }); }); });
+                
                 for (let i = unitEdgePairs.length - 1; i >= 0; i--) {
-                    const {unit, edge} = unitEdgePairs[i]; const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                    const {unit, edge} = unitEdgePairs[i]; 
+                    const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     let unitX = mid.x, unitY = mid.y;
+                    
                     const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
                     const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === unit.id);
                     if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
                         const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
-                        const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
-                        let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
+                        const p1 = axialToPixel(edge.q1, edge.r1); 
+                        const p2 = axialToPixel(edge.q2, edge.r2);
+                        let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; 
+                        const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
                         let perpX = -dy_val / len, perpY = dx_val / len;
-                        unitX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); unitY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
+                        unitX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); 
+                        unitY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
                     }
+                    
                     if (Math.sqrt((x - unitX)**2 + (y - unitY)**2) < (UNIT_CLICK_RADIUS * gameState.renderScale)) {
                        if (unit.player === gameState.currentPlayer) {
                             if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
@@ -1313,7 +1480,14 @@ function handleUnitSelectionClick(x, y) {
                             }
                             clickedOnUnit = unit;
                             break;
-                        } else { showInstruction(`Enemy ${unit.type.name} on edge.`); return true; }
+                        } else { 
+                            // --- FOG CHECK ---
+                            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                                if (!gameState.visionCache.edges.has(unit.position)) continue; // Treat as empty space
+                            }
+                            showInstruction(`Enemy ${unit.type.name} on edge.`); 
+                            return true; 
+                        }
                     }
                 }
             }
@@ -1983,15 +2157,27 @@ canvas.addEventListener('contextmenu', (event) => {
             document.getElementById('loadGameButton').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> Load Game`;
             document.getElementById('buildVersionDisplay').textContent = `FortHex Build ${BUILD_VERSION}`;
             
-            loadSettings(); // Load settings from localStorage into the gameSettings object
-            loadColorPreferences(); // Load color preferences
+            loadSettings(); 
+            loadColorPreferences(); 
 
+            // Sync UI checkboxes safely to match the loaded settings
+            const elAnim = document.getElementById('settingAnimations');
+            if (elAnim) elAnim.checked = gameSettings.animationsEnabled;
+            
+            const elFancy = document.getElementById('settingFancyVisuals');
+            if (elFancy) elFancy.checked = gameSettings.fancyVisualsEnabled;
+            
+            const elPass = document.getElementById('settingPassTurnConfirmation');
+            if (elPass) elPass.checked = gameSettings.passTurnConfirmationEnabled;
+            
+            const elTool = document.getElementById('settingTooltips');
+            if (elTool) elTool.checked = gameSettings.tooltipsEnabled;
 
-            // Sync UI checkboxes to match the loaded settings
-            document.getElementById('settingAnimations').checked = gameSettings.animationsEnabled;
-            document.getElementById('settingFancyVisuals').checked = gameSettings.fancyVisualsEnabled;
-            document.getElementById('settingPassTurnConfirmation').checked = gameSettings.passTurnConfirmationEnabled;
-            document.getElementById('settingTooltips').checked = gameSettings.tooltipsEnabled;
+            const elFog = document.getElementById('settingFogOfWar');
+            if (elFog) elFog.checked = gameSettings.fogOfWarEnabled;
+
+            const elBlur = document.getElementById('settingPassDeviceBlur');
+            if (elBlur) elBlur.checked = gameSettings.passDeviceBlurEnabled;
 
             // --- Connection Status Indicator ---
             const connectionIcon = document.getElementById('connectionStatusIcon');
@@ -2184,6 +2370,8 @@ canvas.addEventListener('contextmenu', (event) => {
             const passTurnCheckbox = document.getElementById('settingPassTurnConfirmation');
             const fancyVisualsCheckbox = document.getElementById('settingFancyVisuals');
             const tooltipsCheckbox = document.getElementById('settingTooltips');
+            const fogOfWarCheckbox = document.getElementById('settingFogOfWar'); 
+            const passDeviceBlurCheckbox = document.getElementById('settingPassDeviceBlur'); 
             const uiScaleSlider = document.getElementById('settingUiScale');
             const uiScaleValueLabel = document.getElementById('uiScaleValueLabel');
 
@@ -2198,6 +2386,8 @@ canvas.addEventListener('contextmenu', (event) => {
             passTurnCheckbox.checked = gameSettings.passTurnConfirmationEnabled;
             fancyVisualsCheckbox.checked = gameSettings.fancyVisualsEnabled;
             tooltipsCheckbox.checked = gameSettings.tooltipsEnabled;
+            fogOfWarCheckbox.checked = gameSettings.fogOfWarEnabled; 
+            passDeviceBlurCheckbox.checked = gameSettings.passDeviceBlurEnabled;
             applyUiScale(); 
 
             animationsCheckbox.addEventListener('change', (e) => {
@@ -2222,6 +2412,18 @@ canvas.addEventListener('contextmenu', (event) => {
                 saveSettings();
             });
 
+            fogOfWarCheckbox.addEventListener('change', (e) => {
+                gameSettings.fogOfWarEnabled = e.target.checked;
+                saveSettings();
+                gameState.visionDirty = true; // Force vision recalculation
+                gameState.needsRedraw = true; // Force a canvas redraw
+            });
+
+            passDeviceBlurCheckbox.addEventListener('change', (e) => {
+                gameSettings.passDeviceBlurEnabled = e.target.checked;
+                saveSettings();
+            });
+            
             uiScaleSlider.addEventListener('input', (e) => {
                 const scaleValue = parseFloat(e.target.value);
                 gameSettings.uiScale = scaleValue;

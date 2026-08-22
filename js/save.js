@@ -381,6 +381,13 @@ function rehydrateGameState() {
         }
 
         gameState.activeAnimations = [];
+        
+        // --- TRANSIENT VISUAL STATE RESET ---
+        // Prevents loaded JSON objects from breaking Map/Set functions
+        gameState.fogAnimState = null;
+        gameState.visionCache = null;
+        gameState.visionDirty = true;
+        gameState.isPassDeviceTransition = false;
 
         // 5. Restore Unit Logic (Getters & Stats)
         gameState.units.forEach(unit => {

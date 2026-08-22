@@ -927,7 +927,8 @@ async function executeAIAction(action) {
             gameState.debugPathHoverStartTime = Date.now() - PATH_DRAW_HOVER_DELAY_MS;
             await delay(PATH_DRAW_ANIMATION_DURATION_MS + 200);
         }
-        handleMoveAction(unit, moveData.path[moveData.path.length - 1], moveData.cost);
+        // Pass the path array explicitly to handleMoveAction
+        handleMoveAction(unit, moveData.path[moveData.path.length - 1], moveData.cost, moveData.path);
     };
 
     switch (action.type) {

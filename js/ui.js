@@ -477,6 +477,22 @@
                 const originalMessage = logObject.message;
                 const activePlayer = logObject.player;
 
+                // --- FOG OF WAR FILTER ---
+                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode) {
+                    const viewer = gameState.currentPlayer;
+                    let isRelevant = false;
+                    
+                    // 1. Did the current player do it?
+                    if (activePlayer === viewer) isRelevant = true;
+                    // 2. Was the current player's unit hit, targeted, or ZoC'd? (Text contains "P1" or "P2")
+                    else if (originalMessage.includes(`P${viewer}`) || originalMessage.includes(`Player ${viewer}`)) isRelevant = true;
+                    // 3. Is it a global game event? (Flag stolen/returned, Game Over, etc.)
+                    else if (originalMessage.toLowerCase().includes('flag') || originalMessage.includes('Wins') || originalMessage.includes('Draw') || originalMessage.includes('Time Limit')) isRelevant = true;
+
+                    // If it doesn't involve the viewer, don't render this log entry for them
+                    if (!isRelevant) continue; 
+                }
+
                 let formattedMessage = originalMessage.replace(/<br>/g, ' ');
 
                 formattedMessage = formattedMessage.replace(/(P1)/g, '<strong class="p1-log">$1</strong>');
