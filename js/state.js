@@ -76,7 +76,7 @@ let gameSettings = {
     tooltipsEnabled: true, 
     debugModeEnabled: false, 
     fogOfWarEnabled: false,
-    passDeviceBlurEnabled: true,
+    passDeviceBlurEnabled: false,
     uiScale: 1.0
 };
 

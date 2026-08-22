@@ -256,7 +256,7 @@ function checkVictoryCondition() {
         ui.fortifyUnfortifyButton.addEventListener('click', handleFortifyUnfortifyButtonClick);
         ui.buildBridgeButton.addEventListener('click', handleBuildBridgeAction);
         ui.attackButton.addEventListener('click', handleAttackAction);
-        
+
 // Global reference to prevent overlapping timers
 window.resolvePassDeviceOverlay = null;
 
@@ -1076,6 +1076,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             if (gameState.mapMakerMode) {
                 gameState.isDragging = false;
                 gameState.mapMakerLastPaintedHexKey = null;
+                gameState.needsRedraw = true;
                 return;
             }
             if (!gameState.isDragging || !gameState.draggingUnit) return;
@@ -1701,6 +1702,10 @@ function handleUnitSelectionClick(x, y) {
     gameState.hoveredUnitId = null;
     gameState.currentPlayer = 1;
     gameState.globalTurnNumber = 1;
+    gameState.visionCache = null;
+    gameState.fogAnimState = null;
+    gameState.visionDirty = true;
+    gameState.isPassDeviceTransition = false;
     updateGlobalTurnDisplay();
     gameState.isDragging = false;
     gameState.draggingUnit = null;
@@ -2177,7 +2182,10 @@ canvas.addEventListener('contextmenu', (event) => {
             if (elFog) elFog.checked = gameSettings.fogOfWarEnabled;
 
             const elBlur = document.getElementById('settingPassDeviceBlur');
-            if (elBlur) elBlur.checked = gameSettings.passDeviceBlurEnabled;
+            if (elBlur) {
+                elBlur.checked = gameSettings.passDeviceBlurEnabled;
+                elBlur.disabled = !gameSettings.fogOfWarEnabled;
+            }
 
             // --- Connection Status Indicator ---
             const connectionIcon = document.getElementById('connectionStatusIcon');
@@ -2412,12 +2420,23 @@ canvas.addEventListener('contextmenu', (event) => {
                 saveSettings();
             });
 
-            fogOfWarCheckbox.addEventListener('change', (e) => {
-                gameSettings.fogOfWarEnabled = e.target.checked;
-                saveSettings();
-                gameState.visionDirty = true; // Force vision recalculation
-                gameState.needsRedraw = true; // Force a canvas redraw
-            });
+            if (fogOfWarCheckbox) {
+                fogOfWarCheckbox.addEventListener('change', (e) => {
+                    gameSettings.fogOfWarEnabled = e.target.checked;
+
+                    if (passDeviceBlurCheckbox) {
+                        passDeviceBlurCheckbox.disabled = !gameSettings.fogOfWarEnabled;
+                        if (!gameSettings.fogOfWarEnabled) {
+                            gameSettings.passDeviceBlurEnabled = false;
+                            passDeviceBlurCheckbox.checked = false;
+                        }
+                    }
+
+                    saveSettings();
+                    gameState.visionDirty = true; 
+                    gameState.needsRedraw = true; 
+                });
+            }
 
             passDeviceBlurCheckbox.addEventListener('change', (e) => {
                 gameSettings.passDeviceBlurEnabled = e.target.checked;

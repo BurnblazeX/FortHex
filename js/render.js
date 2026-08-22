@@ -1,3 +1,12 @@
+function getPerspectivePlayer() {
+    // In Singleplayer, always view from the human player's side
+    if (gameState.gameMode === 'singleplayer' && gameState.playerSide) {
+        return gameState.playerSide;
+    }
+    // In Local Multiplayer, view from whoever's turn it currently is
+    return gameState.currentPlayer;
+}
+        
         function drawHexFill(q, r, tileType) {
             const { x, y } = axialToPixel(q, r);
             const currentHexSize = HEX_SIZE * gameState.renderScale; 
@@ -290,7 +299,15 @@
                         const dirIdx = MAP_DIRECTION_TO_EDGE_INDEX.indexOf(k);
                         const neighborDir = AXIAL_DIRECTIONS[dirIdx];
                         const edgeKey = getEdgeKey(q, r, q + neighborDir.q, r + neighborDir.r);
-                        if (gameState.visionCache.edges.has(edgeKey)) targetEdges[k] = 0.0;
+                        
+                        if (!gameState.edges.has(edgeKey)) {
+                            // If the edge doesn't exist on the map (it's an outer boundary), 
+                            if (gameState.visionCache.tiles.has(tileKey)) {
+                                targetEdges[k] = 0.0;
+                            }
+                        } else if (gameState.visionCache.edges.has(edgeKey)) {
+                            targetEdges[k] = 0.0;
+                        }
                     }
                 } else {
                     targetCenter = 0.0;
@@ -449,8 +466,7 @@
 
             // --- REVISED FOG CHECK (Base Camps Immune) ---
             if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                // If it's an enemy tile AND it's NOT a base camp...
-                if (playerOwner !== gameState.currentPlayer && !tile.isBaseCampTile) {
+                if (playerOwner !== getPerspectivePlayer() && !tile.isBaseCampTile) {
                     let isAnyPartVisible = gameState.visionCache.tiles.has(tileKey);
                     
                     // If center isn't visible, check if ANY edge is visible
@@ -994,7 +1010,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     edgeUnitsOnly.forEach((unit, index) => {
                         if (animatedUnitIds.has(unit.id)) return;
                         if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                            if (unit.player !== gameState.currentPlayer && !gameState.visionCache.edges.has(unit.position)) return;
+                            if (unit.player !== getPerspectivePlayer() && !gameState.visionCache.edges.has(unit.position)) return;
                         }
                         let unitX = mid.x, unitY = mid.y;
                         if (edgeUnitsOnly.length > 1) {
@@ -1941,15 +1957,16 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             }
 
             if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode) {
-                if (gameState.visionDirty || !gameState.visionCache || gameState.visionCache.player !== gameState.currentPlayer) {
-                    const newVision = computePlayerVision(gameState.currentPlayer);
+                const perspectivePlayer = getPerspectivePlayer();
+                if (gameState.visionDirty || !gameState.visionCache || gameState.visionCache.player !== perspectivePlayer) {
+                    const newVision = computePlayerVision(perspectivePlayer);
                     gameState.visionCache = {
-                        player: gameState.currentPlayer,
+                        player: perspectivePlayer,
                         tiles: newVision.tiles,
                         edges: newVision.edges
                     };
                     gameState.visionDirty = false;
-                    gameState.needsRedraw = true; // Force redraw if vision shifted
+                    gameState.needsRedraw = true; 
                 }
             }
 
@@ -2053,9 +2070,9 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                         drawBridgeAttackHighlightsOnly(currentAttackTargets); 
                         break;
                 }
-                drawMapMakerHighlights();
             }
             
+            drawMapMakerHighlights();
             drawDebugPath();
             drawAnimations();
             drawMovementHighlights();
@@ -2103,7 +2120,11 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 ui.victoryMessage.style.display = 'none';
                 ui.endTurnButton.disabled = false;
             }
+            
+            // Guarantee fresh fog logic on complete reload
+            gameState.visionDirty = true;
             gameState.needsRedraw = true;
+            
             // A single call to gameLoop will trigger a full redraw of the canvas
             requestAnimationFrame(gameLoop);
         }
@@ -2159,7 +2180,7 @@ function drawSupplyLines() {
 
             path.forEach(edgeKey => {
                 if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                    if (unit.player !== gameState.currentPlayer && !gameState.visionCache.edges.has(edgeKey)) {
+                    if (unit.player !== gameState.getPerspectivePlayer() && !gameState.visionCache.edges.has(edgeKey)) {
                         return; // Skip drawing this specific unseen segment
                     }
                 }
@@ -2201,6 +2222,8 @@ function drawMapMakerHighlights() {
         const player = brush.player;
         const currentBase = gameState.baseCampPositions[`player${player}`];
         
+        console.trace(`[Map Maker] Base highlight check. Player: ${player}, Base Size: ${Array.isArray(currentBase) ? currentBase.length : 0}`);
+
         if (Array.isArray(currentBase) && currentBase.length > 0 && currentBase.length < 3) {
             const validNeighbors = new Set();
             const enemyPlayer = player === 1 ? 2 : 1;
@@ -2219,6 +2242,8 @@ function drawMapMakerHighlights() {
                     }
                 });
             });
+            
+            console.log(`[Map Maker] Drawing valid placement rings for:`, Array.from(validNeighbors));
             drawActionSelectionHighlights(Array.from(validNeighbors), 'fortify');
         }
     }

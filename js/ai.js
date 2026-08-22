@@ -390,7 +390,7 @@ async function handleAIReinforcements() {
 
         } else if (armySize < maxUnits) {
 // Recruit missing units based on Brain Weights
-const counts = gameState.unitCounts[queueKey];
+const counts = getUnitCountsForPlayer(player);
 
         // Sort classes dynamically based on their learned weight (Highest weight first)
         const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
@@ -923,7 +923,11 @@ async function executeAIAction(action) {
 
     const animateAndMove = async (unit, moveData) => {
         if (!gameState.isTrainingMode) {
-            gameState.potentialDebugPathToDraw = moveData.path;
+            if (gameSettings.fogOfWarEnabled && gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
+                gameState.potentialDebugPathToDraw = null;
+            } else {
+                gameState.potentialDebugPathToDraw = moveData.path;
+            }
             gameState.debugPathHoverStartTime = Date.now() - PATH_DRAW_HOVER_DELAY_MS;
             await delay(PATH_DRAW_ANIMATION_DURATION_MS + 200);
         }

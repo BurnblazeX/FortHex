@@ -576,17 +576,13 @@
             if (spawnEdgeKey) {
                 const newUnit = createUnit(player, unitType, spawnEdgeKey);
                 gameState.units.push(newUnit);
-                const edge = gameState.edges.get(spawnEdgeKey);
+                
                 logAction(`P${player} ${unitType.name} has returned to the fight!`, player);
                 gameState.visionDirty = true;
                 gameState.needsRedraw = true; 
                 return true;
             }
             
-            if (gameState.unitCounts) {
-                    gameState.unitCounts[`player${player}`][unitType.name]++;
-                }
-
             logAction(`P${player} Base is blocked! Cannot respawn ${unitType.name}.`, player);
             return false;
         }
@@ -604,8 +600,6 @@
             const activePlayer = gameState.currentPlayer;
             const destroyedPlayer = unitToDestroy.player;
             const wasFortified = unitToDestroy.isFortified;
-
-            gameState.unitCounts[`player${destroyedPlayer}`][unitToDestroy.type.name]--;
 
             if (unitToDestroy.isCarryingFlag) {
                 const flag = Object.values(gameState.flags).find(f => f.carrierId === unitToDestroy.id);
@@ -2113,11 +2107,7 @@
 
     const oldType = unit.type.name;
 
-    // 2. Update global counts
-    gameState.unitCounts[`player${unit.player}`][oldType]--;
-    gameState.unitCounts[`player${unit.player}`][template.name]++;
-
-    // --- 3. B29 FIX: Update typeId and stats object ---
+    // --- Update typeId and stats object ---
     unit.typeId = newTypeKey; 
     
     // Reset base stats to the new class
@@ -2133,7 +2123,6 @@
     
     // Sync their Movement Points to the new speed
     unit.currentMove = unit.stats.speed;
-    // ---------------------------------------------------
 
     triggerDamageVisual(unit, 'normal');
     logAction(`P${unit.player} morphed ${oldType} into ${template.name}.`, unit.player);

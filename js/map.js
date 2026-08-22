@@ -938,6 +938,7 @@ function buildMapMakerControls() {
                 // Revert visual state
                 btn.style.backgroundColor = originalColor;
                 btn.style.boxShadow = `0 3px ${originalShadow}`;
+                gameState.needsRedraw = true; // <-- ADD REDRAW HERE
                 return;
             }
 
@@ -971,6 +972,8 @@ function buildMapMakerControls() {
                 palette.querySelectorAll('.unit-option').forEach(el => el.classList.remove('selected'));
                 palette.querySelectorAll('.tile-option').forEach(el => el.style.borderColor = '#4a6075');
             }
+
+            gameState.needsRedraw = true; 
         };
 
         const p1BaseBtn = document.createElement('button');
@@ -1233,6 +1236,11 @@ function clearMapForMaker() {
 
     // Clear all units
     gameState.units = [];   
+
+    //Fog of War Reset 
+    gameState.visionCache = null;
+    gameState.fogAnimState = null;
+    gameState.visionDirty = true;
 
     // Reset Base Camp Data
     if (gameState.gridRadius === 3) {

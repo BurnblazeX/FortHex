@@ -322,7 +322,7 @@
 
             const armySize = gameState.units.filter(u => u.player === player).length;
             const maxUnits = getMaxUnitsForCurrentMap();
-            const counts = gameState.unitCounts[`player${player}`];
+            const counts = getUnitCountsForPlayer(player);
 
             // 2. Populate Recruit Tab
             const recruitContainer = document.getElementById('respawnChoices');
@@ -479,7 +479,7 @@
 
                 // --- FOG OF WAR FILTER ---
                 if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode) {
-                    const viewer = gameState.currentPlayer;
+                    const viewer = (gameState.gameMode === 'singleplayer' && gameState.playerSide) ? gameState.playerSide : gameState.currentPlayer;
                     let isRelevant = false;
                     
                     // 1. Did the current player do it?
