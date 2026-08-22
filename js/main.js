@@ -268,27 +268,28 @@ function showPassDeviceOverlay(nextPlayer, callback) {
         console.log("[Handoff] Creating overlay DOM element.");
         overlay = document.createElement('div');
         overlay.id = 'passDeviceOverlay';
-        
-        overlay.style.cssText = `
-            display: none; position: fixed; z-index: 2147483647; 
-            background-color: rgba(24, 40, 48, 0.6); 
-            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); 
-            align-items: center; justify-content: center; flex-direction: column; 
-            cursor: pointer; border-radius: 10px; pointer-events: auto;
-        `;
-        
-        overlay.innerHTML = `
-            <h2 id="passDeviceText" style="font-family: 'Geostar', cursive; font-size: clamp(2em, 6vw, 3.5em); margin-bottom: 10px; text-align: center; text-shadow: 0 4px 10px rgba(0,0,0,0.9); font-weight: bold;">Pass to Player X</h2>
-            <div id="passDeviceCountdown" style="font-size: clamp(3em, 8vw, 5em); font-weight: bold; color: #FFFFFF; margin-bottom: 20px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">5</div>
-            <p style="font-size: clamp(1.2em, 4vw, 1.5em); color: #FFFFFF; opacity: 0.9; text-align: center; text-shadow: 0 2px 5px rgba(0,0,0,0.9);">Tap anywhere to continue</p>
-        `;
         document.body.appendChild(overlay);
     }
+    
+    // --- FIX: Change 'fixed' to 'absolute' so it scrolls with the page! ---
+    overlay.style.cssText = `
+        display: none; position: absolute; z-index: 2147483647; 
+        background-color: rgba(24, 40, 48, 0.6); 
+        backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); 
+        align-items: center; justify-content: center; flex-direction: column; 
+        cursor: pointer; border-radius: 10px; pointer-events: auto;
+    `;
+    
+    overlay.innerHTML = `
+        <h2 id="passDeviceText" style="font-family: 'Geostar', cursive; font-size: clamp(2em, 6vw, 3.5em); margin-bottom: 10px; text-align: center; text-shadow: 0 4px 10px rgba(0,0,0,0.9); font-weight: bold;">Pass to Player X</h2>
+        <div id="passDeviceCountdown" style="font-size: clamp(3em, 8vw, 5em); font-weight: bold; color: #FFFFFF; margin-bottom: 20px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">5</div>
+        <p style="font-size: clamp(1.2em, 4vw, 1.5em); color: #FFFFFF; opacity: 0.9; text-align: center; text-shadow: 0 2px 5px rgba(0,0,0,0.9);">Tap anywhere to continue</p>
+    `;
 
     // --- SPAM FIX: FORCE RESOLVE EXISTING OVERLAY ---
     if (window.resolvePassDeviceOverlay) {
         console.log("[Handoff] Force-resolving previous overlay due to rapid click.");
-        window.resolvePassDeviceOverlay(true); // true = isForceAbort
+        window.resolvePassDeviceOverlay(true); 
     }
 
     const countdownEl = document.getElementById('passDeviceCountdown');
@@ -305,10 +306,11 @@ function showPassDeviceOverlay(nextPlayer, callback) {
     gameState.isPassDeviceTransition = true;
     gameState.needsRedraw = true;
     
+    // --- FIX: Inject window.scrollY to pin it to the document instead of the camera ---
     const syncOverlaySize = () => {
         const rect = canvasEl.getBoundingClientRect();
-        overlay.style.top = rect.top + 'px';
-        overlay.style.left = rect.left + 'px';
+        overlay.style.top = (rect.top + window.scrollY) + 'px';
+        overlay.style.left = (rect.left + window.scrollX) + 'px';
         overlay.style.width = rect.width + 'px';
         overlay.style.height = rect.height + 'px';
     };
@@ -348,7 +350,7 @@ function showPassDeviceOverlay(nextPlayer, callback) {
         if (isResolving) return;
         isResolving = true;
         
-        window.resolvePassDeviceOverlay = null; // Clear global reference
+        window.resolvePassDeviceOverlay = null; 
         
         console.trace("[Handoff] resolveOverlay triggered. Clearing overlay and lifting fog.");
         clearInterval(intervalId);
@@ -364,7 +366,6 @@ function showPassDeviceOverlay(nextPlayer, callback) {
             if (callback) callback();
         };
 
-        // Skip exit animation if force aborted to prevent graphical glitches during spam
         if (gameSettings.animationsEnabled && !isForceAbort) {
             const anim = overlay.animate([
                 { opacity: 1 },
@@ -381,7 +382,6 @@ function showPassDeviceOverlay(nextPlayer, callback) {
 
     window.resolvePassDeviceOverlay = resolveOverlay;
     
-    // Use a named handler so we can cleanly remove it later
     const overlayClickHandler = () => resolveOverlay(false);
     overlay.addEventListener('click', overlayClickHandler);
 }
