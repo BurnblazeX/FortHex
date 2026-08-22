@@ -2180,7 +2180,7 @@ function drawSupplyLines() {
 
             path.forEach(edgeKey => {
                 if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                    if (unit.player !== gameState.getPerspectivePlayer() && !gameState.visionCache.edges.has(edgeKey)) {
+                    if (unit.player !== getPerspectivePlayer() && !gameState.visionCache.edges.has(edgeKey)) {
                         return; // Skip drawing this specific unseen segment
                     }
                 }
