@@ -191,6 +191,7 @@ function attemptLegacyConversion(data) {
             
             // Ensure essential flags exist
             if (u.turnsFortifiedAtBase === undefined) u.turnsFortifiedAtBase = 0;
+            if (u.mountainAttritionTurns === undefined) u.mountainAttritionTurns = 0;
             if (u.fortifyCooldown === undefined) u.fortifyCooldown = 0;
             if (u.level === undefined) u.level = 0;
             if (u.spearWalled === undefined) u.spearWalled = false;
@@ -367,6 +368,11 @@ function rehydrateGameState() {
             gameState.currentReachableMoves = new Map();
         }
 
+        // 3b. Rebuild the fine-grid index from the freshly restored tiles/edges.
+        // It's derived data — never trust whatever the save serialised it into (a Map
+        // becomes a plain {} through JSON, which would break resolveFineCoord()).
+        buildFineGridIndex();
+
         // 4. Restore Global Color State
         if (gameState.playerColorSelections) {
             const p1Theme = COLOR_THEMES[gameState.playerColorSelections.player1];
@@ -413,6 +419,18 @@ function rehydrateGameState() {
             if (!unit.typeId && unit.typeName) unit.typeId = unit.typeName;
             if (!unit.type) console.warn("Unknown Unit Type ID:", unit.typeId);
         });
+
+        // 5b. Re-link unit REFERENCES to the real array members. JSON has no reference
+        // sharing, so selectedUnit/draggingUnit/unitToSwap deserialise as detached clones
+        // that the getter loop above never touched. Acting on a clone mutates the copy
+        // while tile state mutates the real board, desyncing the game.
+        const relinkUnitRef = (ref) => {
+            if (!ref || !ref.id) return null;
+            return gameState.units.find(u => u.id === ref.id) || null;
+        };
+        gameState.selectedUnit = relinkUnitRef(gameState.selectedUnit);
+        gameState.draggingUnit = relinkUnitRef(gameState.draggingUnit);
+        gameState.unitToSwap = relinkUnitRef(gameState.unitToSwap);
 
         // 6. Re-link Units to Edges (Re-attach Getters)
         gameState.edges.forEach((edge, edgeKey) => {
@@ -510,7 +528,9 @@ function loadMapFromDataObject(mapData) {
     });
 
     mapData.units.forEach(unitInfo => {
-        const typeKey = (unitInfo.typeName || "").toUpperCase();
+        // Map files store typeName; game saves store typeId. Accept either, or every
+        // unit in a .fhsave opened through the map maker is silently dropped.
+        const typeKey = (unitInfo.typeName || unitInfo.typeId || "").toUpperCase();
         const unitType = UNIT_TYPES[typeKey];
         
         if (unitType) {
@@ -525,9 +545,14 @@ function loadMapFromDataObject(mapData) {
         }
     });
 
-    gameState.baseCampPositions = mapData.baseCampPositions;
-    gameState.flags.p1_flag.homePosition = mapData.baseCampPositions.player1;
-    gameState.flags.p2_flag.homePosition = mapData.baseCampPositions.player2;
+    gameState.baseCampPositions = mapData.baseCampPositions || { player1: null, player2: null };
+
+    // resizeMapGrid(2) nulls gameState.flags for arcade, so this must be guarded the same
+    // way startMapTest does it — otherwise loading any Compact (radius 2) map throws.
+    if (gameState.flags) {
+        gameState.flags.p1_flag.homePosition = gameState.baseCampPositions.player1;
+        gameState.flags.p2_flag.homePosition = gameState.baseCampPositions.player2;
+    }
 
     const setBaseFlags = (baseData) => {
         if (!baseData) return;
@@ -573,6 +598,10 @@ function loadMapFromDataObject(mapData) {
 
     const bcSlider = document.getElementById('baseCampSlider');
     if (bcSlider) bcSlider.value = matchingSliderValue;
+
+    // gameState.tiles was cleared and repopulated from mapData above, so the index
+    // resizeMapGrid built no longer necessarily matches the board.
+    buildFineGridIndex();
 
     showInstruction("Map loaded successfully!", 2000);
     return true;

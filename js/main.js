@@ -388,7 +388,15 @@ function showPassDeviceOverlay(nextPlayer, callback) {
 
 function proceedToEndTurn() {
     if (gameState.isDragging || gameState.gameOver) return;
-    
+
+    // A pending forced retreat must be resolved before the turn can end. Otherwise
+    // proceedToEndTurn clears selectedUnit while mustUnfortify stays set, and
+    // handleTapLogic then blocks ALL canvas input for both players permanently.
+    if (gameState.mustUnfortify) {
+        showInstruction("You MUST select an edge to retreat to first!", 2500);
+        return;
+    }
+
     // --- ARCADE PHASE CHECK ---
     if (gameState.gameMode === 'arcade') {
         if (gameState.globalTurnNumber >= 2) {
@@ -454,9 +462,14 @@ function proceedToEndTurn() {
     });
     
     handleRespawnQueue();
-    applyStartOfTurnZoCDamage(); 
+    applyStartOfTurnZoCDamage();
+    // Give unsupplied forts a chance to buy a supply line back before anything that
+    // depends on supply status runs — otherwise a fort could only ever be resupplied as
+    // a side effect of some unrelated fortify/unfortify elsewhere on the board.
+    attemptToResupplyForts(gameState.currentPlayer);
     logSiegeStatus();
-    applyStartOfTurnHealing(); 
+    applyMountainAttrition();
+    applyStartOfTurnHealing();
 
     // --- VISUAL REVEAL CALLBACK (Runs after overlay clears) ---
     const finalizeVisuals = () => {
@@ -664,6 +677,59 @@ function updateAllHealingStatus() {
             if (p2FlagStolen) { logAction(`P2's flag is stolen! Healing is disabled.`, 1, 3000); }
         }
 
+// Archers holding a mountain peak bleed HP unless they are BOTH supplied and their
+// player's flag is safely at base — a stolen flag cuts the peak off just as surely as a
+// severed supply line. The damage escalates 1, 2, 3... for each consecutive turn the
+// hold is unsupported, and resets the moment support is restored (or when the unit
+// unfortifies off the peak).
+function applyMountainAttrition() {
+    const activePlayer = gameState.currentPlayer;
+    const attritionEvents = [];
+    const unitsToDestroy = [];
+
+    gameState.units.forEach(unit => {
+        if (unit.player !== activePlayer || !isUnitOnMountainPeak(unit)) return;
+
+        const playerFlag = gameState.flags ? gameState.flags[`p${unit.player}_flag`] : null;
+        const flagStolen = !!(playerFlag && playerFlag.status === 'carried');
+
+        if (!flagStolen && isUnitSupplied(unit)) {
+            unit.mountainAttritionTurns = 0;
+            return;
+        }
+
+        unit.mountainAttritionTurns = (unit.mountainAttritionTurns || 0) + 1;
+        const damage = unit.mountainAttritionTurns;
+
+        unit.hp -= damage;
+        triggerDamageVisual(unit, 'normal');
+
+        attritionEvents.push({
+            unitId: unit.id,
+            damage: damage,
+            remainingHp: unit.hp,
+            isFatal: unit.hp <= 0
+        });
+
+        logAction(`P${unit.player} ${unit.type.name} takes ${damage} mountain attrition. HP: ${unit.hp}`, activePlayer, 3500);
+
+        if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
+            unitsToDestroy.push(unit);
+        }
+    });
+
+    if (attritionEvents.length > 0 && typeof ActionManager !== 'undefined') {
+        ActionManager.submitAction({
+            type: "TURN_START_MOUNTAIN_ATTRITION",
+            turn: gameState.globalTurnNumber,
+            player: activePlayer,
+            payload: { events: attritionEvents }
+        });
+    }
+
+    if (unitsToDestroy.length > 0) unitsToDestroy.forEach(u => handleUnitDeath(u, "mountain_attrition"));
+}
+
 function applyStartOfTurnHealing() {
     // In Arcade mode, there are no base camps, so units cannot heal.
     if (gameState.gameMode === 'arcade') return;
@@ -685,34 +751,13 @@ function applyStartOfTurnHealing() {
             return;
         }
             
-        let isSupplied = false;
-        
-        // --- Normalized Base Tiles Check ---
-        const rawBaseData = gameState.baseCampPositions[`player${unit.player}`];
-        let baseTiles = [];
-        if (Array.isArray(rawBaseData)) {
-            baseTiles = rawBaseData;
-        } else if (typeof rawBaseData === 'string') {
-            const [h1, h2] = parseEdgeKey(rawBaseData);
-            if (!isNaN(h1.q)) baseTiles.push(getTileKey(h1.q, h1.r));
-            if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
-        }
-        
-        if (baseTiles.includes(unit.fortifiedTileKey)) {
-            isSupplied = true;
+        // A unit on a mountain peak can never heal — its supplies go entirely to
+        // keeping it alive up there.
+        if (isUnitOnMountainPeak(unit)) {
+            return;
         }
 
-        if (!isSupplied && unit.supplyLine && unit.supplyLine.path) {
-            const isIntercepted = unit.supplyLine.path.some(edgeKey => {
-                const edge = gameState.edges.get(edgeKey);
-                return edge && edge.units.some(u => u.player !== unit.player);
-            });
-            if (!isIntercepted) {
-                isSupplied = true;
-            }
-        }
-
-        if (isSupplied) {
+        if (isUnitSupplied(unit)) {
             const oldHp = unit.hp;
             unit.hp++;
             const activePlayer = gameState.currentPlayer;
@@ -1552,10 +1597,10 @@ function handleUnitSelectionClick(x, y) {
             
             gameState.validFortifyTargetTileKeys = [];
 
-            if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey)) {
+            if (tile1 && canUnitFortifyOnTile(selectedUnit, tile1) && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey)) {
                 gameState.validFortifyTargetTileKeys.push(tile1Key);
             }
-            if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey)) {
+            if (tile2 && canUnitFortifyOnTile(selectedUnit, tile2) && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey)) {
                 gameState.validFortifyTargetTileKeys.push(tile2Key);
             }
 
@@ -2519,7 +2564,13 @@ canvas.addEventListener('contextmenu', (event) => {
             document.getElementById('loadGameModalCloseButton').addEventListener('click', hideLoadGameModal);
 
             document.getElementById('loadFromAutosaveButton').addEventListener('click', () => {
-                if (localStorage.getItem('forthexSaveGame')) {
+                // Must match the key loadAutoSave() will actually read, or the button
+                // reports "no autosave" for singleplayer / map-maker saves that do exist.
+                const activeAutosaveKey = gameState.mapMakerMode
+                    ? MAP_MAKER_AUTOSAVE_KEY
+                    : (gameState.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame');
+
+                if (localStorage.getItem(activeAutosaveKey)) {
                     loadAutoSave();
                     hideLoadGameModal();
                 } else {

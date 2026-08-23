@@ -845,13 +845,16 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                 const myFlagTileKey = getFlagTileKey(unit.player);
                 const enemyPlayer = unit.player === 1 ? 2 : 1;
                 const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
-                const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
-                const enemyBaseTileKeys = new Set(Array.isArray(enemyBaseData) ? enemyBaseData : []);
+                // getBaseTileKeys handles both the array and edge-key-string shapes. The
+                // old inline `Array.isArray(...) ? ... : []` silently produced an empty set
+                // on radius-3 maps, so the enemy-base guard below never fired there.
+                const enemyBaseTileKeys = new Set(getBaseTileKeys(enemyPlayer));
+                const myBaseTileKeys = new Set(getBaseTileKeys(unit.player));
 
                 [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {
                     const tile = gameState.tiles.get(tileKey);
-                    
-                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey && (!enemyBaseTileKeys.has(tileKey) || tileKey === enemyFlagTileKey)) {
+
+                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey && !myBaseTileKeys.has(tileKey) && (!enemyBaseTileKeys.has(tileKey) || tileKey === enemyFlagTileKey)) {
                          let score = aiBrain.weights.fortify_base_score - unit.fortifyCooldown;
                          if(unit.type.name === 'Pikeman') score += aiBrain.weights.fortify_pikeman_bonus; 
                          if(unit.hp < unit.maxHp) score += aiBrain.weights.fortify_heal_bonus; 

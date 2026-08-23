@@ -518,7 +518,7 @@ function drawFortificationOutlines() {
             const CONTESTED_EDGE_COLOR = '#C440C4';
             const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
 
-            gameState.edges.forEach(edge => {
+            gameState.edges.forEach((edge, edgeKey) => {
                 if (edge.units.length < 2) return;
 
                 const playerOnEdge = edge.units[0].player;
@@ -1021,7 +1021,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 if (animatedUnitIds.has(unit.id)) return;
                 if (unit.isFortified && unit.positionType === 'center' && (!isEffectivelyDragging || unit.id !== gameState.draggingUnit.id)) {
                     if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                        if (unit.player !== gameState.currentPlayer && !gameState.visionCache.tiles.has(unit.position)) return;
+                        if (unit.player !== getPerspectivePlayer() && !gameState.visionCache.tiles.has(unit.position)) return;
                     }
                     const tile = gameState.tiles.get(unit.position);
                     if (tile) {
@@ -1226,260 +1226,55 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             ctx.restore();
         }
 
-        function drawDebugAttackRangeHighlights() {
+        function drawFineGridVisibilityDebug() {
+            if (!gameSettings.debugModeEnabled || !gameState.selectedUnit) return;
+
+            const vis = getVisibleKeysFromUnit(gameState.selectedUnit);
+            const attackCells = getAttackRangeFineCells(gameState.selectedUnit);
+
             const currentHexSize = HEX_SIZE * gameState.renderScale;
-            const currentTime = Date.now();
+            const fineHexRadius = currentHexSize * 0.5;
 
-    // --- 1. DEBUG MODE: Show Theoretical Range (RED - Constant) ---
-    if (gameSettings.debugModeEnabled && gameState.selectedUnit) {
-        const unit = gameState.selectedUnit;
-        let theoreticalEdges = new Set();
-        let theoreticalTiles = new Set();
+            ctx.save();
 
-        if (unit.type.attackType === 'melee') {
-            // Melee Edges
-            const edges = getPotentialMeleeAttackEdges(unit);
-            edges.forEach(e => theoreticalEdges.add(e));
-
-            // Melee Tiles (Adjacent Centers) - ONLY if on Edge
-            if (unit.positionType === 'edge') {
-                const [h1, h2] = parseEdgeKey(unit.position);
-                if (!isNaN(h1.q)) theoreticalTiles.add(getTileKey(h1.q, h1.r));
-                if (!isNaN(h2.q)) theoreticalTiles.add(getTileKey(h2.q, h2.r));
-            } 
-        } 
-        else if (unit.type.name === 'Archer') {
-            const visibilityData = getVisibleKeysFromUnit(unit);
-            
-            // Archer Edges: Filter Visible edges based on Range Rules
-            visibilityData.edges.forEach(e => {
-                let isAttackable = true;
-                
-                // Restriction A: Edge Archer
-                if (unit.positionType === 'edge') {
-                    const [h1, h2] = parseEdgeKey(unit.position);
-                    const inA = !isNaN(h1.q) && isEdgePartOfTile(h1.q, h1.r, e);
-                    const inB = !isNaN(h2.q) && isEdgePartOfTile(h2.q, h2.r, e);
-                    if (!inA && !inB) isAttackable = false;
-                }
-
-                // Restriction B: Fortified Archer (Low Visibility)
-                if (unit.positionType === 'center' && unit.isFortified) {
-                    const sourceTile = gameState.tiles.get(unit.position);
-                    if (sourceTile && getTileVisibility(sourceTile) <= 1) {
-                        if (!isEdgePartOfTile(sourceTile.q, sourceTile.r, e)) {
-                            isAttackable = false;
-                        }
-                    }
-                }
-                
-                if (isAttackable) theoreticalEdges.add(e);
-            });
-
-            // Archer Tiles: Can only attack visible tiles with Visibility > 1
-            visibilityData.tiles.forEach(tKey => {
-                const t = gameState.tiles.get(tKey);
-                if (t && getTileVisibility(t) > 1) {
-                    theoreticalTiles.add(tKey);
-                }
-            });
-        }
-
-        ctx.save();
-        ctx.lineCap = 'round';
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = `rgba(255, 50, 50, 0.8)`; // Constant Red, high opacity
-        ctx.fillStyle = `rgba(255, 50, 50, 0.3)`;   // Semi-transparent Red for tiles
-
-        // Draw Edges
-        theoreticalEdges.forEach(edgeKey => {
-            const edge = gameState.edges.get(edgeKey);
-            if (!edge) return;
-
-            const p1_center = axialToPixel(edge.q1, edge.r1);
-            const p2_center = axialToPixel(edge.q2, edge.r2);
-            
-            const edgeMidX = (p1_center.x + p2_center.x) / 2;
-            const edgeMidY = (p1_center.y + p2_center.y) / 2;
-
-            let perp_dx = -(p2_center.y - p1_center.y);
-            let perp_dy = p2_center.x - p1_center.x;
-            const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
-
-            if (len_perp_vec > 0) {
-                const scale = (currentHexSize / 2) * 0.9;
-                const dx = (perp_dx / len_perp_vec) * scale;
-                const dy = (perp_dy / len_perp_vec) * scale;
+            // Draw a mini-hex exactly on the fine grid lattice.
+            // Dividing fine coords by 2 gives the exact axial pixel midpoint.
+            const drawMiniHex = (fq, fr, fillStyle) => {
+                const { x, y } = axialToPixel(fq / 2, fr / 2);
 
                 ctx.beginPath();
-                ctx.moveTo(edgeMidX + dx, edgeMidY + dy);
-                ctx.lineTo(edgeMidX - dx, edgeMidY - dy);
-                ctx.stroke();
-            }
-        });
-
-        // Draw Tile Centers (Targetable Forts)
-        theoreticalTiles.forEach(tileKey => {
-            const tile = gameState.tiles.get(tileKey);
-            if (tile) {
-                const { x, y } = axialToPixel(tile.q, tile.r);
-                
-                ctx.beginPath();
-                const radius = currentHexSize * 0.4;
                 for (let i = 0; i < 6; i++) {
                     const angle = Math.PI / 180 * (60 * i - 30);
-                    const vx = x + radius * Math.cos(angle);
-                    const vy = y + radius * Math.sin(angle);
+                    const vx = x + fineHexRadius * Math.cos(angle);
+                    const vy = y + fineHexRadius * Math.sin(angle);
                     if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
                 }
                 ctx.closePath();
+                ctx.fillStyle = fillStyle;
                 ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 2;
                 ctx.stroke();
-            }
-        });
+            };
 
-        ctx.restore();
-    }
-}
-        function drawDebugVisibilityHighlights() {
-            if (!gameSettings.debugModeEnabled) return;
-
-            let visibilityData = null;
-
-            // Prioritize Unit selection, then Base selection
-            if (gameState.selectedUnit) {
-                visibilityData = getVisibleKeysFromUnit(gameState.selectedUnit);
-        } else if (gameState.debugSelectedBasePlayer) {
-                visibilityData = getBaseVisibility(gameState.debugSelectedBasePlayer);
-            }
-
-            if (!visibilityData) return;
-
-            const visibleEdges = visibilityData.edges;
-            const visibleTiles = visibilityData.tiles;
-
-            // Calculate pulsing alpha
-            const currentTime = Date.now();
-            const pulseDuration = 1000;
-            const alpha = 0.3 + 0.4 * (Math.sin(currentTime / pulseDuration * 2 * Math.PI) + 1) / 2; 
-
-            const currentHexSize = HEX_SIZE * gameState.renderScale;
-
-            ctx.save();
-            // Use slightly different color for Base vs Unit to distinguish
-            if (gameState.debugSelectedBasePlayer && !gameState.selectedUnit) {
-                ctx.strokeStyle = `rgba(0, 255, 255, ${alpha + 0.3})`; // Cyan for Base
-                ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
-            } else {
-                ctx.strokeStyle = `rgba(255, 255, 0, ${alpha + 0.3})`; // Yellow for Unit
-                ctx.fillStyle = `rgba(255, 255, 0, ${alpha})`;
-            }
-            ctx.lineWidth = 5;
-
-            // 1. Draw Visible Tile Centers
-            visibleTiles.forEach(tileKey => {
-                const tile = gameState.tiles.get(tileKey);
-                if (tile) {
-                    const { x, y } = axialToPixel(tile.q, tile.r);
-                    ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const angle = Math.PI / 180 * (60 * i - 30);
-                        const vx = x + currentHexSize * 0.6 * Math.cos(angle); 
-                        const vy = y + currentHexSize * 0.6 * Math.sin(angle);
-                        if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
-                    }
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
-                }
+            // 1. Visibility (blue)
+            vis.tiles.forEach(t => {
+                const f = getFineCoordForTile(t);
+                drawMiniHex(f.fq, f.fr, 'rgba(0, 100, 255, 0.6)');
+            });
+            vis.edges.forEach(e => {
+                const f = getFineCoordForEdge(e);
+                drawMiniHex(f.fq, f.fr, 'rgba(0, 100, 255, 0.6)');
             });
 
-            // 2. Draw Visible Edges
-            visibleEdges.forEach(edgeKey => {
-                const edge = gameState.edges.get(edgeKey);
-                if (edge) {
-                    const p1_center = axialToPixel(edge.q1, edge.r1);
-                    const p2_center = axialToPixel(edge.q2, edge.r2);
-            
-                    const edgeMidX = (p1_center.x + p2_center.x) / 2;
-                    const edgeMidY = (p1_center.y + p2_center.y) / 2;
-
-                    let perp_dx = -(p2_center.y - p1_center.y);
-                    let perp_dy = p2_center.x - p1_center.x;
-                    const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
-
-                    if (len_perp_vec > 0) {
-                        const scale = (currentHexSize / 2) * 0.8;
-                        const dx = (perp_dx / len_perp_vec) * scale;
-                        const dy = (perp_dy / len_perp_vec) * scale;
-
-                        ctx.beginPath();
-                        ctx.moveTo(edgeMidX + dx, edgeMidY + dy);
-                        ctx.lineTo(edgeMidX - dx, edgeMidY - dy);
-                        ctx.stroke();
-                    }
-                }
+            // 2. Attack range (red) — always a subset of visibility, so drawn on top.
+            attackCells.forEach(fineKey => {
+                const [fq, fr] = fineKey.split(',').map(Number);
+                drawMiniHex(fq, fr, 'rgba(255, 0, 0, 0.65)');
             });
 
             ctx.restore();
         }
-
-function drawFineGridVisibilityComparison() {
-    if (!gameSettings.debugModeEnabled || !gameState.selectedUnit) return;
-
-    const oldVis = getVisibleKeysFromUnit(gameState.selectedUnit);
-    const newVis = getVisibleKeysFromUnitFine(gameState.selectedUnit);
-
-    const currentHexSize = HEX_SIZE * gameState.renderScale;
-    const fineHexRadius = currentHexSize * 0.5; 
-
-    ctx.save();
-
-    // Helper to draw a mini-hex exactly on the fine grid lattice
-    const drawMiniHex = (fq, fr, color) => {
-        // The magic trick: dividing fine coords by 2 gives the exact axial pixel midpoint!
-        const { x, y } = axialToPixel(fq / 2, fr / 2);
-        
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = Math.PI / 180 * (60 * i - 30);
-            const vx = x + fineHexRadius * Math.cos(angle);
-            const vy = y + fineHexRadius * Math.sin(angle);
-            if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
-        }
-        ctx.closePath();
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // Light border to show the grid
-        ctx.lineWidth = 2;
-        ctx.stroke();
-    };
-
-    // Draw the entire NEW system's vision as a blue honeycomb
-    newVis.tiles.forEach(t => {
-        const f = getFineCoordForTile(t);
-        drawMiniHex(f.fq, f.fr, 'rgba(0, 100, 255, 0.6)');
-    });
-    newVis.edges.forEach(e => {
-        const f = getFineCoordForEdge(e);
-        drawMiniHex(f.fq, f.fr, 'rgba(0, 100, 255, 0.6)');
-    });
-
-    // If the old system grabbed something the new one missed, flag it RED
-    const oldOnlyTiles = [...oldVis.tiles].filter(t => !newVis.tiles.has(t));
-    const oldOnlyEdges = [...oldVis.edges].filter(e => !newVis.edges.has(e));
-
-    oldOnlyTiles.forEach(t => {
-        const f = getFineCoordForTile(t);
-        drawMiniHex(f.fq, f.fr, 'rgba(255, 0, 0, 0.8)');
-    });
-    oldOnlyEdges.forEach(e => {
-        const f = getFineCoordForEdge(e);
-        drawMiniHex(f.fq, f.fr, 'rgba(255, 0, 0, 0.8)');
-    });
-
-    ctx.restore();
-}
 
         function triggerDamageVisual(targetUnit, attackStatus = 'normal') {
             if (gameState.isTrainingMode || !gameSettings.animationsEnabled) return;
@@ -2100,9 +1895,7 @@ function drawFineGridVisibilityComparison() {
             drawBridges();
             drawFogOfWar();
             drawSupplyLines();
-            drawDebugVisibilityHighlights(); 
-            drawFineGridVisibilityComparison();
-            drawDebugAttackRangeHighlights(); 
+            drawFineGridVisibilityDebug();
 
             if (!gameState.isDragging) {
                 switch(gameState.currentActionState) {
@@ -2279,8 +2072,7 @@ function drawMapMakerHighlights() {
         if (Array.isArray(currentBase) && currentBase.length > 0 && currentBase.length < 3) {
             const validNeighbors = new Set();
             const enemyPlayer = player === 1 ? 2 : 1;
-            const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
-            const enemyBaseSet = new Set(Array.isArray(enemyBaseData) ? enemyBaseData : []);
+            const enemyBaseSet = new Set(getBaseTileKeys(enemyPlayer));
 
             currentBase.forEach(key => {
                 const [q,r] = key.split(',').map(Number);
