@@ -626,7 +626,7 @@ function getAttackRangeFineCells(unit) {
         // Without the type check, an arcade class-swap that morphs a fortified peak
         // archer into another class would keep granting it archer-tier vision.
         function isUnitOnMountainPeak(unit) {
-            if (!unit || unit.type.name !== 'Archer' || unit.positionType !== 'center' || !unit.isFortified) return false;
+            if (!unit || !unit.type || unit.type.name !== 'Archer' || unit.positionType !== 'center' || !unit.isFortified) return false;
             const tile = gameState.tiles.get(unit.position);
             return !!(tile && tile.type.name === 'Mountain');
         }

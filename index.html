@@ -83,7 +83,7 @@
     <div id="messageBox" class="message-box" style="display: block;">Project Hexblade Loaded. Player 1's Turn.</div>
     <div id="victoryMessage" class="victory-message" style="display: none;"></div>
     
-    <div id="buildVersionDisplay">FortHex B29//3d</div>
+    <div id="buildVersionDisplay">FortHex B29//4</div>
     <div id="confettiContainer"></div>
     <div id="victoryInteractionBlocker" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1999; display: none; background-color: rgba(44, 62, 80, 0.4); backdrop-filter: blur(3px); transition: background-color 0.5s ease, backdrop-filter 0.5s ease;"></div>
 
@@ -273,6 +273,43 @@
         <div class="modal-content" style="max-width: 500px; text-align: left;">
             <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px; text-align: center;">Changelog</h3>
             <div id="changelogList" style="max-height: 50vh; overflow-y: auto; padding-right: 15px;">
+                <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B29 Patch 4: Mountains & Forests</h4>
+                <ul style="list-style-type: none; padding-left: 0;">
+                    <!-- Features -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li><strong>Fine-Grid Vision & Range System:</strong> Replaced the line-of-sight and targeting engine with a high-resolution sub-hex grid to ensure visual highlights strictly align with mechanical rules.</li>
+                            <li><strong>Mountain Peak Fortification:</strong> Archers can now fortify on Mountain tiles. This expands their vision and attack range to 3 hexes and allows targeting over standard line-of-sight obstacles.</li>
+                            <li><strong>Mountain Peak Attrition:</strong> Archers fortified on mountain peaks take escalating attrition damage each turn unless supported by an intact supply line and an uncaptured team flag.</li>
+                            <li><strong>Fine-Grid Debug Overlay:</strong> Added a developer visualizer that renders the sub-grid calculations for vision and attack ranges.</li>
+                        </ul>
+                    </li>
+                    <!-- Improvements -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li><strong>Unified Attack Targeting:</strong> Consolidated melee and ranged combat targeting into a single shared pipeline based on the fine-grid geometry.</li>
+                            <li><strong>Fort Resupply Ordering:</strong> Modified the turn sequence so unsupplied forts attempt to re-establish supply lines before attrition and healing phases occur.</li>
+                            <li><strong>Terrain Defense Penalty:</strong> Moved the defense penalty for holding Forests and Mountains to combat damage resolution rather than modifying base stats, preventing forced unfortification caused by the defense stat dropping to 0.</li>
+                            <li><strong>Dynamic Combined Arms:</strong> Integrated Combined Arms logic with the fine-grid system. A friendly melee unit on an archer's edge relaxes the visibility threshold, permitting attacks into low-visibility tiles like forests.</li>
+                            <li><strong>Data Normalization:</strong> Implemented universal helpers to standardize Base Camp identification across Expansive and Standard maps.</li>
+                        </ul>
+                    </li>
+                    <!-- Fixes -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li>Fixed a soft-lock where pressing "End Turn" with a pending forced retreat cleared the unit selection but left the lock active, disabling canvas interactions.</li>
+                            <li>Fixed a state desync where loading a game spawned detached clones for selected and dragged units. Game actions now correctly re-link and mutate the actual board units.</li>
+                            <li>Fixed logic that caused the AI to fail at parsing base camp arrays on Radius 3 maps, preventing it from ignoring Base Camp geometries during movement scoring.</li>
+                            <li>Blocked units from fortifying inside enemy base camp tiles. Capturing the flag tile remains permitted.</li>
+                            <li>Fixed an issue in the Map Maker where save files deleted all units upon load due to a mismatch between type serialization.</li>
+                            <li>Fixed a null reference crash triggered by resizing the map between Arcade Mode and standard map sizes.</li>
+                            <li>Removed deprecated fortification properties from unit templates; validation is now handled exclusively by terrain and class mechanics.</li>
+                        </ul>
+                    </li>
+                </ul>
                 <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B29 Patch 3: Fog of War</h4>
                 <ul style="list-style-type: none; padding-left: 0;">
                     <!-- Features -->
