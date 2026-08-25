@@ -46,6 +46,355 @@
             return (Math.abs(dq) + Math.abs(dr) + Math.abs(ds)) / 2;
         }
 
+ // === Fine Grid System ===
+
+function buildFineGridIndex() {
+    gameState.fineGrid = new Map();
+    
+    // Tiles map to (2q, 2r)
+    gameState.tiles.forEach(tile => {
+        const fq = 2 * tile.q;
+        const fr = 2 * tile.r;
+        const tileKey = getTileKey(tile.q, tile.r);
+        gameState.fineGrid.set(`${fq},${fr}`, { type: 'tile', key: tileKey });
+    });
+
+    // Edges map to (q1+q2, r1+r2)
+    gameState.edges.forEach((edge, edgeKey) => {
+        const fq = edge.q1 + edge.q2;
+        const fr = edge.r1 + edge.r2;
+        gameState.fineGrid.set(`${fq},${fr}`, { type: 'edge', key: edgeKey });
+    });
+}
+
+function getFineCoordForTile(tileKey) {
+    const [q, r] = tileKey.split(',').map(Number);
+    return { fq: 2 * q, fr: 2 * r };
+}
+
+function getFineCoordForEdge(edgeKey) {
+    const [h1, h2] = parseEdgeKey(edgeKey);
+    return { fq: h1.q + h2.q, fr: h1.r + h2.r };
+}
+
+function getFineCoordForUnit(unit) {
+    if (unit.positionType === 'center') {
+        return getFineCoordForTile(unit.position);
+    } else {
+        return getFineCoordForEdge(unit.position);
+    }
+}
+
+function fineDistance(a, b) {
+    return axialDistance(a.fq, a.fr, b.fq, b.fr);
+}
+
+function getFineNeighbors(fq, fr) {
+    return AXIAL_DIRECTIONS.map(dir => ({ fq: fq + dir.q, fr: fr + dir.r }));
+}
+
+function resolveFineCoord(fq, fr) {
+    return gameState.fineGrid.get(`${fq},${fr}`) || null;
+}
+
+function fineRangeQuery(startFine, maxRange, options = {}) {
+    const visited = new Map();
+    const startKeyStr = `${startFine.fq},${startFine.fr}`;
+    const startEntity = resolveFineCoord(startFine.fq, startFine.fr);
+
+    // If the starting coordinate is off-board, return empty immediately
+    if (!startEntity) return visited;
+
+    // Record the starting cell
+    visited.set(startKeyStr, {
+        distance: 0,
+        type: startEntity.type,
+        key: startEntity.key
+    });
+
+    const queue = [{ coord: startFine, distance: 0, entity: startEntity }];
+
+    while (queue.length > 0) {
+        const { coord, distance, entity } = queue.shift();
+
+        // If this entity blocks vision/range beyond it, stop expanding from it.
+        // (It is still included in `visited`, but its neighbors won't be queued).
+        if (options.blocksBeyond && options.blocksBeyond(entity, distance)) {
+            continue;
+        }       
+
+        // Stop expanding if we've reached max range
+        if (distance >= maxRange) {
+            continue;
+        }
+
+        const nextDistance = distance + 1;
+        const neighbors = getFineNeighbors(coord.fq, coord.fr);
+
+        for (const neighbor of neighbors) {
+            const neighborKeyStr = `${neighbor.fq},${neighbor.fr}`;
+
+            if (!visited.has(neighborKeyStr)) {
+                const neighborEntity = resolveFineCoord(neighbor.fq, neighbor.fr);
+                
+                // Only add if it's on the board
+                if (neighborEntity) {
+                    visited.set(neighborKeyStr, {
+                        distance: nextDistance,
+                        type: neighborEntity.type,
+                        key: neighborEntity.key
+                    });
+                    
+                    queue.push({ coord: neighbor, distance: nextDistance, entity: neighborEntity });
+                }
+            }
+        }
+    }
+
+    return visited;
+}
+
+// Returns an object containing Sets of visible EdgeKeys and TileKeys, computed on the
+// fine grid (every tile centre and every edge is its own subHex).
+function getVisibleKeysFromUnit(unit) {
+    if (!unit) return { edges: new Set(), tiles: new Set() };
+
+    // An archer fortified on a mountain peak sees 3 instead of 2, and is high enough
+    // that forests no longer block it. Other mountains still do.
+    const onMountainPeak = isUnitOnMountainPeak(unit);
+    const VISIBILITY_RANGE = onMountainPeak ? 3 : 2;
+    const startCoord = getFineCoordForUnit(unit);
+
+    // A fortified unit occupies its tile, so that tile's own terrain never blocks it —
+    // it still gets the full flower and can see out of the forest/mountain it sits in.
+    // Any OTHER forest or mountain tile still blocks normally.
+    const occupiedTileKey = (unit.positionType === 'center') ? unit.position : null;
+
+    const isForestTile = (tileKey) => {
+        if (onMountainPeak) return false; // too high up for forests to matter
+        if (tileKey === occupiedTileKey) return false;
+        const tile = gameState.tiles.get(tileKey);
+        return !!(tile && tile.type.name === 'Forest');
+    };
+
+    const isMountainTile = (tileKey) => {
+        if (tileKey === occupiedTileKey) return false;
+        const tile = gameState.tiles.get(tileKey);
+        return !!(tile && tile.type.name === 'Mountain');
+    };
+
+    // BLOCKING RULE: a subHex "contains" a forest/mountain if it is that tile's own
+    // subHex, OR it is an edge subHex with such a tile on either side. Such a subHex
+    // is itself visible, but nothing beyond it is — sight stops there. The unit's own
+    // subHex never blocks.
+    const blocksSight = (entity) => {
+        if (entity.type === 'tile') {
+            return isForestTile(entity.key) || isMountainTile(entity.key);
+        }
+        return getTileKeysOfEdge(entity.key).some(k => isForestTile(k) || isMountainTile(k));
+    };
+
+    const blocksBeyond = (entity, distance) => distance > 0 && blocksSight(entity);
+
+    const rangeResult = fineRangeQuery(startCoord, VISIBILITY_RANGE, { blocksBeyond });
+
+    const visibleEdges = new Set();
+    const visibleTiles = new Set();
+
+    rangeResult.forEach((data) => {
+        if (data.type === 'edge') {
+            visibleEdges.add(data.key);
+        } else if (data.type === 'tile') {
+            visibleTiles.add(data.key);
+        }
+    });
+
+    // MOUNTAIN RULE 1: a mountain's peak (its centre subHex) is always visible so long
+    // as it is within visibility range — it stands above whatever else is in the way,
+    // so blockers along the path don't hide it.
+    gameState.tiles.forEach((tile, tileKey) => {
+        if (tile.type.name !== 'Mountain') return;
+        if (fineDistance(startCoord, getFineCoordForTile(tileKey)) <= VISIBILITY_RANGE) {
+            visibleTiles.add(tileKey);
+        }
+    });
+
+    // MOUNTAIN RULE 2: standing on a mountain tile's edge, that same mountain's other
+    // edges rotationally adjacent to the unit (fine-distance 1) cannot be seen —
+    // the peak between them is in the way.
+    if (unit.positionType === 'edge') {
+        const ownMountainKeys = getTileKeysOfEdge(unit.position).filter(isMountainTile);
+
+        if (ownMountainKeys.length > 0) {
+            [...visibleEdges].forEach(edgeKey => {
+                if (edgeKey === unit.position) return;
+                if (fineDistance(startCoord, getFineCoordForEdge(edgeKey)) !== 1) return;
+                if (getTileKeysOfEdge(edgeKey).some(k => ownMountainKeys.includes(k))) {
+                    visibleEdges.delete(edgeKey);
+                }
+            });
+        }
+    }
+
+    return { edges: visibleEdges, tiles: visibleTiles };
+}
+
+// The tile keys an edge subHex sits between.
+function getTileKeysOfEdge(edgeKey) {
+    const [h1, h2] = parseEdgeKey(edgeKey);
+    const keys = [];
+    if (!isNaN(h1.q)) keys.push(getTileKey(h1.q, h1.r));
+    if (!isNaN(h2.q)) keys.push(getTileKey(h2.q, h2.r));
+    return keys;
+}
+
+// The two tile keys an edge-positioned unit sits between (its "side tiles").
+function getSideTileKeys(unit) {
+    if (!unit || unit.positionType !== 'edge') return [];
+    return getTileKeysOfEdge(unit.position);
+}
+
+// Does this unit share its edge with a friendly melee unit? (combined arms spotter)
+function hasCombinedArmsSupport(unit) {
+    if (!unit || unit.positionType !== 'edge') return false;
+    const myEdge = gameState.edges.get(unit.position);
+    if (!myEdge) return false;
+    return myEdge.units.some(u => u.id !== unit.id && u.player === unit.player && u.type.attackType === 'melee');
+}
+
+// Which subHexes a unit can attack INTO, purely positional. Deliberately ignores the
+// action-economy guards (currentMove / hasPerformedMajorAction) so the range geometry
+// stays visible while testing. Returns a Map of "fq,fr" -> { distance, type, key }.
+// Attack range is ALWAYS a subset of visibility.
+//
+// Both the targeting functions and the debug overlay read from this, so what's drawn
+// can never drift from what's actually attackable.
+function getAttackRangeCells(unit) {
+    const cells = new Map();
+    if (!unit) return cells;
+
+    const isArcher = unit.type.name === 'Archer';
+    if (!isArcher && unit.type.attackType !== 'melee') return cells;
+
+    const vis = getVisibleKeysFromUnit(unit);
+    const sideTileKeys = getSideTileKeys(unit);
+    const startCoord = getFineCoordForUnit(unit);
+
+    // MODIFIER 2 — low-visibility fortified restriction: an archer fortified somewhere
+    // with visibility <= 1 (e.g. a Forest) drops to range 1 instead of 2.
+    //
+    // A mountain peak is checked FIRST and overrides it: mountains are visibility 0, so
+    // they'd otherwise trip the low-visibility rule, when in fact they extend range to 3.
+    const onMountainPeak = isArcher && isUnitOnMountainPeak(unit);
+    let maxRange = isArcher ? 2 : 1;
+    let isLowVisFortifiedArcher = false;
+
+    if (onMountainPeak) {
+        maxRange = 3;
+    } else if (isArcher && unit.positionType === 'center' && unit.isFortified) {
+        const sourceTile = gameState.tiles.get(unit.position);
+        if (sourceTile && getTileVisibility(sourceTile) <= 1) {
+            maxRange = 1;
+            isLowVisFortifiedArcher = true;
+        }
+    }
+
+    // MODIFIER 1 — mountains stop arrows the same way they stop sight. Melee has no
+    // LOS blocking at range 1, so it runs unblocked. An archer's own peak never blocks
+    // its own shots.
+    const blocksBeyond = !isArcher ? null : (entity, distance) => {
+        if (distance === 0 || entity.type !== 'tile') return false;
+        if (entity.key === unit.position) return false;
+        const tile = gameState.tiles.get(entity.key);
+        return !!(tile && getTileVisibility(tile) === 0);
+    };
+
+    // MODIFIER 3 — combined arms: a friendly melee unit sharing the edge spots for the
+    // archer, relaxing the fortified-tile visibility threshold from 2 to 1 on the
+    // archer's own side tiles.
+    const hasCombinedArms = isArcher && hasCombinedArmsSupport(unit);
+
+    const rangeResult = fineRangeQuery(startCoord, maxRange, blocksBeyond ? { blocksBeyond } : {});
+
+    rangeResult.forEach((data, fineKey) => {
+        if (data.distance === 0) return;
+
+        if (data.type === 'edge') {
+            if (!vis.edges.has(data.key)) return;
+
+            // MODIFIER 4 — edge-position range restriction: an archer standing on an
+            // edge can only hit edges touching one of its own two side tiles.
+            if (isArcher && unit.positionType === 'edge') {
+                const edgeTileKeys = getTileKeysOfEdge(data.key);
+                if (!edgeTileKeys.some(k => sideTileKeys.includes(k))) return;
+            }
+        } else {
+            if (!vis.tiles.has(data.key)) return;
+
+            const tile = gameState.tiles.get(data.key);
+            if (!tile) return;
+
+            const isMountainPeak = tile.type.name === 'Mountain';
+
+            if (isArcher) {
+                // Two cases skip the visibility threshold entirely:
+                //   - A fortified enemy on a mountain peak is ALWAYS targetable by
+                //     archers, despite the peak's raw visibility of 0.
+                //   - An archer shooting FROM a peak has the elevation to hit anything
+                //     in range, including enemies fortified inside a forest.
+                if (!isMountainPeak && !onMountainPeak) {
+                    // Fortified centres can normally only be targeted when the tile's own
+                    // visibility is > 1; combined arms relaxes that to > 0 on side tiles.
+                    let visibilityThreshold = 2;
+                    if (hasCombinedArms && sideTileKeys.includes(data.key)) visibilityThreshold = 1;
+                    if (getTileVisibility(tile) < visibilityThreshold) return;
+                }
+            } else {
+                // Melee: fortified enemies can only be hit from an edge, not from
+                // another fortified position — and a mountain peak can never be melee'd
+                // at all, no matter where the attacker stands.
+                if (unit.positionType !== 'edge') return;
+                if (isMountainPeak) return;
+            }
+        }
+
+        cells.set(fineKey, data);
+    });
+
+    // BALANCE RULE — an archer fortified in low visibility (a Forest) has its range cut
+    // to 1 by MODIFIER 2, but can still target the centre of every adjacent PLAINS tile,
+    // even though those sit at fine-distance 2.
+    if (isLowVisFortifiedArcher) {
+        const [q, r] = unit.position.split(',').map(Number);
+
+        getNeighbors(q, r).forEach(n => {
+            const tileKey = getTileKey(n.q, n.r);
+            const tile = gameState.tiles.get(tileKey);
+            if (!tile || tile.type.name !== 'Plains') return;
+            if (!vis.tiles.has(tileKey)) return;
+
+            const f = getFineCoordForTile(tileKey);
+            const fineKey = `${f.fq},${f.fr}`;
+            if (cells.has(fineKey)) return;
+
+            cells.set(fineKey, {
+                distance: fineDistance(startCoord, f),
+                type: 'tile',
+                key: tileKey
+            });
+        });
+    }
+
+    return cells;
+}
+
+// Set of "fq,fr" keys for the debug overlay.
+function getAttackRangeFineCells(unit) {
+    return new Set(getAttackRangeCells(unit).keys());
+}
+
+// ========================
+
         function calculateBaseCentroid(baseTileKeys) {
             if (!Array.isArray(baseTileKeys) || baseTileKeys.length !== 3) return null;
 
@@ -223,12 +572,6 @@
             return Array.from(edges);
         }
 
-        function isEdgePartOfTile(tileQ, tileR, edgeKey) {
-            if (!edgeKey) return false;
-            const [h1, h2] = parseEdgeKey(edgeKey);
-            return (h1.q === tileQ && h1.r === tileR) || (h2.q === tileQ && h2.r === tileR);
-        }
-
         function getTileVisibility(tile) {
             if (!tile) return 0;
             
@@ -242,6 +585,69 @@
             }
 
             return vis;
+        }
+
+        // Whether a specific unit may fortify on a specific tile. Fortification is
+        // unit-dependent, not a flat terrain property: only Archers can take a mountain
+        // peak, where they gain range/vision 3 but bleed attrition unless supplied.
+        function canUnitFortifyOnTile(unit, tile) {
+            if (!unit || !tile) return false;
+            if (tile.type.name === 'Mountain') {
+                // Arcade has no supply network at all, so a peak archer could never be
+                // supplied and would just bleed escalating attrition with no counterplay.
+                // Peaks are a non-arcade mechanic.
+                if (gameState.gameMode === 'arcade') return false;
+                return unit.type.name === 'Archer';
+            }
+            return !!tile.type.canFortify;
+        }
+
+        // baseCampPositions[playerN] is either an array of tile keys or a single edge-key
+        // string depending on map radius. Normalise to an array of tile keys — hand-rolled
+        // copies of this that forgot the string case have already caused one live bug.
+        function getBaseTileKeys(player) {
+            const rawBaseData = gameState.baseCampPositions ? gameState.baseCampPositions[`player${player}`] : null;
+
+            if (Array.isArray(rawBaseData)) return [...rawBaseData];
+
+            if (typeof rawBaseData === 'string') {
+                const [h1, h2] = parseEdgeKey(rawBaseData);
+                const keys = [];
+                if (!isNaN(h1.q)) keys.push(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) keys.push(getTileKey(h2.q, h2.r));
+                return keys;
+            }
+
+            return [];
+        }
+
+        // Is this unit currently fortified on a mountain peak? Gated on Archer, not just
+        // terrain — only archers are meant to hold the range-3/vision-3 peak package.
+        // Without the type check, an arcade class-swap that morphs a fortified peak
+        // archer into another class would keep granting it archer-tier vision.
+        function isUnitOnMountainPeak(unit) {
+            if (!unit || !unit.type || unit.type.name !== 'Archer' || unit.positionType !== 'center' || !unit.isFortified) return false;
+            const tile = gameState.tiles.get(unit.position);
+            return !!(tile && tile.type.name === 'Mountain');
+        }
+
+        // Is this fortified unit's supply line intact? Sitting on a base tile always
+        // counts as supplied; otherwise the unit's supply path must not be intercepted
+        // by an enemy unit standing on it.
+        function isUnitSupplied(unit) {
+            if (!unit) return false;
+
+            if (getBaseTileKeys(unit.player).includes(unit.fortifiedTileKey)) return true;
+
+            if (unit.supplyLine && unit.supplyLine.path) {
+                const isIntercepted = unit.supplyLine.path.some(edgeKey => {
+                    const edge = gameState.edges.get(edgeKey);
+                    return edge && edge.units.some(u => u.player !== unit.player);
+                });
+                if (!isIntercepted) return true;
+            }
+
+            return false;
         }
 
         function getBaseVisibility(player) {
@@ -515,6 +921,8 @@
                 canHeal: true,
                 supplyLine: null,
                 lastAttackedByHostileOnTurn: 0,
+                spearWalled: false,
+                ambushed: false,
                 
                 // VETERANCY
                 level: 0,
@@ -574,15 +982,13 @@
             if (spawnEdgeKey) {
                 const newUnit = createUnit(player, unitType, spawnEdgeKey);
                 gameState.units.push(newUnit);
-                const edge = gameState.edges.get(spawnEdgeKey);
+                
                 logAction(`P${player} ${unitType.name} has returned to the fight!`, player);
+                gameState.visionDirty = true;
+                gameState.needsRedraw = true; 
                 return true;
             }
             
-            if (gameState.unitCounts) {
-                    gameState.unitCounts[`player${player}`][unitType.name]++;
-                }
-
             logAction(`P${player} Base is blocked! Cannot respawn ${unitType.name}.`, player);
             return false;
         }
@@ -600,8 +1006,6 @@
             const activePlayer = gameState.currentPlayer;
             const destroyedPlayer = unitToDestroy.player;
             const wasFortified = unitToDestroy.isFortified;
-
-            gameState.unitCounts[`player${destroyedPlayer}`][unitToDestroy.type.name]--;
 
             if (unitToDestroy.isCarryingFlag) {
                 const flag = Object.values(gameState.flags).find(f => f.carrierId === unitToDestroy.id);
@@ -673,6 +1077,10 @@
                 gameState.currentReachableMoves.clear();
                 resetActionSelectionStates();
                 updateSelectedUnitInfoPanel();
+                // If this unit was the one under a forced retreat, the requirement dies
+                // with it — otherwise mustUnfortify stays set with no unit to resolve it
+                // and handleTapLogic locks out all canvas input.
+                gameState.mustUnfortify = false;
             }
             if (gameState.hoveredUnitId === unitToDestroy.id) {
                 gameState.hoveredUnitId = null;
@@ -684,9 +1092,9 @@
                 canvas.style.cursor = 'default';
             }
 
+            gameState.visionDirty = true;
             checkVictoryCondition();
             
-            // --- GUARANTEE REDRAW ---
             gameState.needsRedraw = true;
         }
         
@@ -776,6 +1184,8 @@
                 return new Map(); 
             }
             if (!unit || unit.currentMove < 1 || unit.isFortified) return new Map();
+            if (unit.spearWalled) return new Map(); //Spear Wall Prevents Movement
+            if (unit.ambushed) return new Map(); //Ambush Prevents Movement
     
             if (unit.hasPerformedMajorAction) {
                 if (!unit.type.canMoveAfterAttack) {
@@ -827,8 +1237,20 @@
             // -------------------------------------------------------
 
             if (nextAdjacentEdgeKey === unit.position && current.pathTaken.length === 1) continue;
-            const nextAdjacentEdgeObject = gameState.edges.get(nextAdjacentEdgeKey); if (!nextAdjacentEdgeObject) continue;
-            if (nextAdjacentEdgeObject.units.some(u => u.player !== unit.player)) continue;
+            const nextAdjacentEdgeObject = gameState.edges.get(nextAdjacentEdgeKey); 
+            if (!nextAdjacentEdgeObject) continue;
+            
+            let enemyBlocks = false;
+            if (nextAdjacentEdgeObject.units.some(u => u.player !== unit.player)) {
+                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                    if (gameState.visionCache.edges.has(nextAdjacentEdgeKey)) {
+                        enemyBlocks = true;
+                    }
+                } else {
+                    enemyBlocks = true; 
+                }
+            }
+            if (enemyBlocks) continue;
             const friendlyUnitsOnNext = nextAdjacentEdgeObject.units.filter(u => u.player === unit.player);
             if (friendlyUnitsOnNext.length >= 2 && !friendlyUnitsOnNext.find(u => u.id === unit.id)) continue;
             const costToTraverseNextEdge = getEdgeCost(unit, nextAdjacentEdgeKey); if (costToTraverseNextEdge === Infinity) continue;
@@ -1063,6 +1485,7 @@
         }
 
         function attemptToResupplyForts(playerNum) {
+            if (gameState.gameMode === 'arcade' || !gameState.flags) return;
             const playerSupplyKey = `player${playerNum}`;
             const unsuppliedForts = gameState.units.filter(u => 
                 u.player === playerNum && 
@@ -1163,7 +1586,7 @@
         function completeFortify(unitToFortify, targetTileKeyToFortify) {
             if (!unitToFortify || unitToFortify.hasPerformedMajorAction || unitToFortify.isFortified) { showInstruction("Cannot fortify now.", 2000); return; }
             const targetTileObject = gameState.tiles.get(targetTileKeyToFortify);
-            if (!targetTileObject || !targetTileObject.type.canFortify) { showInstruction("Invalid tile to fortify.", 2000); return; }
+            if (!targetTileObject || !canUnitFortifyOnTile(unitToFortify, targetTileObject)) { showInstruction("Invalid tile to fortify.", 2000); return; }
             if (targetTileObject.fortifiedByPlayer !== null) {
                 showInstruction(`Tile ${targetTileKeyToFortify.substring(0,5)}... already fortified.`, 2500);
                 resetActionSelectionStates(); 
@@ -1173,12 +1596,26 @@
             const myFlagTileKey = getFlagTileKey(unitToFortify.player);
             if (targetTileKeyToFortify === myFlagTileKey && !unitToFortify.isCarryingFlag) {
                 showInstruction("Cannot fortify on the flag tile.", 2500);
-                resetActionSelectionStates(); 
+                resetActionSelectionStates();
+                updateSelectedUnitInfoPanel(); return;
+            }
+
+            // Enforced here, not just in the UI — the player-facing paths already blocked
+            // this, but nothing stopped a non-UI caller from fortifying inside enemy base
+            // camp tiles. The enemy FLAG tile remains a legal capture target.
+            const enemyPlayer = unitToFortify.player === 1 ? 2 : 1;
+            const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
+            if (getBaseTileKeys(enemyPlayer).includes(targetTileKeyToFortify) && targetTileKeyToFortify !== enemyFlagTileKey) {
+                showInstruction("Cannot fortify inside the enemy base camp.", 2500);
+                resetActionSelectionStates();
                 updateSelectedUnitInfoPanel(); return;
             }
 
     //Immediately clear move highlights so they don't persist during animation
     gameState.currentReachableMoves.clear();
+
+    unitToFortify.hasPerformedMajorAction = true;
+
 
     const animation = {
         type: 'fortify',
@@ -1193,6 +1630,7 @@
             
             const currentEdge = gameState.edges.get(unitToFortify.position);
             unitToFortify.isFortified = true; unitToFortify.fortifiedTileKey = targetTileKeyToFortify;
+            unitToFortify.mountainAttritionTurns = 0;
             if (unitToFortify.typeId === 'ARCHER') {
                 unitToFortify.stats.damage += 2;
             }
@@ -1214,7 +1652,7 @@
             }
             logAction(`${unitToFortify.type.name} fortified on tile ${targetTileKeyToFortify.substring(0,5)}...`, fortifyingPlayer, 2500);
 
-            if (gameState.gameMode !== 'arcade') {
+            if (gameState.gameMode !== 'arcade' && gameState.flags) {
                 const enemyPlayer = unitToFortify.player === 1 ? 2 : 1;
                 const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
                 
@@ -1256,14 +1694,15 @@
                 }
             }
 
-            const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
-            if (playerFlag && playerFlag.status !== 'carried') {
-                // Instead of funding one fort, recalculate the entire player's network
-                // to account for shared supply lines.
-                recalculatePlayerSupplyNetwork(fortifyingPlayer);
-
-            } else {
-                logAction(`P${unitToFortify.player} ${unitToFortify.type.name} fortified, but is unsupplied due to stolen flag.`, fortifyingPlayer, 3000);
+            if (gameState.gameMode !== 'arcade') {
+                const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
+                if (playerFlag && playerFlag.status !== 'carried') {
+                    // Instead of funding one fort, recalculate the entire player's network
+                    // to account for shared supply lines.
+                    recalculatePlayerSupplyNetwork(fortifyingPlayer);
+                } else {
+                    logAction(`P${unitToFortify.player} ${unitToFortify.type.name} fortified, but is unsupplied due to stolen flag.`, fortifyingPlayer, 3000);
+                }
             }
 
             let unitsToDestroy = [];
@@ -1306,6 +1745,7 @@
 
             unitsToDestroy.forEach(u => handleUnitDeath(u, "zoc_fort"));
 
+            gameState.visionDirty = true; 
             gameState.currentReachableMoves.clear();
             resetActionSelectionStates();
             updateSelectedUnitInfoPanel();
@@ -1347,6 +1787,8 @@
         oldFortifiedTile.fortifiedByPlayer = null;
     }
     unitToUnfortify.supplyLine = null;
+    unitToUnfortify.hasPerformedMajorAction = true;
+
 
     const animation = {
         type: 'unfortify',
@@ -1370,7 +1812,8 @@
                 unitToUnfortify.stats.damage -= 2;
             }
             unitToUnfortify.turnsFortifiedAtBase = 0;
-            unitToUnfortify.turnsFortified = 0;      
+            unitToUnfortify.turnsFortified = 0;
+            unitToUnfortify.mountainAttritionTurns = 0;
             unitToUnfortify.supplyLine = null;
             unitToUnfortify.fortifiedTileKey = null;
             unitToUnfortify.positionType = 'edge'; 
@@ -1393,6 +1836,7 @@
             }
             logAction(`${unitToUnfortify.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, unfortifyingPlayer, 2500);
             
+            gameState.visionDirty = true;
             recalculatePlayerSupplyNetwork(unfortifyingPlayer);
 
             resetActionSelectionStates();
@@ -1552,64 +1996,51 @@
             return unitDestroyed;
         }
 
-        function getPotentialMeleeAttackEdges(attackingUnit) {
-            const potentialEdges = new Set();
-            if (!attackingUnit) return Array.from(potentialEdges);
-
-            if (attackingUnit.isFortified && attackingUnit.positionType === 'center') {
-                const fortifiedTile = gameState.tiles.get(attackingUnit.position);
-                if (!fortifiedTile) return Array.from(potentialEdges);
-                getNeighbors(fortifiedTile.q, fortifiedTile.r).forEach(neighborCoords => {
-                    if (gameState.tiles.has(getTileKey(neighborCoords.q, neighborCoords.r))) {
-                        const edgeKey = getEdgeKey(fortifiedTile.q, fortifiedTile.r, neighborCoords.q, neighborCoords.r);
-                        potentialEdges.add(edgeKey);
-                    }
-                });
-            } else if (attackingUnit.positionType === 'edge') {
-                return getRotationallyAdjacentEdges(attackingUnit.position);
-            }
-            return Array.from(potentialEdges);
-        }
-
-        function getValidMeleeAttackTargets(attackingUnit) {
-            if (!attackingUnit || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) return [];
+        // Walks a getAttackRangeCells() result and collects the actual targets sitting in
+        // it. Shared by the melee and archer target-getters — the only difference between
+        // them is the range calculation, which getAttackRangeCells() already handles.
+        function collectTargetsFromAttackRange(attackingUnit, rangeCells) {
             const targets = [];
+
             const addUnitTarget = (targetUnit, edgeKey = null, tileKeyForTarget = null) => {
                 if (!targets.some(t => t.unit && t.unit.id === targetUnit.id)) targets.push({ unit: targetUnit, edgeKey, tileKeyForTarget, isBridgeTarget: false });
             };
             const addBridgeTarget = (edgeKey) => {
-                 if (!targets.some(t => t.isBridgeTarget && t.edgeKey === edgeKey)) targets.push({ unit: null, edgeKey, tileKeyForTarget: null, isBridgeTarget: true });
-            }
-            
-            const potentialAttackEdges = getPotentialMeleeAttackEdges(attackingUnit);
+                if (!targets.some(t => t.isBridgeTarget && t.edgeKey === edgeKey)) targets.push({ unit: null, edgeKey, tileKeyForTarget: null, isBridgeTarget: true });
+            };
 
-            potentialAttackEdges.forEach(edgeKey => {
-                const edge = gameState.edges.get(edgeKey);
-                if (edge) {
-                    edge.units.forEach(unitOnEdge => { 
+            rangeCells.forEach((data) => {
+                if (data.type === 'edge') {
+                    const edge = gameState.edges.get(data.key);
+                    if (!edge) return;
+
+                    edge.units.forEach(unitOnEdge => {
                         if (unitOnEdge.player !== attackingUnit.player && unitOnEdge.positionType === 'edge') {
-                            addUnitTarget(unitOnEdge, edgeKey); 
+                            addUnitTarget(unitOnEdge, data.key);
                         }
                     });
-                     if (edge.bridge && edge.bridgeHp > 0) addBridgeTarget(edgeKey);
+
+                    if (edge.bridge && edge.bridgeHp > 0) addBridgeTarget(data.key);
+                } else if (data.type === 'tile') {
+                    const tile = gameState.tiles.get(data.key);
+                    if (!tile || !tile.fortifiedByPlayer || tile.fortifiedByPlayer === attackingUnit.player) return;
+
+                    const fortifiedUnit = gameState.units.find(u => u.isFortified && u.position === data.key && u.player === tile.fortifiedByPlayer);
+                    if (fortifiedUnit) addUnitTarget(fortifiedUnit, null, data.key);
                 }
             });
-            
-            if (attackingUnit.positionType === 'edge') { 
-                const [H1_coords, H2_coords] = parseEdgeKey(attackingUnit.position);
-                [H1_coords, H2_coords].forEach(hexCoords => { 
-                     if (isNaN(hexCoords.q)) return;
-                    const tileKey = getTileKey(hexCoords.q, hexCoords.r);
-                    const tile = gameState.tiles.get(tileKey);
-                    if (tile && tile.fortifiedByPlayer && tile.fortifiedByPlayer !== attackingUnit.player) {
-                        const fortifiedUnit = gameState.units.find(u => u.isFortified && u.position === tileKey && u.player === tile.fortifiedByPlayer);
-                        if (fortifiedUnit) {
-                            addUnitTarget(fortifiedUnit, null, tileKey);
-                        }
-                    }
-                });
-            }
+
             return targets;
+        }
+
+        function getValidMeleeAttackTargets(attackingUnit) {
+            if (!attackingUnit || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) return [];
+            // Melee only. Without this, an Archer would get its full ranged result back
+            // from here as well as from getValidArcherAttackTargets, double-counting every
+            // archer target for any caller that unions the two.
+            if (attackingUnit.type.attackType !== 'melee') return [];
+
+            return collectTargetsFromAttackRange(attackingUnit, getAttackRangeCells(attackingUnit));
         }
 
         function getValidArcherAttackTargets(attackingUnit) {
@@ -1617,118 +2048,7 @@
                 return [];
             }
 
-            // 1. Calculate all visible keys using the new system (Fog of War)
-            const visibilityData = getVisibleKeysFromUnit(attackingUnit);
-            const visibleEdges = visibilityData.edges;
-            const visibleTiles = visibilityData.tiles;
-
-            const potentialTargets = [];
-
-            // Helper to add targets if they are in the visible set
-            const addPotentialUnit = (unit, edgeKey = null, tileKey = null) => {
-                if (!potentialTargets.some(t => t.unit && t.unit.id === unit.id)) {
-                    potentialTargets.push({ unit: unit, edgeKey: edgeKey, tileKeyForTarget: tileKey, isBridgeTarget: false });
-                }
-            };
-            
-            const addPotentialBridge = (edgeKey) => {
-                if (!potentialTargets.some(t => t.isBridgeTarget && t.edgeKey === edgeKey)) {
-                    potentialTargets.push({ unit: null, edgeKey: edgeKey, tileKeyForTarget: null, isBridgeTarget: true });
-                }
-            };
-
-            // --- COMBINED ARMS CHECK ---
-            let hasCombinedArms = false;
-            if (attackingUnit.positionType === 'edge') {
-                const myEdge = gameState.edges.get(attackingUnit.position);
-                if (myEdge) {
-                    hasCombinedArms = myEdge.units.some(u => u.id !== attackingUnit.id && u.player === attackingUnit.player && u.type.attackType === 'melee');
-                }
-            }
-
-            // Pre-calculate Edge Archer context (Side Tiles)
-            let adjTile1Key = null;
-            let adjTile2Key = null;
-            let sideTileH1 = null; 
-            let sideTileH2 = null;
-
-            if (attackingUnit.positionType === 'edge') {
-                const [h1, h2] = parseEdgeKey(attackingUnit.position);
-                if (!isNaN(h1.q)) { adjTile1Key = getTileKey(h1.q, h1.r); sideTileH1 = h1; }
-                if (!isNaN(h2.q)) { adjTile2Key = getTileKey(h2.q, h2.r); sideTileH2 = h2; }
-            }
-
-            // Pre-calculate Fortified Archer context (Source Tile Visibility)
-            let sourceTile = null;
-            let sourceVis = 3;
-            if (attackingUnit.positionType === 'center' && attackingUnit.isFortified) {
-                sourceTile = gameState.tiles.get(attackingUnit.position);
-                if (sourceTile) sourceVis = getTileVisibility(sourceTile);
-            }
-
-            // 2. Scan Visible Edges for Targets
-            visibleEdges.forEach(edgeKey => {
-                // --- ATTACK RANGE FILTER: EDGE ARCHER ---
-                // Can only attack edges belonging to Side Tiles (A/B)
-                if (attackingUnit.positionType === 'edge') {
-                    const inA = sideTileH1 && isEdgePartOfTile(sideTileH1.q, sideTileH1.r, edgeKey);
-                    const inB = sideTileH2 && isEdgePartOfTile(sideTileH2.q, sideTileH2.r, edgeKey);
-                    if (!inA && !inB) return; 
-                }
-
-                // --- ATTACK RANGE FILTER: FORTIFIED ARCHER ---
-                // If fortified in Low Vis (<=1, e.g. Forest), can ONLY attack own tile edges.
-                // If fortified in High Vis (>1, e.g. Plains), can attack "roads leading up" (Neighbors included).
-                if (attackingUnit.positionType === 'center' && attackingUnit.isFortified && sourceTile) {
-                    if (sourceVis <= 1) {
-                        if (!isEdgePartOfTile(sourceTile.q, sourceTile.r, edgeKey)) {
-                            return; // Skip edge if not directly on the fort perimeter
-                        }
-                    }
-                }
-
-                const edge = gameState.edges.get(edgeKey);
-                if (edge) {
-                    // Check for Enemy Units
-                    edge.units.forEach(unit => {
-                        if (unit.player !== attackingUnit.player) {
-                            addPotentialUnit(unit, edgeKey, null);
-                        }
-                    });
-                    // Check for Bridges
-                    if (edge.bridge && edge.bridgeHp > 0) {
-                        addPotentialBridge(edgeKey);
-                    }
-                }
-            });
-
-            // 3. Scan Visible Tiles for Fortified Targets
-            visibleTiles.forEach(tileKey => {
-                const tile = gameState.tiles.get(tileKey);
-                if (!tile) return;
-
-                const vis = getTileVisibility(tile);
-                
-                // --- TARGETING RESTRICTION & EXCEPTION ---
-                // Default Rule: Can only target center if Visibility > 1.
-                let visibilityThreshold = 2;
-
-                // Combined Arms Exception: If we have a spotter, we can target adjacent centers with Visibility > 0.
-                if (hasCombinedArms && (tileKey === adjTile1Key || tileKey === adjTile2Key)) {
-                    visibilityThreshold = 1;
-                }
-
-                if (vis < visibilityThreshold) return;
-
-                if (tile.fortifiedByPlayer && tile.fortifiedByPlayer !== attackingUnit.player) {
-                    const fortifiedUnit = gameState.units.find(u => u.isFortified && u.position === tileKey);
-                    if (fortifiedUnit) {
-                        addPotentialUnit(fortifiedUnit, null, tileKey);
-                    }
-                }
-            });
-            
-            return potentialTargets;
+            return collectTargetsFromAttackRange(attackingUnit, getAttackRangeCells(attackingUnit));
         }
 
         function completeAttack(attackingUnit, targetUnitInfo, attackType) {
@@ -1744,6 +2064,9 @@
     const liveAttacker = gameState.units.find(u => u.id === attackingUnit.id);
     if (!liveAttacker) { console.error("Attacker missing from master list"); return; }
     attackingUnit = liveAttacker;
+
+    attackingUnit.hasPerformedMajorAction = true;
+    gameState.currentReachableMoves.clear();
 
     // 3. Calculate Base Damage (Robust Fallback)
     // Check if .stats exists (New System) or fallback to .type (Old System) to prevent NaN
@@ -1794,6 +2117,7 @@
                 const spearWallOnTarget = targetUnitInfo.edgeKey ? isEdgeAdjacentToSpearWall(attackingUnit, targetUnitInfo.edgeKey) : false;
                 if (spearWallOnAttacker || spearWallOnTarget) {
                     hitAndRunMessage = "Spear Wall prevents further movement!";
+                    attackingUnit.spearWalled = true;
                     gameState.currentReachableMoves.clear();
                 } else if (attackingUnit.currentMove > 0) {
                     hitAndRunMessage = "Horseman can move again!";
@@ -1851,7 +2175,7 @@
                         const isBeach = (tile1 && tile1.type !== TILE_TYPES.WATER) || (tile2 && tile2.type !== TILE_TYPES.WATER);
                         [...bridgeEdge.units].forEach(unitOnCollapse => {
                             if (isBeach) {
-                                const fallDamage = 3;
+                                const fallDamage = 5;
                                 unitOnCollapse.hp -= fallDamage;
                                 logParts.push(`P${unitOnCollapse.player} ${unitOnCollapse.type.name} fell as the bridge collapsed and takes ${fallDamage} damage! HP: ${unitOnCollapse.hp}`);
                                 if (unitOnCollapse.hp <= 0) handleUnitDeath(unitOnCollapse, "bridge_collapse");
@@ -1883,9 +2207,13 @@
                     if (targetUnit.stats && typeof targetUnit.stats.defense === 'number') targetDefense = targetUnit.stats.defense;
                     else targetDefense = targetUnit.type.defense || 0; // Legacy fallback
                     
-                    // Forest Penalty Logic (New)
+                    // Terrain exposure penalty: a unit fortified in a Forest, or an archer
+                    // holding a Mountain peak, has 1 less effective defense. Applied here
+                    // rather than to stats.defense so a default archer (defense 1) reads as
+                    // zero negation on a peak without tripping the "a fortified unit needs
+                    // defense > 0 to hold its position" invariant enforced elsewhere.
                     const fortTile = gameState.tiles.get(targetUnit.position);
-                    if (targetUnit.isFortified && fortTile && fortTile.type.name === 'Forest') {
+                    if (targetUnit.isFortified && fortTile && (fortTile.type.name === 'Forest' || fortTile.type.name === 'Mountain')) {
                         targetDefense -= 1;
                     }
 
@@ -2082,11 +2410,7 @@
 
     const oldType = unit.type.name;
 
-    // 2. Update global counts
-    gameState.unitCounts[`player${unit.player}`][oldType]--;
-    gameState.unitCounts[`player${unit.player}`][template.name]++;
-
-    // --- 3. B29 FIX: Update typeId and stats object ---
+    // --- Update typeId and stats object ---
     unit.typeId = newTypeKey; 
     
     // Reset base stats to the new class
@@ -2102,7 +2426,6 @@
     
     // Sync their Movement Points to the new speed
     unit.currentMove = unit.stats.speed;
-    // ---------------------------------------------------
 
     triggerDamageVisual(unit, 'normal');
     logAction(`P${unit.player} morphed ${oldType} into ${template.name}.`, unit.player);
@@ -2261,39 +2584,73 @@
             return totalEnemyCount >= 2 && occupiedEdgesCount >= 2;
         }
 
-        function handleMoveAction(unitToMove, targetEdgeKey, costToMove) {
+function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
     gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
 
-    // 1. MASTER REFERENCE CHECK
     const masterUnit = gameState.units.find(u => u.id === unitToMove.id);
-    if (!masterUnit) {
-        console.error("CRITICAL: Unit not found in master list during move.");
-        return;
-    }
+    if (!masterUnit) { console.error("CRITICAL: Unit not found."); return; }
     const unit = masterUnit;
-
     const originPos = unit.position; 
 
-    // 2. UPDATE UNIT STATE
-    unit.position = targetEdgeKey;
+    // --- AMBUSH RESOLUTION ---
+    let actualTarget = targetEdgeKey;
+    let actualCost = costToMove;
+    let ambushed = false;
+
+    if (path && path.length > 1) {
+        let accumulatedCost = 0;
+        let lastValidEdge = path[0];
+
+        for (let i = 1; i < path.length; i++) {
+            const stepEdgeKey = path[i];
+            const stepEdgeObj = gameState.edges.get(stepEdgeKey);
+            const stepCost = getEdgeCost(unit, stepEdgeKey);
+            
+            const hasEnemy = stepEdgeObj && stepEdgeObj.units.some(u => u.player !== unit.player);
+            const friendlyCount = stepEdgeObj ? stepEdgeObj.units.filter(u => u.player === unit.player).length : 0;
+            const isFull = friendlyCount >= 2 && !stepEdgeObj.units.some(u => u.id === unit.id);
+
+            if (hasEnemy || isFull) {
+                ambushed = true;
+                actualTarget = lastValidEdge;
+                accumulatedCost += stepCost; 
+                break;
+            }
+            
+            accumulatedCost += stepCost;
+            lastValidEdge = stepEdgeKey;
+        }
+
+        if (ambushed) {
+            actualCost = accumulatedCost;
+            unit.ambushed = true; // <-- APPLY THE PENALTY FLAG
+            if (actualTarget === originPos) {
+                logAction(`P${unit.player} ${unit.type.name} was ambushed and halted immediately!`, gameState.currentPlayer, 3000);
+            } else {
+                logAction(`P${unit.player} ${unit.type.name} was ambushed and halted at ${actualTarget.substring(0,5)}...`, gameState.currentPlayer, 3000);
+            }
+        }
+    }
+
+    // UPDATE UNIT STATE
+    unit.position = actualTarget;
     unit.positionType = 'edge';
-    unit.currentMove -= costToMove;
+    unit.currentMove = Math.max(0, unit.currentMove - actualCost); 
 
     // FLAG CAPTURE LOGIC
-    if (gameState.gameMode !== 'arcade') {
+    if (gameState.gameMode !== 'arcade' && gameState.flags) {
         const enemyPlayer = unit.player === 1 ? 2 : 1;
-        
         let enemyFlagHome = null;
         if (gameState.gridRadius === 4) {
-             if (isInternalBaseEdge(targetEdgeKey)) {
-                const [h1, h2] = parseEdgeKey(targetEdgeKey);
+             if (isInternalBaseEdge(actualTarget)) {
+                const [h1, h2] = parseEdgeKey(actualTarget);
                 const t1 = getTileKey(h1.q, h1.r);
                 const enemyBase = gameState.baseCampPositions[`player${enemyPlayer}`];
                 if (Array.isArray(enemyBase) && enemyBase.includes(t1)) enemyFlagHome = true;
             }
         } else {
             const flagObj = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
-            if (flagObj && flagObj.homePosition === targetEdgeKey) enemyFlagHome = true;
+            if (flagObj && flagObj.homePosition === actualTarget) enemyFlagHome = true;
         }
         
         const enemyFlagObj = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
@@ -2317,50 +2674,33 @@
             updateSupplyPointsBasedOnFlagStatus(enemyPlayer);
 
             const unitPos = getUnitScreenPosition(unit);
-            
-            // DIAGNOSTIC TRACE
-            console.group("FLAG CAPTURE DIAGNOSTICS");
-            console.trace("Capture Triggered");
-            console.log("Calculated unitPos:", unitPos);
-            
             if (unitPos) {
                 gameState.visualEffects.push({
-                    type: 'flag_capture_burst',
-                    x: unitPos.x,
-                    y: unitPos.y,
-                    player: enemyPlayer,
-                    startTime: Date.now(),
-                    duration: 500
+                    type: 'flag_capture_burst', x: unitPos.x, y: unitPos.y,
+                    player: enemyPlayer, startTime: Date.now(), duration: 500
                 });
-                console.log("Pushed to visualEffects array. Current array:", gameState.visualEffects);
-            } else {
-                console.error("unitPos was null! Animation skipped.");
             }
-            console.groupEnd();
         }
     }
 
+    gameState.visionDirty = true;
+    gameState.needsRedraw = true;
+
     checkVictoryCondition();
-    const unitDestroyedByZoC = applyFortificationDamageOnMove(unit, targetEdgeKey);
+    const unitDestroyedByZoC = applyFortificationDamageOnMove(unit, actualTarget);
 
     if (typeof ActionManager !== 'undefined') {
         ActionManager.submitAction({
-            type: "MOVE",
-            turn: gameState.globalTurnNumber,
-            player: gameState.currentPlayer,
-            actorId: unit.id,
-            payload: {
-                from: originPos,
-                to: targetEdgeKey,
-                cost: costToMove,
-                unitState: getUnitSnapshot(unit)
-            }
+            type: "MOVE", turn: gameState.globalTurnNumber, player: gameState.currentPlayer,
+            actorId: unit.id, payload: { from: originPos, to: actualTarget, cost: actualCost, unitState: getUnitSnapshot(unit) }
         });
     }
 
     if (!unitDestroyedByZoC && unit.hp > 0) {
-        logAction(`${unit.type.name} moved. MP: ${Math.floor(unit.currentMove)}`, gameState.currentPlayer);
-        if (unit.currentMove >= 1 && (!unit.hasPerformedMajorAction || unit.type.canMoveAfterAttack)) {
+        if (!ambushed) logAction(`${unit.type.name} moved. MP: ${Math.floor(unit.currentMove)}`, gameState.currentPlayer);
+        
+        // --- PREVENT NEW MOVEMENT HIGHLIGHTS IF AMBUSHED ---
+        if (unit.currentMove >= 1 && (!unit.hasPerformedMajorAction || unit.type.canMoveAfterAttack) && !unit.ambushed) {
             if (gameState.gameMode !== 'singleplayer' || unit.player === gameState.playerSide) {
                 gameState.currentReachableMoves = getPossibleMoves(unit);
             }
@@ -2375,176 +2715,57 @@
     updateSupplyPointsDisplay();
 }
 
-// Returns an object containing Sets of visible EdgeKeys and TileKeys
-function getVisibleKeysFromUnit(unit) {
+
+function computePlayerVision(player) {
+    const visibleTiles = new Set();
     const visibleEdges = new Set();
-    const visibleTiles = new Set(); 
 
-    if (!unit) return { edges: visibleEdges, tiles: visibleTiles };
-
-    const touchingTileKeys = new Set();
-
-    if (unit.positionType === 'edge') {
-        const [h1, h2] = parseEdgeKey(unit.position);
-        if (!isNaN(h1.q)) touchingTileKeys.add(getTileKey(h1.q, h1.r));
-        if (!isNaN(h2.q)) touchingTileKeys.add(getTileKey(h2.q, h2.r));
-
-        if (!isNaN(h1.q) && !isNaN(h2.q)) {
-            const n1 = getNeighbors(h1.q, h1.r);
-            n1.forEach(n => {
-                if (axialDistance(n.q, n.r, h2.q, h2.r) === 1) {
-                    touchingTileKeys.add(getTileKey(n.q, n.r));
-                }
-            });
-        }
-    } else if (unit.positionType === 'center') {
-        const t = gameState.tiles.get(unit.position);
-        if (t) {
-            touchingTileKeys.add(unit.position);
-            getNeighbors(t.q, t.r).forEach(n => touchingTileKeys.add(getTileKey(n.q, n.r)));
-        }
+    // 1. Add Base Camp Visibility (Force fully visible)
+    const baseData = gameState.baseCampPositions[`player${player}`];
+    let baseTiles = [];
+    if (Array.isArray(baseData)) {
+        baseTiles = baseData;
+    } else if (typeof baseData === 'string') {
+        const [h1, h2] = parseEdgeKey(baseData);
+        if (!isNaN(h1.q)) baseTiles.push(getTileKey(h1.q, h1.r));
+        if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
     }
 
-    const isBlockedByMountain = (edgeKey) => {
-        if (edgeKey === unit.position) return false; 
-        if (unit.positionType === 'center' && unit.isFortified) {
-            const [ea, eb] = parseEdgeKey(edgeKey);
-            if (getTileKey(ea.q, ea.r) === unit.position || getTileKey(eb.q, eb.r) === unit.position) {
-                return false; 
-            }
-        }
+    baseTiles.forEach(tileKey => {
+        visibleTiles.add(tileKey);
+        const [q, r] = tileKey.split(',').map(Number);
+        // Force all 6 geometric edges to be visible to clear boundary fog
+        AXIAL_DIRECTIONS.forEach(dir => {
+            visibleEdges.add(getEdgeKey(q, r, q + dir.q, r + dir.r));
+        });
+    });
 
-        const [ea, eb] = parseEdgeKey(edgeKey);
-        const k1 = !isNaN(ea.q) ? getTileKey(ea.q, ea.r) : null;
-        const k2 = !isNaN(eb.q) ? getTileKey(eb.q, eb.r) : null;
+    const baseVis = getBaseVisibility(player);
+    baseVis.tiles.forEach(t => visibleTiles.add(t));
+    baseVis.edges.forEach(e => visibleEdges.add(e));
 
-        const checkBlock = (k) => {
-            if (!k) return false;
-            const t = gameState.tiles.get(k);
-            if (t && getTileVisibility(t) === 0 && touchingTileKeys.has(k)) {
-                return true;
-            }
-            return false;
-        };
-
-        return checkBlock(k1) || checkBlock(k2);
-    };
-
-    const safeAddEdge = (key) => {
-        if (!isBlockedByMountain(key)) {
-            visibleEdges.add(key);
-        }
-    };
-
-    const processTileVisibility = (tileKey, viewingEdgeKey) => {
-        const tile = gameState.tiles.get(tileKey);
-        if (!tile) return;
-
-        let visLevel = getTileVisibility(tile);
-        const tileEdges = getEdgesOfTile(tile.q, tile.r);
-
-        if (unit.isFortified && unit.positionType === 'center') {
-            if (visLevel > 0) visLevel = 1;
-        }
-
-        if (visLevel === 3) {
-            tileEdges.forEach(e => safeAddEdge(e));
-            visibleTiles.add(tileKey);
-        } 
-        else if (visLevel === 2) {
-            let viewingEdgeIndex = -1;
-            for(let i=0; i<6; i++) {
-                const neighbor = AXIAL_DIRECTIONS[i];
-                const checkKey = getEdgeKey(tile.q, tile.r, tile.q + neighbor.q, tile.r + neighbor.r);
-                if (checkKey === viewingEdgeKey) {
-                    viewingEdgeIndex = i;
-                    break;
-                }
-            }
-
-            if (viewingEdgeIndex !== -1) {
-                const oppositeIndex = (viewingEdgeIndex + 3) % 6;
-                for(let i=0; i<6; i++) {
-                    if (i !== oppositeIndex) {
-                        const neighbor = AXIAL_DIRECTIONS[i];
-                        const eKey = getEdgeKey(tile.q, tile.r, tile.q + neighbor.q, tile.r + neighbor.r);
-                        safeAddEdge(eKey);
-                    }
-                }
-            }
-            visibleTiles.add(tileKey);
-        } 
-        else if (visLevel === 1) {
-            if (viewingEdgeKey) {
-                const adjacentEdges = getRotationallyAdjacentEdges(viewingEdgeKey);
-                adjacentEdges.forEach(adjKey => {
-                    if (isEdgePartOfTile(tile.q, tile.r, adjKey)) {
-                        safeAddEdge(adjKey);
-                    }
+    // 2. Add Unit Visibility
+    gameState.units.forEach(unit => {
+        if (unit.player === player) {
+            if (unit.positionType === 'center') {
+                visibleTiles.add(unit.position);
+                const [q, r] = unit.position.split(',').map(Number);
+                // Force all 6 geometric edges to be visible to clear boundary fog
+                AXIAL_DIRECTIONS.forEach(dir => {
+                    visibleEdges.add(getEdgeKey(q, r, q + dir.q, r + dir.r));
                 });
+            } else if (unit.positionType === 'edge') {
+                visibleEdges.add(unit.position);
+                const [h1, h2] = parseEdgeKey(unit.position);
+                if (!isNaN(h1.q)) visibleTiles.add(getTileKey(h1.q, h1.r));
+                if (!isNaN(h2.q)) visibleTiles.add(getTileKey(h2.q, h2.r));
             }
-            visibleTiles.add(tileKey);
+
+            const vis = getVisibleKeysFromUnit(unit);
+            vis.tiles.forEach(t => visibleTiles.add(t));
+            vis.edges.forEach(e => visibleEdges.add(e));
         }
-    };
+    });
 
-    if (unit.positionType === 'edge') {
-        const [h1, h2] = parseEdgeKey(unit.position);
-        
-        if (!isNaN(h1.q)) processTileVisibility(getTileKey(h1.q, h1.r), unit.position);
-        if (!isNaN(h2.q)) processTileVisibility(getTileKey(h2.q, h2.r), unit.position);
-
-        visibleEdges.add(unit.position);
-
-        if (!isNaN(h1.q) && !isNaN(h2.q)) {
-            const n1_neighbors = getNeighbors(h1.q, h1.r);
-            const commonNeighbors = [];
-            n1_neighbors.forEach(n => {
-                if (axialDistance(n.q, n.r, h2.q, h2.r) === 1) commonNeighbors.push({ q: n.q, r: n.r });
-            });
-
-            commonNeighbors.forEach(n => {
-                const endTileKey = getTileKey(n.q, n.r);
-                const endTile = gameState.tiles.get(endTileKey);
-                
-                if (endTile) {
-                    const vis = getTileVisibility(endTile);
-                    if (vis > 0) {
-                        visibleTiles.add(endTileKey);
-                        
-                        if (vis >= 3) {
-                            const dirToA = { q: h1.q - n.q, r: h1.r - n.r };
-                            const dirToB = { q: h2.q - n.q, r: h2.r - n.r };
-                            const idxA = findDirectionIndex(dirToA);
-                            const idxB = findDirectionIndex(dirToB);
-                            const forbiddenIdx1 = (idxA + 3) % 6;
-                            const forbiddenIdx2 = (idxB + 3) % 6;
-                            
-                            for(let i=0; i<6; i++) {
-                                if (i !== forbiddenIdx1 && i !== forbiddenIdx2) {
-                                    const neighborDir = AXIAL_DIRECTIONS[i];
-                                    const eKey = getEdgeKey(n.q, n.r, n.q + neighborDir.q, n.r + neighborDir.r);
-                                    safeAddEdge(eKey);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-    } 
-    else if (unit.positionType === 'center' && unit.isFortified) {
-        const myTile = gameState.tiles.get(unit.position);
-        if (myTile) {
-            getEdgesOfTile(myTile.q, myTile.r).forEach(e => safeAddEdge(e));
-            
-            getNeighbors(myTile.q, myTile.r).forEach(n => {
-                const neighborKey = getTileKey(n.q, n.r);
-                const sharedEdgeKey = getEdgeKey(myTile.q, myTile.r, n.q, n.r);
-                processTileVisibility(neighborKey, sharedEdgeKey);
-            });
-        }
-    }
-
-    return { edges: visibleEdges, tiles: visibleTiles };
+    return { tiles: visibleTiles, edges: visibleEdges };
 }
-

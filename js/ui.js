@@ -179,8 +179,8 @@
                         const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
 
                         // Block enemy bases, block friendly FLAG tile (UNLESS carrying flag), but ALLOW friendly BASE tiles AND enemy FLAG tile
-                        const canFortifyTile1 = tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey);
-                        const canFortifyTile2 = tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey);
+                        const canFortifyTile1 = tile1 && canUnitFortifyOnTile(selectedUnit, tile1) && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey);
+                        const canFortifyTile2 = tile2 && canUnitFortifyOnTile(selectedUnit, tile2) && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey);
                         
                         fortifyDisabledCondition = !(canFortifyTile1 || canFortifyTile2) || selectedUnit.positionType === 'center';
                     } else {
@@ -248,13 +248,28 @@
 }
 
         function showRespawnModal(player) {
-            const overlay = document.getElementById('respawnModalOverlay');
-            if (!overlay) return;
+            console.trace(`[Respawn] showRespawnModal triggered for Player ${player}`);
+            
+            let overlay = document.getElementById('respawnModalOverlay');
+            if (!overlay) {
+                console.warn("[Respawn] Overlay missing from HTML! Rebuilding dynamically.");
+                overlay = document.createElement('div');
+                overlay.id = 'respawnModalOverlay';
+                overlay.className = 'modal-overlay';
+                document.body.appendChild(overlay);
+            }
 
-            const content = document.getElementById('respawnModalContent');
+            let content = document.getElementById('respawnModalContent');
+            if (!content) {
+                console.warn("[Respawn] Content missing from HTML! Rebuilding dynamically.");
+                content = document.createElement('div');
+                content.id = 'respawnModalContent';
+                overlay.appendChild(content);
+            }
             
             // --- AUTO-REPAIR HTML ---
             if (!document.getElementById('tabViewRecruit')) {
+                console.log("[Respawn] Rebuilding modal inner HTML...");
                 content.style.cssText = "max-width: 950px; min-height: 450px; display: flex; flex-direction: column;";
                 content.innerHTML = `
                     <div id="respawnTabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #4a6075; padding-bottom: 0;">
@@ -291,7 +306,6 @@
                         const targetView = document.getElementById(tabName === 'recruit' ? 'tabViewRecruit' : 'tabViewPromote');
                         targetView.classList.add('active');
                         
-                        // Safety reset: Always show the list when clicking the Promote tab
                         if (tabName === 'promote') {
                             document.getElementById('promoteInstructionText').style.display = 'block';
                             document.getElementById('promoteUnitList').style.display = 'flex';
@@ -304,7 +318,6 @@
             }
 
             // 1. Reset State & Styling
-            // FORCE width update even if HTML existed
             content.style.maxWidth = "950px"; 
             
             document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
@@ -322,7 +335,14 @@
 
             const armySize = gameState.units.filter(u => u.player === player).length;
             const maxUnits = getMaxUnitsForCurrentMap();
-            const counts = gameState.unitCounts[`player${player}`];
+            
+            // --- BULLETPROOF UNIT COUNTER ---
+            const counts = { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
+            gameState.units.forEach(u => {
+                if (u.player === player && u.type && u.type.name) {
+                    counts[u.type.name] = (counts[u.type.name] || 0) + 1;
+                }
+            });
 
             // 2. Populate Recruit Tab
             const recruitContainer = document.getElementById('respawnChoices');
@@ -330,9 +350,13 @@
             
             const recruitOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'];
             
+            console.log(`[Respawn] Populating Recruit Tab. Army Size: ${armySize}/${maxUnits}`);
             recruitOrder.forEach(typeKey => {
-                const unitCap = UNIT_CAPS[UNIT_TYPES[typeKey].name];
-                const currentCount = counts[UNIT_TYPES[typeKey].name];
+                const unitTypeObj = UNIT_TYPES[typeKey];
+                if (!unitTypeObj) return;
+
+                const unitCap = UNIT_CAPS[unitTypeObj.name];
+                const currentCount = counts[unitTypeObj.name] || 0;
                 const isCapped = currentCount >= unitCap;
                 const isArmyFull = armySize >= maxUnits;
                 
@@ -354,13 +378,10 @@
             const aliveUnits = gameState.units.filter(u => u.player === player);
             const classOrder = ['Melee', 'Archer', 'Pikeman', 'Horseman'];
             
-            // Strictly enforce the Melee -> Archer -> Pike -> Horse order
             classOrder.forEach(className => {
-                // Find all alive units of this class that are NOT max level
-                const eligibleUnits = aliveUnits.filter(u => u.type.name === className && u.level < 3);
+                const eligibleUnits = aliveUnits.filter(u => u.type && u.type.name === className && u.level < 3);
                 
                 if (eligibleUnits.length > 0) {
-                    // Render all eligible units of this class
                     eligibleUnits.forEach(unit => {
                         const card = createUnitCardDOM(unit, () => {
                             showPromoteSelection(unit);
@@ -368,11 +389,11 @@
                         promoteContainer.appendChild(card);
                     });
                 } else {
-                    // If no eligible units exist for this class, render the Card Back!
                     promoteContainer.appendChild(createCardBackDOM());
                 }
             });
 
+            console.log("[Respawn] Displaying modal overlay...");
             overlay.style.display = 'flex';
             setTimeout(() => overlay.classList.add('modal-visible'), 10);
         }
@@ -476,6 +497,22 @@
 
                 const originalMessage = logObject.message;
                 const activePlayer = logObject.player;
+
+                // --- FOG OF WAR FILTER ---
+                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode) {
+                    const viewer = (gameState.gameMode === 'singleplayer' && gameState.playerSide) ? gameState.playerSide : gameState.currentPlayer;
+                    let isRelevant = false;
+                    
+                    // 1. Did the current player do it?
+                    if (activePlayer === viewer) isRelevant = true;
+                    // 2. Was the current player's unit hit, targeted, or ZoC'd? (Text contains "P1" or "P2")
+                    else if (originalMessage.includes(`P${viewer}`) || originalMessage.includes(`Player ${viewer}`)) isRelevant = true;
+                    // 3. Is it a global game event? (Flag stolen/returned, Game Over, etc.)
+                    else if (originalMessage.toLowerCase().includes('flag') || originalMessage.includes('Wins') || originalMessage.includes('Draw') || originalMessage.includes('Time Limit')) isRelevant = true;
+
+                    // If it doesn't involve the viewer, don't render this log entry for them
+                    if (!isRelevant) continue; 
+                }
 
                 let formattedMessage = originalMessage.replace(/<br>/g, ' ');
 
@@ -1413,8 +1450,14 @@ function createCardBackDOM() {
             };
         }
 
+        const SYNTHETIC_MOUSE_EVENT_GUARD_MS = 500;
+        function isLikelySyntheticFromTouch() {
+            return Date.now() - lastTouchInteractionTime < SYNTHETIC_MOUSE_EVENT_GUARD_MS;
+        }
+
         function handleCanvasMouseDown(event) {
             if (event.button !== 0) return;
+            if (isLikelySyntheticFromTouch()) return;
             const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
             handleInteractionStart(x, y, false);
         }
@@ -1467,6 +1510,7 @@ function createCardBackDOM() {
 
         function handleCanvasMouseUp(event) {
             if (gameState.gameOver || !gameState.isDragging) return;
+            if (isLikelySyntheticFromTouch()) return;
             const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
             handleInteractionEnd(x, y, false);
         }
@@ -1479,7 +1523,8 @@ function createCardBackDOM() {
 
         function handleCanvasTouchStart(event) {
             if (gameState.gameOver || event.touches.length !== 1) return;
-            // Removed preventDefault() here to allow scrolling on canvas if needed
+            event.preventDefault();  
+            lastTouchInteractionTime = Date.now();
             const touch = event.touches[0]; 
             const { x, y } = getRelativeCoordinates(touch.clientX, touch.clientY);
 
@@ -1509,36 +1554,40 @@ function createCardBackDOM() {
             }
         }
 
-        function handleCanvasTouchEnd(event) {
-            if (gameState.gameOver) return;
-            const finalTouch = event.changedTouches[0]; 
-            if (!finalTouch) return;
-            
-            const { x, y } = getRelativeCoordinates(finalTouch.clientX, finalTouch.clientY);
+function handleCanvasTouchEnd(event) {
+    if (gameState.gameOver) return;
+    const finalTouch = event.changedTouches[0]; 
+    if (!finalTouch) return;
+    lastTouchInteractionTime = Date.now();
+    const { x, y } = getRelativeCoordinates(finalTouch.clientX, finalTouch.clientY);
 
-            const wasDragging = gameState.isDragging;
-            const wasShortDrag = gameState.draggedDistance < DRAGGED_DISTANCE_THRESHOLD;
+    const wasDragging = gameState.isDragging;
+    const wasShortDrag = gameState.draggedDistance < DRAGGED_DISTANCE_THRESHOLD;
 
-            if (wasDragging) {
-                handleInteractionEnd(x, y, true);
-            }
-            
-            if (!wasDragging || wasShortDrag) {
-                handleTapLogic(x, y);
-            }
-            
-            gameState.draggedDistance = 0;
-            updateSelectedUnitInfoPanel();
-        }
+    if (wasDragging) {
+        handleInteractionEnd(x, y, true);
+    }
+    
+    if (!wasDragging || wasShortDrag) {
+        handleTapLogic(x, y);
+    }
+    
+    gameState.draggedDistance = 0;
+    dragOperationJustConcluded = true; 
+    updateSelectedUnitInfoPanel();
+}
 
-        function handleCanvasTouchCancel(event) {
-            handleInteractionCancel();
-            gameState.draggedDistance = 0;
-        }
+function handleCanvasTouchCancel(event) {
+    handleInteractionCancel();
+    gameState.draggedDistance = 0;
+    dragOperationJustConcluded = true; 
+    lastTouchInteractionTime = Date.now();
+}
 
         function handleCanvasClick(event) {
             if (gameState.mapMakerMode) return;
             if (gameState.gameOver || event.button !== 0) return;
+            if (isLikelySyntheticFromTouch()) return;
             if (dragOperationJustConcluded) { 
                 dragOperationJustConcluded = false; 
                 return; 

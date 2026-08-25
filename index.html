@@ -23,7 +23,7 @@
 </head>
 <body>
     <div id="trainingBanner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; background-color: #E04030; color: white; text-align: center; z-index: 99999; padding: 10px; font-weight: bold; font-family: 'Exo 2', sans-serif; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
-    ⚠️ AI TRAINING SIMULATION ACTIVE ⚠️ <br> Running at maximum speed. Press <span style="color: #FFC020;">Alt + X</span> to abort.
+    AI TRAINING SIMULATION ACTIVE  <br> Press <span style="color: #FFC020;">Alt + X</span> to abort.
 </div>
     <h1 class="text-4xl font-bold mb-6 text-center text-amber-400" style="font-family: 'Geostar', cursive;">FortHex</h1>
 
@@ -83,7 +83,7 @@
     <div id="messageBox" class="message-box" style="display: block;">Project Hexblade Loaded. Player 1's Turn.</div>
     <div id="victoryMessage" class="victory-message" style="display: none;"></div>
     
-    <div id="buildVersionDisplay">FortHex B29//2a</div>
+    <div id="buildVersionDisplay">FortHex B29//4</div>
     <div id="confettiContainer"></div>
     <div id="victoryInteractionBlocker" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1999; display: none; background-color: rgba(44, 62, 80, 0.4); backdrop-filter: blur(3px); transition: background-color 0.5s ease, backdrop-filter 0.5s ease;"></div>
 
@@ -223,7 +223,7 @@
     </div>
 
     <!-- Settings Modal -->
-    <div id="settingsModal" class="modal-overlay">
+    <div id="settingsModal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;">Settings</h3>
             <div id="settingsOptionsContainer">
@@ -238,6 +238,14 @@
                 <div class="settings-option">
                     <label for="settingPassTurnConfirmation">Pass Turn Confirmation</label>
                     <input type="checkbox" id="settingPassTurnConfirmation" name="passTurnConfirmation" checked="">
+                </div>
+                <div class="settings-option">
+                    <label for="settingFogOfWar">Fog of War</label>
+                    <input type="checkbox" id="settingFogOfWar" name="fogOfWar">
+                </div>
+                <div class="settings-option">
+                    <label for="settingPassDeviceBlur">Pass Device Blur (Local)</label>
+                    <input type="checkbox" id="settingPassDeviceBlur" name="passDeviceBlur" disabled="">
                 </div>
                 <div class="settings-option">
                     <label for="settingTooltips">Tooltips</label>
@@ -265,8 +273,115 @@
         <div class="modal-content" style="max-width: 500px; text-align: left;">
             <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px; text-align: center;">Changelog</h3>
             <div id="changelogList" style="max-height: 50vh; overflow-y: auto; padding-right: 15px;">
+                <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B29 Patch 4: Mountains & Forests</h4>
+                <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">23.08.2026</p>
+                    <!-- Features -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li><strong>Fine-Grid Vision & Range System:</strong> Replaced the line-of-sight and targeting engine with a high-resolution sub-hex grid to ensure visual highlights strictly align with mechanical rules.</li>
+                            <li><strong>Mountain Peak Fortification:</strong> Archers can now fortify on Mountain tiles. This expands their vision and attack range to 1.5 hexes and allows targeting over standard line-of-sight obstacles.</li>
+                            <li><strong>Mountain Peak Attrition:</strong> Archers fortified on mountain peaks take escalating attrition damage each turn unless supported by an intact supply line and an uncaptured team flag.</li>
+                            <li><strong>Bridge Fall Damage:</strong> Falling from a bridge now deal 5 damage instead of 3.</li>
+                            <li><strong>Zone of Control Suppression:</strong> Having two different units on the fortified tile edges suppresses the zone of control damage.</li>
+                            <li><strong>Fine-Grid Debug Overlay:</strong> Added a developer visualizer that renders the sub-grid calculations for vision and attack ranges.</li>
+                        </ul>
+                    </li>
+                    <!-- Improvements -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li><strong>Unified Attack Targeting:</strong> Consolidated melee and ranged combat targeting into a single shared pipeline based on the fine-grid geometry.</li>
+                            <li><strong>Fort Resupply Ordering:</strong> Modified the turn sequence so unsupplied forts attempt to re-establish supply lines before attrition and healing phases occur.</li>
+                            <li><strong>Terrain Defense Penalty:</strong> Moved the defense penalty for holding Forests and Mountains to combat damage resolution rather than modifying base stats, preventing forced unfortification caused by the defense stat dropping to 0.</li>
+                            <li><strong>Dynamic Combined Arms:</strong> Integrated Combined Arms logic with the fine-grid system. A friendly melee unit on an archer's edge relaxes the visibility threshold, permitting attacks into low-visibility tiles like forests.</li>
+                            <li><strong>Data Normalization:</strong> Implemented universal helpers to standardize Base Camp identification across Expansive and Standard maps.</li>
+                        </ul>
+                    </li>
+                    <!-- Fixes -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li>Fixed a soft-lock where pressing "End Turn" with a pending forced retreat cleared the unit selection but left the lock active, disabling canvas interactions.</li>
+                            <li>Fixed a state desync where loading a game spawned detached clones for selected and dragged units. Game actions now correctly re-link and mutate the actual board units.</li>
+                            <li>Fixed logic that caused the AI to fail at parsing base camp arrays on Radius 3 maps, preventing it from ignoring Base Camp geometries during movement scoring.</li>
+                            <li>Blocked units from fortifying inside enemy base camp tiles. Capturing the flag tile remains permitted.</li>
+                            <li>Fixed an issue in the Map Maker where save files deleted all units upon load due to a mismatch between type serialization.</li>
+                            <li>Fixed a null reference crash triggered by resizing the map between Arcade Mode and standard map sizes.</li>
+                            <li>Removed deprecated fortification properties from unit templates; validation is now handled exclusively by terrain and class mechanics.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <hr style="border-color: #4a6075; margin: 20px 0;">
 
+                <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B29 Patch 3: Fog of War</h4>
+                <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">21.08.2026</p>
+                <ul style="list-style-type: none; padding-left: 0;">   
+                    <!-- Features -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li><strong>Fog of War:</strong> Added an advanced, segmented line-of-sight system. Terrain features like mountains and forests dynamically block vision, obscuring enemy units, supply lines, and fortification borders.</li>
+                            <li><strong>Pass-and-Play Handoff:</strong> Introduced a secure, frosted-glass screen transition with a countdown for Local Multiplayer. This hides the board between turns to prevent players from peeking at each other's deployments.</li>
+                        </ul>
+                    </li>
+                    <!-- Improvements -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li><strong>Ambush Mechanic:</strong> Moving blindly into the fog can trigger an ambush if a hidden enemy blocks the road. Ambushed units are halted immediately, losing the rest of their movement phase for that turn.</li>
+                            <li><strong>Tactical Pathing:</strong> Movement range highlights now dynamically color-code (Green for clear, Yellow for obscured) to safely indicate which steps venture into the unknown.</li>
+                            <li><strong>Dynamic Fog Animations:</strong> The darkness now geometrically shatters, scales, and fades smoothly as units move and update their line of sight.</li>
+                            <li><strong>Logistics Intel:</strong> Scouting an empty road will now reveal any active enemy supply lines passing through it, even if the connected bases remain hidden.</li>
+                        </ul>
+                    </li>
+                    <!-- Fixes -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li>Fixed a JSON serialization crash that prevented game saves from loading correctly.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <hr style="border-color: #4a6075; margin: 20px 0;">
+
+                <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B29 Patch 2: AI Training</h4>
+                <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">13.07.2026</p>
+                <ul style="list-style-type: none; padding-left: 0;">
+                    <!-- Features -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li><strong>AI Tournament Simulation:</strong> Added a Dev Debug feature allowing the engine to run high-speed, headless AI-vs-AI tournaments to evolve heuristic brain weights.</li>
+                            <li><strong>Imitation Learning ("Gospel"):</strong> The AI now actively observes human players during matches, adapting its recruitment and veterancy weights in real-time to mimic successful human strategies.</li>
+                            <li><strong>Neural Network Pipeline:</strong> Actions and board states are now actively tracked, labeled, and exportable to JSONL format to train offline models.</li>
+                        </ul>
+                    </li>
+                    <!-- Improvements -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li><strong>Influence Mapping:</strong> The AI now calculates territorial control to organize formations, rather than blindly pathing toward the closest enemy unit.</li>
+                            <li><strong>Advantage Scaling:</strong> The AI evaluates its overall lead or deficit to dynamically adjust its risk tolerance and aggression.</li>
+                            <li><strong>Procedural Generation Polish:</strong> Reworked map generation logic to correctly orient procedural terrain based on the rotational offset of the base camps.</li>
+                        </ul>
+                    </li>
+                    <!-- Fixes -->
+                    <li style="margin-bottom: 15px;">
+                        <strong style="color: #F0C020; font-size: 1.1em;">Fixes</strong>
+                        <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
+                            <li>Fixed a bug where generating a new map would inherit the base camp locations of previously loaded asymmetrical preset maps (e.g., River Fork, Volcano Island), causing units to spawn in the ocean or on the wrong sides.</li>
+                            <li>Fixed touch detection registering attacks against bridges as movement commands, causing the unit to overlap the bridge.</li>
+                            <li>Fixed touch detection failing to register clicks on fortified units.</li>
+                            <li>Fixed a bug allowing Horsemen to bypass the Spear Wall penalty and continue moving after attacking a Pikeman.</li>
+                            <li>Added the missing close (X) button to the UI Calibration Card.</li>
+                            <li>Fixed multiple rendering desyncs (missing Dirty Flag updates) when spawning units, fortifying in Arcade Mode, or changing Base Camp tiles in the Map Maker.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <hr style="border-color: #4a6075; margin: 20px 0;">
                 <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B29 Patch 1</h4>
+                <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">29.06.2026</p>
 <ul style="list-style-type: none; padding-left: 0;">
     <!-- Features -->
     <li style="margin-bottom: 15px;">
@@ -307,6 +422,7 @@
 <hr style="border-color: #4a6075; margin: 20px 0;">
 
                 <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B29: The Units Update</h4>
+                <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">27.06.2026</p>
 <ul style="list-style-type: none; padding-left: 0;">
     <!-- Features -->
     <li style="margin-bottom: 15px;">
@@ -337,6 +453,7 @@
 <hr style="border-color: #4a6075; margin: 20px 0;">
 
                 <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 3: (The Patch so big, it could be its own update)</h4>
+                <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">29.11.2025</p>
                 <li style="margin-bottom: 15px;">
                     <strong style="color: #F0C020; font-size: 1.1em;">Features</strong>
                     <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
@@ -372,6 +489,7 @@
                 <hr style="border-color: #4a6075; margin: 20px 0;">
 
                 <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 2</h4>
+                <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">04.09.2025</p>
             <ul style="list-style-type: none; padding-left: 0;">
                 <!-- Features -->
                 <li style="margin-bottom: 15px;">
@@ -402,6 +520,7 @@
             <hr style="border-color: #4a6075; margin: 20px 0;">
 
             <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28 Patch 1</h4>
+            <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">03.09.2025</p>
             <ul style="list-style-type: none; padding-left: 0;">
                 <!-- Features -->
                 <li style="margin-bottom: 15px;">
@@ -433,6 +552,7 @@
             <hr style="border-color: #4a6075; margin: 20px 0;">
 
             <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B28: The Editor Update</h4>
+            <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">02.09.2025</p>
             <ul style="list-style-type: none; padding-left: 0;">
                 <!-- Features -->
                 <li style="margin-bottom: 15px;">
@@ -466,6 +586,7 @@
             <hr style="border-color: #4a6075; margin: 20px 0;">
 
             <h4 style="font-weight: bold; color: #20C0A0; margin-bottom: 10px; font-size: 1.2em;">B27: The Color Update</h4>
+            <p style="font-style: bold; font-size: 0.9em; color: #bdc3c7; text-align: left; margin-top: 5px;">23.07.2025</p>
             <ul style="list-style-type: none; padding-left: 0;">
                 <!-- Features -->
                 <li style="margin-bottom: 15px;">
@@ -531,129 +652,74 @@
         <div id="tutorialModalContent">
             <button id="tutorialCloseButton" class="tutorial-modal-close-button" title="Close Tutorial">×</button>
             <h2>FortHex: Guide</h2>
-            <p>Welcome to FortHex! This is a turn-based strategy game of wits, warfare, and area control. This guide will teach you everything you need to know to claim victory.</p>
+            <p>FortHex is a turn-based tactical strategy game played on a hexagonal board. This guide outlines the controls, interface, and rules required to command your army and secure victory.</p>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">1. How to Play: The Basics <span class="tutorial-arrow">►</span></div>
+                <div class="tutorial-section-header">1. Basics <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
+                    <img src="assets/guide/guide-basics.png" alt="Basics Overview" style="width: 100%; max-width: 250px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; margin: 10px auto 15px auto; display: block; border: 2px solid #304860; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                    <p><strong>Winning the Game:</strong> Matches are won by fulfilling one of two conditions:</p>
                     <ul>
-                        <li><strong>Selecting &amp; Deselecting:</strong> Click on one of your units to select it. Its stats and available actions will appear in the UI panels. To deselect, click the unit again or any empty space.</li>
-                        <li><strong>Movement:</strong> With a unit selected, valid destinations will be highlighted in green. You can either <strong>drag-and-drop</strong> your unit to a highlighted road, or simply <strong>click</strong> on it.</li>
-                        <li><strong>Actions:</strong> With a unit selected, click an action button in the right panel (e.g., "Attack," "Fortify"). The game will highlight valid targets. Click a target to confirm. To cancel, click the action button again.</li>
-                        <li><strong>Ending Your Turn:</strong> When you have finished all your moves, click the "End Turn" button to pass control to your opponent.</li>
+                        <li><strong>Annihilation:</strong> Eliminate all enemy units from the board.</li>
+                        <li><strong>Capture the Flag:</strong> Move a unit onto the enemy's Base Camp to take their flag, then successfully return that unit to your own Base Camp.</li>
+                    </ul>
+                    <p><strong>Controls:</strong> Click a unit to view its statistics in the left panel. Valid movement paths will highlight in green. Click a highlighted path to move. To act, click an action button in the right panel (Attack, Fortify, Build Bridge), then click a valid target on the board. Click "End Turn" to pass control.</p>
+                    <p><strong>Arcade Mode:</strong> Played on a compact map without base camps. You have 30 seconds per turn. Starting on turn 2, you are forced to swap one unit's class each turn. The game ends after 10 turns, and the winner is decided by total remaining army health.</p>
+                </div>
+            </div>
+
+            <div class="tutorial-section">
+                <div class="tutorial-section-header">2. The Terrain <span class="tutorial-arrow">►</span></div>
+                <div class="tutorial-section-content">
+                    <img src="assets/guide/guide-terrain.png" alt="Terrain and Movement" style="width: 100%; max-width: 250px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; margin: 10px auto 15px auto; display: block; border: 2px solid #304860; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                    <p>Units travel and stand on the <strong>roads (edges)</strong> connecting the hexagonal tiles. Up to two friendly units can occupy the same road simultaneously. The terrain bordering a road determines its movement point (MP) cost and visibility:</p>
+                    <ul>
+                        <li><strong>Plains:</strong> Open ground. Costs 1 MP to traverse. Does not block Line of Sight.</li>
+                        <li><strong>Forest:</strong> Dense terrain. Costs 2 MP to traverse. Blocks Line of Sight for ranged attacks.</li>
+                        <li><strong>Mountain:</strong> Tall rock formations. Costs 3 MP to traverse. Blocks Line of Sight for ranged attacks. Cannot be fortified.</li>
+                        <li><strong>Water & Beaches:</strong> Beaches (edges between land and water) cost 3 MP to traverse. Pure water edges are impassable until a Melee unit converts them into a Bridge. Cannot be fortified.</li>
                     </ul>
                 </div>
             </div>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">2. The Objective: How to Win <span class="tutorial-arrow">►</span></div>
+                <div class="tutorial-section-header">3. Your Army <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
-                    <p>There are two paths to victory:</p>
+                    <img src="assets/guide/guide-units.png" alt="Unit Classes" style="width: 100%; max-width: 250px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; margin: 10px auto 15px auto; display: block; border: 2px solid #304860; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                    <p>You control four distinct unit classes. Class advantages grant +1 Damage against specific targets, while disadvantages deal -1 Damage.</p>
                     <ul>
-                        <li><strong>Annihilation:</strong> Eliminate all of your opponent's units.</li>
-                        <li><strong>Capture the Flag (CTF):</strong> Move one of your units to the enemy's starting base to capture their flag. Successfully bring that unit back to your own starting base to win the game instantly.</li>
+                        <li><strong>Melee (Sword):</strong> HP: 12 | Move: 4 | Attack: 3. Standard frontline infantry. Can consume 1 MP to build a Bridge over a water road. Strong vs Archers. Weak vs Horsemen.</li>
+                        <li style="margin-top:10px;"><strong>Archer (Arrow):</strong> HP: 10 | Move: 3 | Attack: 2. Ranged unit. Attacks from a distance without taking counter-attack damage. Gains +2 Attack when fortified. Strong vs Pikemen. Weak vs Melee.</li>
+                        <li style="margin-top:10px;"><strong>Pikeman (Pike):</strong> HP: 13 | Move: 3 | Attack: 3. Heavily armored defender. Base defense is higher than other classes. Strong vs Horsemen. Weak vs Archers.</li>
+                        <li style="margin-top:10px;"><strong>Horseman (Horse):</strong> HP: 11 | Move: 5 | Attack: 3. Mobile scout. Can attack and use any remaining MP to retreat in the same turn. Cannot fortify. Strong vs Melee. Weak vs Pikemen.</li>
                     </ul>
                 </div>
             </div>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">3. The Battlefield: Tiles &amp; Roads <span class="tutorial-arrow">►</span></div>
+                <div class="tutorial-section-header">4. Combat &amp; Abilities <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
-                    <p>The map is made of hexagonal tiles and the roads connecting them. Your units are positioned on roads.</p>
-                    <p><strong>Tiles:</strong> Each tile type affects gameplay.</p>
+                    <img src="assets/guide/guide-combat.png" alt="Combat Mechanics" style="width: 100%; max-width: 250px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; margin: 10px auto 15px auto; display: block; border: 2px solid #304860; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                    <p><strong>Attacking:</strong> Consumes 1 MP.</p>
+                    <p><strong>Fortifying:</strong> Consumes 1 MP. Moves a unit off the road and into the center of an adjacent <strong>Plains or Forest</strong> tile. Fortified units take reduced damage and exert a Zone of Control (ZoC) that deals 1 damage to any enemy that walks past or starts their turn nearby.</p>
+                    <p><strong>Unit Synergies:</strong> Position your units to utilize combat rules:</p>
                     <ul>
-                        <li><strong>Plains:</strong> Standard, open ground.</li>
-                        <li><strong>Forest:</strong> Provides cover, but slows movement. Blocks Line of Sight.</li>
-                        <li><strong>Mountain:</strong> Difficult to cross and blocks Line of Sight.</li>
-                        <li><strong>Water:</strong> Impassable.</li>
-                    </ul>
-                    <p><strong>Roads:</strong> The paths your units travel on. Up to two friendly units can share a road.</p>
-                    <ul>
-                        <li>Movement costs vary by the terrain on either side of a road (e.g., a road next to a Forest is slower to cross).</li>
-                        <li>Moving onto a road next to an enemy-controlled fort costs an extra Movement Point (MP).</li>
-                    </ul>
-                </div>
-            </div>
-            
-            <div class="tutorial-section">
-                <div class="tutorial-section-header">4. Core Mechanic: Fortification <span class="tutorial-arrow">►</span></div>
-                <div class="tutorial-section-content">
-                    <p>Fortifying is a key strategic action. A unit on a road can move into the center of an adjacent tile to fortify it.</p>
-                    <ul>
-                        <li><strong>Fortifiable Tiles:</strong> You can only fortify <strong>Plains</strong> and <strong>Forest</strong> tiles.</li>
-                        <li><strong>Benefits of Fortification:</strong>
-                            <ul>
-                                <li><strong>Defense:</strong> Reduces incoming damage. A fortified Pikeman is especially tough.</li>
-                                <li><strong>Zone of Control (ZoC):</strong> Automatically damages adjacent enemies, creating a dangerous area for your opponent.</li>
-                                <li><strong>Healing &amp; Supply:</strong> A fortified unit can heal 1 HP at the start of your turn. Healing can even grant a temporary 1 HP "shield" above its maximum health.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Unfortify:</strong> A fortified unit can perform an action to move back onto an adjacent road, removing the fortification.</li>
+                        <li><strong>Combined Arms:</strong> If a Melee and Archer occupy the same road, their attacks ignore the defense bonuses of fortified targets.</li>
+                        <li><strong>Cavalry Screen:</strong> If an enemy Melee attacks your Horseman, a friendly Archer sharing the road will automatically fire a half-damage support shot at the attacker.</li>
+                        <li><strong>Spear Wall:</strong> Enemy Horsemen attacking an edge adjacent to your fortified Pikeman immediately lose their remaining MP and cannot retreat.</li>
+                        <li><strong>Split Damage:</strong> If an Archer fires at a road occupied by two enemies, the total damage is split evenly between both targets.</li>
                     </ul>
                 </div>
             </div>
 
             <div class="tutorial-section">
-                <div class="tutorial-section-header">5. Your Army: The Units <span class="tutorial-arrow">►</span></div>
+                <div class="tutorial-section-header">5. Advanced Mechanics <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
-                    <p>You control four distinct unit types, each with a unique role.</p>
-                     <ul>
-                        <li><strong>Melee (Symbol: Sword):</strong> A versatile front-line fighter.
-                            <p style="margin-left: 15px; margin-bottom: 5px;">HP: 12 | Move: 4 | Attack: 3</p>
-                            <ul>
-                                <li><strong>Special:</strong> The only unit that can build Bridges over Water roads.</li>
-                                <li><strong>Weak against:</strong> Horseman | <strong>Strong against:</strong> Archer</li>
-                            </ul>
-                        </li>
-                        <li style="margin-top:10px;"><strong>Archer (Symbol: Arrow):</strong> A ranged unit that attacks from a distance. Must have Line of Sight to its target.
-                            <p style="margin-left: 15px; margin-bottom: 5px;">HP: 10 | Move: 3 | Attack: 3</p>
-                            <ul>
-                                <li><strong>Special:</strong> Gains +1 Attack when attacking from a fortified position.</li>
-                                <li><strong>Weak against:</strong> Melee | <strong>Strong against:</strong> Pikeman</li>
-                            </ul>
-                        </li>
-                        <li style="margin-top:10px;"><strong>Pikeman (Symbol: Pike):</strong> A defensive powerhouse and anti-cavalry specialist.
-                            <p style="margin-left: 15px; margin-bottom: 5px;">HP: 13 | Move: 3 | Attack: 3</p>
-                            <ul>
-                                <li><strong>Special:</strong> Gets a superior defensive bonus when fortified. Its attack can pierce some of an enemy's fortification defense.</li>
-                                <li><strong>Weak against:</strong> Archer | <strong>Strong against:</strong> Horseman</li>
-                            </ul>
-                        </li>
-                        <li style="margin-top:10px;"><strong>Horseman (Symbol: Horse Head):</strong> A fast, mobile flanker designed for hit-and-run tactics.
-                            <p style="margin-left: 15px; margin-bottom: 5px;">HP: 11 | Move: 5 | Attack: 3</p>
-                            <ul>
-                                <li><strong>Special:</strong> Can use its remaining Movement Points *after* attacking. Cannot fortify.</li>
-                                <li><strong>Weak against:</strong> Pikeman | <strong>Strong against:</strong> Melee</li>
-                            </ul>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="tutorial-section">
-                <div class="tutorial-section-header">6. Advanced Combat: Synergies &amp; Counters <span class="tutorial-arrow">►</span></div>
-                <div class="tutorial-section-content">
-                     <p>Unit interactions are the key to victory.</p>
-                    <ul>
-                        <li><strong>Advantage/Disadvantage:</strong> Units get an attack bonus against types they are "strong" against, and a penalty against those they are "weak" against.</li>
-                        <li><strong>Spear Wall:</strong> An enemy Horseman attacking a unit next to your fortified Pikeman is stopped in its tracks and cannot move away after the attack.</li>
-                        <li><strong>Combined Arms:</strong> An attack from a road with both a friendly Melee and Archer on it will ignore the target's fortification bonus.</li>
-                        <li><strong>Cavalry Screen:</strong> If an enemy Melee unit attacks your Horseman, a friendly Archer on the same road will automatically retaliate with a half-damage shot.</li>
-                        <li><strong>Split Damage:</strong> If an Archer attacks a road where two enemies are present, its damage is split between them.</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="tutorial-section">
-                <div class="tutorial-section-header">7. Strategic Systems: The Long Game <span class="tutorial-arrow">►</span></div>
-                <div class="tutorial-section-content">
-                    <p>Mastering these systems will set you apart from your opponent.</p>
-                    <ul>
-                        <li><strong>Supply Points:</strong> Each player starts with <strong>10 Supply Points</strong>, a global resource used to maintain supply lines. The cost of a supply line is based on the length and terrain of the path back to your base. If you cannot afford the cost, your unit will fortify but will be "unsupplied" and cannot heal. When a supplied unit is destroyed or unfortifies, its supply cost is refunded.</li>
-                        <li><strong>Supply Lines &amp; Healing:</strong> For a fortified unit to heal, it must be "in supply." This requires both a valid supply line path AND enough Supply Points to maintain it. An enemy unit standing on any road in that chain will also break the supply line and prevent healing.</li>
-                        <li><strong>Capture the Flag &amp; Supply Raids:</strong> Stealing the enemy flag is a devastating move. When you are carrying their flag, <strong>all of their units, no matter where they are, lose their supply lines and cannot heal.</strong> They must destroy your flag carrier to restore their healing capabilities.</li>
-                        <li><strong>Reinforcements (Respawn System):</strong> Destroyed units aren't gone forever. They enter a respawn queue. After 10 turns, you can deploy a new unit at your base. This is limited by a maximum army size (4 units) and a cap on each unit type (2 of each).</li>
-                    </ul>
+                    <img src="assets/guide/guide-advanced.png" alt="Logistics and Veterancy" style="width: 100%; max-width: 250px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; margin: 10px auto 15px auto; display: block; border: 2px solid #304860; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                    <p><strong>Supply Lines:</strong> You have 10 Supply Points. Fortifying a unit draws a glowing line back to your Base Camp if there is a valid path, reserving points based on distance. Unbroken supply lines allow fortified units to heal +1 HP at the start of your turn (up to +1 Shield over their Max HP) if they have not been attacked that turn. Enemy units standing on the dotted line block this healing.</p>
+                    <p><strong>Capturing the Flag:</strong> The moment a unit picks up the enemy flag, all enemy supply lines are severed. The enemy army cannot heal until they destroy your flag carrier and return the flag to their base.</p>
+                    <p><strong>Bridge Destruction:</strong> Attacking and destroying a built bridge immediately drowns or heavily damages any units standing on it, and severs any supply lines routed across it.</p>
+                    <p><strong>Reinforcements & Veterancy:</strong> Destroyed units enter the Reinforcements queue (bottom left) for 10 turns. When the timer hits 0, a prompt appears. You can either <strong>Deploy</strong> a new unit at your base, or click the <strong>Promote</strong> tab to permanently upgrade a surviving unit on the board. Units can reach up to Level 3, gaining Health, Speed, Damage, or Defense. Heavily upgrading one stat will apply a permanent penalty to its paired stat (Health ↔ Speed, Damage ↔ Defense).</p>
                 </div>
             </div>
         </div>

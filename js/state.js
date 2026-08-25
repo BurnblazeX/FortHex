@@ -62,6 +62,10 @@ let gameState = {
     isTestingMap: false,
     fillToolActive: false,
     needsRedraw: true, 
+    fineGrid: new Map(),
+    visionCache: { player: null, tiles: new Set(), edges: new Set() },
+    visionDirty: true, 
+    isPassDeviceTransition: false
 };
 
 let currentDrawingColors = JSON.parse(JSON.stringify(TEAM_COLORS));
@@ -72,6 +76,8 @@ let gameSettings = {
     passTurnConfirmationEnabled: true, 
     tooltipsEnabled: true, 
     debugModeEnabled: false, 
+    fogOfWarEnabled: false,
+    passDeviceBlurEnabled: false,
     uiScale: 1.0
 };
 
@@ -82,6 +88,7 @@ let currentCancelAction = null;
 let dragOperationJustConcluded = false;
 let lastTap = 0;
 let lastTapPosition = { x: 0, y: 0 };
+let lastTouchInteractionTime = 0;
 let fileLoadContext = 'game_save';
 
 const ActionManager = {

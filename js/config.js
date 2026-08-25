@@ -55,7 +55,7 @@ const THEME = {
 };
         
         // --- Game Configuration & Constants ---
-        const BUILD_VERSION = "B29//2a";
+        const BUILD_VERSION = "B29//4"; 
         const HEX_SIZE = 70; 
         const CANVAS_WIDTH_NORMAL = (2 * 3 + 1.5) * (HEX_SIZE * Math.sqrt(3));
         const CANVAS_HEIGHT_NORMAL = (2 * 3 + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;
@@ -173,10 +173,10 @@ const THEME = {
 
         // Unit Definitions (Templates)
         const UNIT_TYPES = {
-            MELEE:    { typeName: 'MELEE',    name: 'Melee',    hp: 12, speed: 4, damage: 3, defense: 1, symbol: 'M', canBuildBridge: true,  canFortify: true,  attackType: 'melee', canMoveAfterAttack: false, strengths: ['Archer'],   weaknesses: ['Horseman'] },
-            ARCHER:   { typeName: 'ARCHER',   name: 'Archer',   hp: 10, speed: 3, damage: 2, defense: 1, symbol: 'A', canBuildBridge: false, canFortify: true,  attackType: 'ranged', canMoveAfterAttack: false, strengths: ['Pikeman'],  weaknesses: ['Melee'] },
-            PIKEMAN:  { typeName: 'PIKEMAN',  name: 'Pikeman',  hp: 13, speed: 3, damage: 3, defense: 2, symbol: 'P', canBuildBridge: false, canFortify: true,  attackType: 'melee', canMoveAfterAttack: false, strengths: ['Horseman'], weaknesses: ['Archer'] },
-            HORSEMAN: { typeName: 'HORSEMAN', name: 'Horseman', hp: 11, speed: 5, damage: 3, defense: 0, symbol: 'H', canBuildBridge: false, canFortify: false, attackType: 'melee', canMoveAfterAttack: true,  strengths: ['Melee'],    weaknesses: ['Pikeman'] }
+            MELEE:    { typeName: 'MELEE',    name: 'Melee',    hp: 12, speed: 4, damage: 3, defense: 1, symbol: 'M', canBuildBridge: true,  attackType: 'melee', canMoveAfterAttack: false, strengths: ['Archer'],   weaknesses: ['Horseman'] },
+            ARCHER:   { typeName: 'ARCHER',   name: 'Archer',   hp: 10, speed: 3, damage: 2, defense: 1, symbol: 'A', canBuildBridge: false, attackType: 'ranged', canMoveAfterAttack: false, strengths: ['Pikeman'],  weaknesses: ['Melee'] },
+            PIKEMAN:  { typeName: 'PIKEMAN',  name: 'Pikeman',  hp: 13, speed: 3, damage: 3, defense: 2, symbol: 'P', canBuildBridge: false, attackType: 'melee', canMoveAfterAttack: false, strengths: ['Horseman'], weaknesses: ['Archer'] },
+            HORSEMAN: { typeName: 'HORSEMAN', name: 'Horseman', hp: 11, speed: 5, damage: 3, defense: 0, symbol: 'H', canBuildBridge: false, attackType: 'melee', canMoveAfterAttack: true,  strengths: ['Melee'],    weaknesses: ['Pikeman'] }
         };
 
         // --- VETERAN SYSTEM CONSTANTS ---

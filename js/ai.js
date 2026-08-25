@@ -185,7 +185,11 @@ function loadPopulation() {
 
 function savePopulation() {
     if (!aiPopulation) return;
-    localStorage.setItem(AI_POP_STORAGE_KEY, JSON.stringify(aiPopulation));
+    try {
+        localStorage.setItem(AI_POP_STORAGE_KEY, JSON.stringify(aiPopulation));
+    } catch (e) {
+        console.error('[AI] Failed to save population (localStorage full?).', e);
+    }
 }
 
 // Kept so any existing call site (e.g. abortTrainingMode) that still calls saveAIBrain() keeps working.
@@ -349,7 +353,6 @@ function getEdgeInfluence(influenceMap, edgeKey) {
     return (influenceMap.get(k1) || 0) + (influenceMap.get(k2) || 0);
 }
 
-// --- AI Reinforcements System ---
 async function handleAIReinforcements() {
     const player = gameState.currentPlayer;
     const queueKey = `player${player}`;
@@ -362,22 +365,16 @@ async function handleAIReinforcements() {
         let actionTaken = false;
 
         const promotableUnits = gameState.units.filter(u => u.player === player && u.level < 3);
-        
-        // AI Logic: Promote if army is full, or 30% chance to promote anyway if units are available
         const shouldPromote = (armySize >= maxUnits) || (promotableUnits.length > 0 && Math.random() < aiBrain.weights.promote_tendency);
 
         if (shouldPromote && promotableUnits.length > 0) {
-            // Pick a random eligible unit
             const targetUnit = promotableUnits[Math.floor(Math.random() * promotableUnits.length)];
-            
-            // Smart stat selection based on class
             let statPool = ['health', 'defense', 'damage', 'speed'];
             if (targetUnit.type.name === 'Archer') statPool = ['damage', 'speed'];
             if (targetUnit.type.name === 'Pikeman') statPool = ['health', 'defense'];
             if (targetUnit.type.name === 'Horseman') statPool = ['speed', 'damage'];
             
             const statToUpgrade = statPool[Math.floor(Math.random() * statPool.length)];
-            
             console.log(`[AI] Promoted ${targetUnit.type.name} (+${statToUpgrade})`);
             applyUnitUpgrade(targetUnit, statToUpgrade);
             consumeRespawnCharge(player);
@@ -385,17 +382,19 @@ async function handleAIReinforcements() {
             await delay(800);
 
         } else if (armySize < maxUnits) {
-// Recruit missing units based on Brain Weights
-const counts = gameState.unitCounts[queueKey];
+            // --- BULLETPROOF UNIT COUNTER ---
+            const counts = { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
+            gameState.units.forEach(u => {
+                if (u.player === player && u.type && u.type.name) {
+                    counts[u.type.name] = (counts[u.type.name] || 0) + 1;
+                }
+            });
 
-        // Sort classes dynamically based on their learned weight (Highest weight first)
-        const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
-            const weightA = (aiBrain.weights[`recruit_${a.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
-            const weightB = (aiBrain.weights[`recruit_${b.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
-            return weightB - weightA; 
-        });
-
-console.log(`[AI] Recruitment preferred order:`, preferredOrder);
+            const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
+                const weightA = (aiBrain.weights[`recruit_${a.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
+                const weightB = (aiBrain.weights[`recruit_${b.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
+                return weightB - weightA; 
+            });
             
             for (const typeKey of preferredOrder) {
                 const unitName = UNIT_TYPES[typeKey].name;
@@ -413,10 +412,9 @@ console.log(`[AI] Recruitment preferred order:`, preferredOrder);
 
         if (!actionTaken) {
             console.log("[AI] Base blocked or unable to use reinforcement charge. Holding.");
-            break; // Prevents infinite loop if base is blocked and all units are level 3
+            break; 
         }
-
-        queue = gameState.respawnQueue[queueKey]; // Refresh queue for next while loop check
+        queue = gameState.respawnQueue[queueKey]; 
     }
 }
 
@@ -847,13 +845,16 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                 const myFlagTileKey = getFlagTileKey(unit.player);
                 const enemyPlayer = unit.player === 1 ? 2 : 1;
                 const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
-                const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
-                const enemyBaseTileKeys = new Set(Array.isArray(enemyBaseData) ? enemyBaseData : []);
+                // getBaseTileKeys handles both the array and edge-key-string shapes. The
+                // old inline `Array.isArray(...) ? ... : []` silently produced an empty set
+                // on radius-3 maps, so the enemy-base guard below never fired there.
+                const enemyBaseTileKeys = new Set(getBaseTileKeys(enemyPlayer));
+                const myBaseTileKeys = new Set(getBaseTileKeys(unit.player));
 
                 [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {
                     const tile = gameState.tiles.get(tileKey);
-                    
-                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey && (!enemyBaseTileKeys.has(tileKey) || tileKey === enemyFlagTileKey)) {
+
+                    if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey && !myBaseTileKeys.has(tileKey) && (!enemyBaseTileKeys.has(tileKey) || tileKey === enemyFlagTileKey)) {
                          let score = aiBrain.weights.fortify_base_score - unit.fortifyCooldown;
                          if(unit.type.name === 'Pikeman') score += aiBrain.weights.fortify_pikeman_bonus; 
                          if(unit.hp < unit.maxHp) score += aiBrain.weights.fortify_heal_bonus; 
@@ -919,11 +920,16 @@ async function executeAIAction(action) {
 
     const animateAndMove = async (unit, moveData) => {
         if (!gameState.isTrainingMode) {
-            gameState.potentialDebugPathToDraw = moveData.path;
+            if (gameSettings.fogOfWarEnabled && gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
+                gameState.potentialDebugPathToDraw = null;
+            } else {
+                gameState.potentialDebugPathToDraw = moveData.path;
+            }
             gameState.debugPathHoverStartTime = Date.now() - PATH_DRAW_HOVER_DELAY_MS;
             await delay(PATH_DRAW_ANIMATION_DURATION_MS + 200);
         }
-        handleMoveAction(unit, moveData.path[moveData.path.length - 1], moveData.cost);
+        // Pass the path array explicitly to handleMoveAction
+        handleMoveAction(unit, moveData.path[moveData.path.length - 1], moveData.cost, moveData.path);
     };
 
     switch (action.type) {

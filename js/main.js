@@ -17,7 +17,11 @@ function checkArcadeVictoryCondition() {
     ui.victoryMessage.textContent = victoryText;
     ui.victoryMessage.style.display = 'block';
     gameState.gameOver = true;
+    gameState.currentActionState = ACTION_STATES.IDLE;
+    gameState.selectedUnit = null;
+    gameState.currentReachableMoves.clear();
     ui.endTurnButton.disabled = true;
+    canvas.style.cursor = 'default';
     triggerConfetti();
     
     // Block interaction immediately
@@ -253,21 +257,155 @@ function checkVictoryCondition() {
         ui.buildBridgeButton.addEventListener('click', handleBuildBridgeAction);
         ui.attackButton.addEventListener('click', handleAttackAction);
 
+// Global reference to prevent overlapping timers
+window.resolvePassDeviceOverlay = null;
+
+function showPassDeviceOverlay(nextPlayer, callback) {
+    console.trace("[Handoff] showPassDeviceOverlay triggered. Next player:", nextPlayer);
+
+    let overlay = document.getElementById('passDeviceOverlay');
+    if (!overlay) {
+        console.log("[Handoff] Creating overlay DOM element.");
+        overlay = document.createElement('div');
+        overlay.id = 'passDeviceOverlay';
+        document.body.appendChild(overlay);
+    }
+    
+    // --- FIX: Change 'fixed' to 'absolute' so it scrolls with the page! ---
+    overlay.style.cssText = `
+        display: none; position: absolute; z-index: 2147483647; 
+        background-color: rgba(24, 40, 48, 0.6); 
+        backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); 
+        align-items: center; justify-content: center; flex-direction: column; 
+        cursor: pointer; border-radius: 10px; pointer-events: auto;
+    `;
+    
+    overlay.innerHTML = `
+        <h2 id="passDeviceText" style="font-family: 'Geostar', cursive; font-size: clamp(2em, 6vw, 3.5em); margin-bottom: 10px; text-align: center; text-shadow: 0 4px 10px rgba(0,0,0,0.9); font-weight: bold;">Pass to Player X</h2>
+        <div id="passDeviceCountdown" style="font-size: clamp(3em, 8vw, 5em); font-weight: bold; color: #FFFFFF; margin-bottom: 20px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">5</div>
+        <p style="font-size: clamp(1.2em, 4vw, 1.5em); color: #FFFFFF; opacity: 0.9; text-align: center; text-shadow: 0 2px 5px rgba(0,0,0,0.9);">Tap anywhere to continue</p>
+    `;
+
+    // --- SPAM FIX: FORCE RESOLVE EXISTING OVERLAY ---
+    if (window.resolvePassDeviceOverlay) {
+        console.log("[Handoff] Force-resolving previous overlay due to rapid click.");
+        window.resolvePassDeviceOverlay(true); 
+    }
+
+    const countdownEl = document.getElementById('passDeviceCountdown');
+    const textEl = document.getElementById('passDeviceText');
+    const canvasEl = document.getElementById('gameCanvas'); 
+    
+    if (!canvasEl) {
+        console.error("[Handoff] Canvas missing! Aborting transition.");
+        if (callback) callback();
+        return;
+    }
+
+    // --- FORCE FULL MAP FOG ---
+    gameState.isPassDeviceTransition = true;
+    gameState.needsRedraw = true;
+    
+    // --- FIX: Inject window.scrollY to pin it to the document instead of the camera ---
+    const syncOverlaySize = () => {
+        const rect = canvasEl.getBoundingClientRect();
+        overlay.style.top = (rect.top + window.scrollY) + 'px';
+        overlay.style.left = (rect.left + window.scrollX) + 'px';
+        overlay.style.width = rect.width + 'px';
+        overlay.style.height = rect.height + 'px';
+    };
+    
+    syncOverlaySize();
+    window.addEventListener('resize', syncOverlaySize);
+    
+    textEl.textContent = `Pass to Player ${nextPlayer}`;
+    textEl.style.color = nextPlayer === 1 ? 'var(--p1-color-primary)' : 'var(--p2-color-primary)';
+    
+    let timeLeft = 5;
+    countdownEl.textContent = timeLeft;
+    overlay.style.display = 'flex';
+
+    if (gameSettings.animationsEnabled) {
+        overlay.animate([
+            { opacity: 0 },
+            { opacity: 1 }
+        ], {
+            duration: 400,
+            easing: 'ease-out'
+        });
+    }
+    
+    let intervalId = setInterval(() => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+            resolveOverlay();
+        } else {
+            countdownEl.textContent = timeLeft;
+        }
+    }, 1000);
+    
+    let isResolving = false; 
+    
+    const resolveOverlay = (isForceAbort = false) => {
+        if (isResolving) return;
+        isResolving = true;
+        
+        window.resolvePassDeviceOverlay = null; 
+        
+        console.trace("[Handoff] resolveOverlay triggered. Clearing overlay and lifting fog.");
+        clearInterval(intervalId);
+        overlay.removeEventListener('click', overlayClickHandler);
+        window.removeEventListener('resize', syncOverlaySize);
+        
+        gameState.isPassDeviceTransition = false;
+        gameState.visionDirty = true;
+        gameState.needsRedraw = true;
+        
+        const finishResolve = () => {
+            overlay.style.display = 'none';
+            if (callback) callback();
+        };
+
+        if (gameSettings.animationsEnabled && !isForceAbort) {
+            const anim = overlay.animate([
+                { opacity: 1 },
+                { opacity: 0 }
+            ], {
+                duration: 300,
+                easing: 'ease-in'
+            });
+            anim.onfinish = finishResolve;
+        } else {
+            finishResolve();
+        }
+    };
+
+    window.resolvePassDeviceOverlay = resolveOverlay;
+    
+    const overlayClickHandler = () => resolveOverlay(false);
+    overlay.addEventListener('click', overlayClickHandler);
+}
+
 function proceedToEndTurn() {
     if (gameState.isDragging || gameState.gameOver) return;
-    
-    // --- ARCADE PHASE CHECK (Block if swap is needed) ---
+
+    // A pending forced retreat must be resolved before the turn can end. Otherwise
+    // proceedToEndTurn clears selectedUnit while mustUnfortify stays set, and
+    // handleTapLogic then blocks ALL canvas input for both players permanently.
+    if (gameState.mustUnfortify) {
+        showInstruction("You MUST select an edge to retreat to first!", 2500);
+        return;
+    }
+
+    // --- ARCADE PHASE CHECK ---
     if (gameState.gameMode === 'arcade') {
-        // Only enforce swap requirement if we are past Turn 1
         if (gameState.globalTurnNumber >= 2) {
             if (gameState.swapState === 'selecting_unit' || gameState.swapState === 'selecting_class') {
                 showInstruction("You must swap a unit first!", 2000);
-                return; // STOP: Player tried to skip swap
+                return; 
             }
         }
-        
-        // Check Arcade Turn Limit Victory
-        if (gameState.currentPlayer === 2) { // End of round
+        if (gameState.currentPlayer === 2) { 
             gameState.arcadeTotalTurns++;
             if (gameState.arcadeTotalTurns >= ARCADE_MAX_TURNS) {
                 checkArcadeVictoryCondition();
@@ -288,21 +426,21 @@ function proceedToEndTurn() {
         updateGlobalTurnDisplay();
     }
     
-    // --- RESET SELECTIONS & MOUSE ---
+    // --- RESET SELECTIONS ---
     gameState.selectedUnit = null; 
     gameState.currentReachableMoves.clear();
     gameState.hoveredUnitId = null; 
     canvas.style.cursor = 'default';
     resetActionSelectionStates();
     
-    // --- RESET UNITS FOR NEW TURN ---
+    // --- RESET UNITS ---
     gameState.units.forEach(unit => {
         if (unit.player === gameState.currentPlayer) {
             unit.hasPerformedMajorAction = false; 
+            unit.spearWalled = false;
+            unit.ambushed = false;
             
-            // UPDATE: Use unit.stats.speed instead of type.baseMove
             let baseMoveForTurn = unit.stats.speed;
-            
             if (unit.isCarryingFlag) { baseMoveForTurn -= 1; }
             unit.currentMove = Math.max(0, baseMoveForTurn); 
             
@@ -313,9 +451,7 @@ function proceedToEndTurn() {
                 if (unit.fortifyCooldown > 0) unit.fortifyCooldown = Math.max(0, unit.fortifyCooldown - 5);
             }
 
-            // Check Cowardice (Fortified at base too long)
             const playerBaseTiles = getBaseCampTiles(gameState.baseCampPositions[`player${unit.player}`]);
-            
             if (unit.isFortified && playerBaseTiles.includes(unit.fortifiedTileKey)) {
                 unit.turnsFortifiedAtBase++;
                 if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
@@ -326,62 +462,76 @@ function proceedToEndTurn() {
     });
     
     handleRespawnQueue();
-    applyStartOfTurnZoCDamage(); 
+    applyStartOfTurnZoCDamage();
+    // Give unsupplied forts a chance to buy a supply line back before anything that
+    // depends on supply status runs — otherwise a fort could only ever be resupplied as
+    // a side effect of some unrelated fortify/unfortify elsewhere on the board.
+    attemptToResupplyForts(gameState.currentPlayer);
     logSiegeStatus();
-    applyStartOfTurnHealing(); 
-    updateTurnDisplay();
-    updateSelectedUnitInfoPanel(); 
-    
-    // CRITICAL FIX: Update HP display after turn start effects
-    updateSupplyPointsDisplay();
-    
-    // --- ARCADE TIMER RESET & STATE SETUP ---
-    if (gameState.gameMode === 'arcade') {
-        // 1. RESET THE TIMER
-        gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
-        gameState.hasSwappedThisTurn = false; // Reset swap flag
+    applyMountainAttrition();
+    applyStartOfTurnHealing();
 
-        // 2. SET SWAP PHASE (Only for Turn 2+)
-        if (gameState.globalTurnNumber >= 2) {
-            gameState.swapState = 'selecting_unit';
-            showInstruction(`Player ${gameState.currentPlayer}'s Turn. SELECT UNIT TO SWAP.`, 4000);
+    // --- VISUAL REVEAL CALLBACK (Runs after overlay clears) ---
+    const finalizeVisuals = () => {
+        updateTurnDisplay();
+        updateSelectedUnitInfoPanel(); 
+        updateSupplyPointsDisplay();
+        
+        if (gameState.gameMode === 'arcade') {
+            gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
+            gameState.hasSwappedThisTurn = false; 
+
+            if (gameState.globalTurnNumber >= 2) {
+                gameState.swapState = 'selecting_unit';
+                showInstruction(`Player ${gameState.currentPlayer}'s Turn. SELECT UNIT TO SWAP.`, 4000);
+            } else {
+                gameState.swapState = 'none'; 
+                showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
+            }
         } else {
-            gameState.swapState = 'none'; // Turn 1: No swap needed
             showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
         }
-    } else {
-        showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
-    }
-    
-    logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
-    autoSaveGame(true);
-    checkVictoryCondition();
+        
+        logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
+        autoSaveGame(true);
+        checkVictoryCondition();
 
-    // AI Handling (Singleplayer)
-    if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
-        ui.endTurnButton.disabled = true;
-        if (!gameState.isTrainingMode) {
-            setTimeout(() => { executeAITurn(); }, 1500);
+        if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
+            ui.endTurnButton.disabled = true;
+            if (!gameState.isTrainingMode) {
+                setTimeout(() => { executeAITurn(); }, 1500);
+            }
+        } else {
+            ui.endTurnButton.disabled = false;
         }
+    };
+
+    // --- TRIGGER OVERLAY IF ENABLED ---
+    if (gameState.gameMode === 'local' && gameSettings.passDeviceBlurEnabled) {
+        showPassDeviceOverlay(gameState.currentPlayer, finalizeVisuals);
     } else {
-        ui.endTurnButton.disabled = false;
+        finalizeVisuals();
     }
 }
 
 function handleGenerateNewMap() {
-             gameState.isDragging = false; 
-             gameState.draggingUnit = null;
+            gameState.isDragging = false; 
+            gameState.draggingUnit = null;
             
             // 1. Generate the map tiles
             const newLayout = generateImprovedMap(gameState.gridRadius);
             
-            // 2. Initialize the grid with these tiles
-            initializeGrid(newLayout); 
+            // 2. Resolve the correct base camps for the current slider/radius BEFORE placing
+            // units, so procedural placement lines up with the actual bases instead of
+            // whatever a previously-loaded preset (River Fork/Volcano Island - which put P1/P2
+            // on opposite hemispheres) left behind in gameState.baseCampPositions.
+            const sliderEl = document.getElementById('baseCampSlider');
+            const sliderVal = sliderEl ? sliderEl.value : '3';
             
-            // 3. Explicitly update base camp positions based on the current slider and radius
-            // This ensures the game logic matches the visual map size.
-            const sliderVal = document.getElementById('baseCampSlider').value;
-            updateBaseCampLocations(sliderVal);
+            const correctedBaseCamps = computeRotatedBaseCampPositions(gameState.gridRadius, sliderVal);
+
+            // 3. Initialize the grid with these tiles and the corrected base camps
+            initializeGrid(newLayout, null, correctedBaseCamps);
             
             showInstruction("New map generated. Player 1's Turn.", 3000);
         }
@@ -527,6 +677,59 @@ function updateAllHealingStatus() {
             if (p2FlagStolen) { logAction(`P2's flag is stolen! Healing is disabled.`, 1, 3000); }
         }
 
+// Archers holding a mountain peak bleed HP unless they are BOTH supplied and their
+// player's flag is safely at base — a stolen flag cuts the peak off just as surely as a
+// severed supply line. The damage escalates 1, 2, 3... for each consecutive turn the
+// hold is unsupported, and resets the moment support is restored (or when the unit
+// unfortifies off the peak).
+function applyMountainAttrition() {
+    const activePlayer = gameState.currentPlayer;
+    const attritionEvents = [];
+    const unitsToDestroy = [];
+
+    gameState.units.forEach(unit => {
+        if (unit.player !== activePlayer || !isUnitOnMountainPeak(unit)) return;
+
+        const playerFlag = gameState.flags ? gameState.flags[`p${unit.player}_flag`] : null;
+        const flagStolen = !!(playerFlag && playerFlag.status === 'carried');
+
+        if (!flagStolen && isUnitSupplied(unit)) {
+            unit.mountainAttritionTurns = 0;
+            return;
+        }
+
+        unit.mountainAttritionTurns = (unit.mountainAttritionTurns || 0) + 1;
+        const damage = unit.mountainAttritionTurns;
+
+        unit.hp -= damage;
+        triggerDamageVisual(unit, 'normal');
+
+        attritionEvents.push({
+            unitId: unit.id,
+            damage: damage,
+            remainingHp: unit.hp,
+            isFatal: unit.hp <= 0
+        });
+
+        logAction(`P${unit.player} ${unit.type.name} takes ${damage} mountain attrition. HP: ${unit.hp}`, activePlayer, 3500);
+
+        if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
+            unitsToDestroy.push(unit);
+        }
+    });
+
+    if (attritionEvents.length > 0 && typeof ActionManager !== 'undefined') {
+        ActionManager.submitAction({
+            type: "TURN_START_MOUNTAIN_ATTRITION",
+            turn: gameState.globalTurnNumber,
+            player: activePlayer,
+            payload: { events: attritionEvents }
+        });
+    }
+
+    if (unitsToDestroy.length > 0) unitsToDestroy.forEach(u => handleUnitDeath(u, "mountain_attrition"));
+}
+
 function applyStartOfTurnHealing() {
     // In Arcade mode, there are no base camps, so units cannot heal.
     if (gameState.gameMode === 'arcade') return;
@@ -548,34 +751,13 @@ function applyStartOfTurnHealing() {
             return;
         }
             
-        let isSupplied = false;
-        
-        // --- Normalized Base Tiles Check ---
-        const rawBaseData = gameState.baseCampPositions[`player${unit.player}`];
-        let baseTiles = [];
-        if (Array.isArray(rawBaseData)) {
-            baseTiles = rawBaseData;
-        } else if (typeof rawBaseData === 'string') {
-            const [h1, h2] = parseEdgeKey(rawBaseData);
-            if (!isNaN(h1.q)) baseTiles.push(getTileKey(h1.q, h1.r));
-            if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
-        }
-        
-        if (baseTiles.includes(unit.fortifiedTileKey)) {
-            isSupplied = true;
+        // A unit on a mountain peak can never heal — its supplies go entirely to
+        // keeping it alive up there.
+        if (isUnitOnMountainPeak(unit)) {
+            return;
         }
 
-        if (!isSupplied && unit.supplyLine && unit.supplyLine.path) {
-            const isIntercepted = unit.supplyLine.path.some(edgeKey => {
-                const edge = gameState.edges.get(edgeKey);
-                return edge && edge.units.some(u => u.player !== unit.player);
-            });
-            if (!isIntercepted) {
-                isSupplied = true;
-            }
-        }
-
-        if (isSupplied) {
+        if (isUnitSupplied(unit)) {
             const oldHp = unit.hp;
             unit.hp++;
             const activePlayer = gameState.currentPlayer;
@@ -847,11 +1029,12 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
             
             for (let i = edgeUnits.length - 1; i >= 0; i--) {
-                 const {unit, edge} = edgeUnits[i];
-                 if (unit.player !== gameState.currentPlayer) continue;
+                const {unit, edge} = edgeUnits[i];
+                if (unit.player !== gameState.currentPlayer) continue;
                 if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; 
                 if (unit.isFortified || unit.currentMove < 1) continue;
-                 if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
+                if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
+                if (unit.spearWalled) continue;
                  
                  const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                  let unitCenterX = mid.x, unitCenterY = mid.y;
@@ -938,6 +1121,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             if (gameState.mapMakerMode) {
                 gameState.isDragging = false;
                 gameState.mapMakerLastPaintedHexKey = null;
+                gameState.needsRedraw = true;
                 return;
             }
             if (!gameState.isDragging || !gameState.draggingUnit) return;
@@ -954,10 +1138,21 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                     const mid = getEdgeMidpoint(finalTargetEdgeData.q1, finalTargetEdgeData.r1, finalTargetEdgeData.q2, finalTargetEdgeData.r2);
                     if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < dropRadius) {
                         const costToMove = moveData.cost; 
-                        if (finalTargetEdgeData.units.some(u => u.player !== gameState.draggingUnit.player)) { showInstruction("Cannot move to enemy edge."); break; }
+                        
+                        let isTargetKnownEnemy = false;
+                        if (finalTargetEdgeData.units.some(u => u.player !== gameState.draggingUnit.player)) {
+                            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                                if (gameState.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
+                            } else {
+                                isTargetKnownEnemy = true;
+                            }
+                        }
+                        if (isTargetKnownEnemy) { showInstruction("Cannot move to enemy edge."); break; }
                         if (finalTargetEdgeData.units.filter(u => u.player === gameState.draggingUnit.player).length >= 2) { showInstruction("Target edge full."); break; }
+                        
+                        // Pass moveData.path
                         if (costToMove <= gameState.draggingUnit.currentMove && costToMove !== Infinity) { 
-                            handleMoveAction(gameState.draggingUnit, targetEdgeKey, costToMove); 
+                            handleMoveAction(gameState.draggingUnit, targetEdgeKey, costToMove, moveData.path); 
                             droppedOnValidTarget = true; 
                         }
                         else { showInstruction(`Cannot move. Cost: ${costToMove.toFixed(1)}, Have: ${gameState.draggingUnit.currentMove.toFixed(1)}`); }
@@ -1113,9 +1308,21 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         
         if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < scaledClickRadius) {
             const costToMove = moveData.cost;
-            if (finalTargetEdgeData.units.some(u => u.player !== selectedUnit.player)) { showInstruction("Cannot move to enemy edge."); return true; }
+            
+            // Bypass enemy block if they are hidden in fog
+            let isTargetKnownEnemy = false;
+            if (finalTargetEdgeData.units.some(u => u.player !== selectedUnit.player)) {
+                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                    if (gameState.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
+                } else {
+                    isTargetKnownEnemy = true;
+                }
+            }
+            if (isTargetKnownEnemy) { showInstruction("Cannot move to enemy edge."); return true; }
             if (finalTargetEdgeData.units.filter(u => u.player === selectedUnit.player).length >= 2) { showInstruction("Target edge full."); return true; }
-            if (costToMove <= selectedUnit.currentMove && costToMove !== Infinity) handleMoveAction(selectedUnit, targetEdgeKey, costToMove);
+            
+            // Pass moveData.path to handleMoveAction for ambush resolution
+            if (costToMove <= selectedUnit.currentMove && costToMove !== Infinity) handleMoveAction(selectedUnit, targetEdgeKey, costToMove, moveData.path);
             else showInstruction(`Cannot move. Cost: ${costToMove.toFixed(1)}, Have: ${selectedUnit.currentMove.toFixed(1)}`);
             return true;
         }
@@ -1173,14 +1380,14 @@ function handleActionTargetSelectionClick(x, y) {
                     const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
 
                     if (len_perp_vec > 0) {
-                        const scale = HEX_SIZE / 2;
+                        const scale = (HEX_SIZE * gameState.renderScale) / 2;
                         perp_dx = (perp_dx / len_perp_vec) * scale;
                         perp_dy = (perp_dy / len_perp_vec) * scale;
                         const v = { x: edgeMidX + perp_dx, y: edgeMidY + perp_dy };
                         const w = { x: edgeMidX - perp_dx, y: edgeMidY - perp_dy };
 
                         // --- Check distance from click to the line segment ---
-                        if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * 2)**2) {
+                        if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * gameState.renderScale * 2)**2) {
                             completeBuildBridge(edgeKey);
                             clickedValidTarget = true;
                             break;
@@ -1207,13 +1414,13 @@ function handleActionTargetSelectionClick(x, y) {
                         const len_perp_vec = Math.sqrt(perp_dx * perp_dx + perp_dy * perp_dy);
 
                         if (len_perp_vec > 0) {
-                            const scale = HEX_SIZE / 2;
+                            const scale = (HEX_SIZE * gameState.renderScale) / 2;
                             perp_dx = (perp_dx / len_perp_vec) * scale;
                             perp_dy = (perp_dy / len_perp_vec) * scale;
                             const v = { x: edgeMidX + perp_dx, y: edgeMidY + perp_dy };
                             const w = { x: edgeMidX - perp_dx, y: edgeMidY - perp_dy };
 
-                            if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * 2)**2) {
+                            if (distToSegmentSquared(p, v, w) < (BRIDGE_CLICK_TOLERANCE * gameState.renderScale * 2)**2) {
                                 completeAttack(selectedUnit, targetInfo, attackType);
                                 clickedValidTarget = true;
                                 break;
@@ -1221,10 +1428,10 @@ function handleActionTargetSelectionClick(x, y) {
                         }
                     }
                 } else if (targetInfo.unit) {
-                    const targetUnit = targetInfo.unit; let unitX_val, unitY_val, clickRadius = UNIT_CLICK_RADIUS;
+                    const targetUnit = targetInfo.unit; let unitX_val, unitY_val, clickRadius = UNIT_CLICK_RADIUS * gameState.renderScale;
                     if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
                         const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
-                        if (tile) { const centerPixel = axialToPixel(tile.q, tile.r); unitX_val = centerPixel.x; unitY_val = centerPixel.y; clickRadius = FORTIFIED_UNIT_DRAW_SIZE * 1.5; }
+                        if (tile) { const centerPixel = axialToPixel(tile.q, tile.r); unitX_val = centerPixel.x; unitY_val = centerPixel.y; clickRadius = (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5; }
                         else continue;
                     } else if (targetInfo.edgeKey) {
                         const edgeOfTarget = gameState.edges.get(targetInfo.edgeKey); if (!edgeOfTarget) continue;
@@ -1236,7 +1443,7 @@ function handleActionTargetSelectionClick(x, y) {
                             const p1 = axialToPixel(edgeOfTarget.q1, edgeOfTarget.r1); const p2 = axialToPixel(edgeOfTarget.q2, edgeOfTarget.r2);
                             let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
                             let perpX = -dy_val / len, perpY = dx_val / len;
-                            unitX_val += perpX * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5); unitY_val += perpY * UNIT_ON_EDGE_OFFSET * offsetSign * (0.5);
+                            unitX_val += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); unitY_val += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
                         }
                     } else continue;
                     if (Math.sqrt((x - unitX_val)**2 + (y - unitY_val)**2) < clickRadius) { 
@@ -1262,39 +1469,55 @@ function handleActionTargetSelectionClick(x, y) {
 
 function handleUnitSelectionClick(x, y) {
             let clickedOnUnit = null;
+            
             for (const unit of gameState.units) {
                 if (unit.isFortified && unit.positionType === 'center') {
                     const tile = gameState.tiles.get(unit.position);
                     if (tile) {
                         const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
                         if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5) {
-                             if (unit.player === gameState.currentPlayer) {
+                            if (unit.player === gameState.currentPlayer) {
                                 if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
                                     showInstruction(`That is an AI unit.`);
                                     return true;
                                 }
                                 clickedOnUnit = unit;
                                 break;
-                            } else { showInstruction(`Enemy ${unit.type.name} fortified.`); return true; }
+                            } else { 
+                                // --- FOG CHECK ---
+                                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                                    if (!gameState.visionCache.tiles.has(unit.position)) continue; // Treat as empty space
+                                }
+                                showInstruction(`Enemy ${unit.type.name} fortified.`); 
+                                return true; 
+                            }
                         }
                     }
                 }
             }
+            
             if (!clickedOnUnit) {
                  const unitEdgePairs = [];
                  gameState.edges.forEach((edge, edgeKey) => { edge.units.forEach(u => { if (u.positionType === 'edge') unitEdgePairs.push({ unit: u, edge: edge }); }); });
+                
                 for (let i = unitEdgePairs.length - 1; i >= 0; i--) {
-                    const {unit, edge} = unitEdgePairs[i]; const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
+                    const {unit, edge} = unitEdgePairs[i]; 
+                    const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     let unitX = mid.x, unitY = mid.y;
+                    
                     const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
                     const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === unit.id);
                     if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
                         const offsetSign = (unitIndexOnEdge % 2 === 0) ? -1 : 1;
-                        const p1 = axialToPixel(edge.q1, edge.r1); const p2 = axialToPixel(edge.q2, edge.r2);
-                        let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
+                        const p1 = axialToPixel(edge.q1, edge.r1); 
+                        const p2 = axialToPixel(edge.q2, edge.r2);
+                        let dx_val = p2.x - p1.x, dy_val = p2.y - p1.y; 
+                        const len = Math.sqrt(dx_val*dx_val + dy_val*dy_val) || 1;
                         let perpX = -dy_val / len, perpY = dx_val / len;
-                        unitX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); unitY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
+                        unitX += perpX * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5); 
+                        unitY += perpY * (UNIT_ON_EDGE_OFFSET * gameState.renderScale) * offsetSign * (0.5);
                     }
+                    
                     if (Math.sqrt((x - unitX)**2 + (y - unitY)**2) < (UNIT_CLICK_RADIUS * gameState.renderScale)) {
                        if (unit.player === gameState.currentPlayer) {
                             if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
@@ -1303,7 +1526,14 @@ function handleUnitSelectionClick(x, y) {
                             }
                             clickedOnUnit = unit;
                             break;
-                        } else { showInstruction(`Enemy ${unit.type.name} on edge.`); return true; }
+                        } else { 
+                            // --- FOG CHECK ---
+                            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                                if (!gameState.visionCache.edges.has(unit.position)) continue; // Treat as empty space
+                            }
+                            showInstruction(`Enemy ${unit.type.name} on edge.`); 
+                            return true; 
+                        }
                     }
                 }
             }
@@ -1318,7 +1548,7 @@ function handleUnitSelectionClick(x, y) {
                     console.log(`[Selection] Unit Selected: ${gameState.selectedUnit.id}`);
                     resetActionSelectionStates();
                     const unit = gameState.selectedUnit;
-                    const canPhysicallyMove = !unit.isFortified && unit.positionType === 'edge' && unit.currentMove >= 1;
+                    const canPhysicallyMove = !unit.isFortified && unit.positionType === 'edge' && unit.currentMove >= 1 && !unit.spearWalled;
                     const isAllowedToMove = !unit.hasPerformedMajorAction || unit.type.canMoveAfterAttack;
                     if (canPhysicallyMove && isAllowedToMove) {
                         gameState.currentReachableMoves = getPossibleMoves(unit);
@@ -1367,10 +1597,10 @@ function handleUnitSelectionClick(x, y) {
             
             gameState.validFortifyTargetTileKeys = [];
 
-            if (tile1 && tile1.type.canFortify && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey)) {
+            if (tile1 && canUnitFortifyOnTile(selectedUnit, tile1) && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey)) {
                 gameState.validFortifyTargetTileKeys.push(tile1Key);
             }
-            if (tile2 && tile2.type.canFortify && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey)) {
+            if (tile2 && canUnitFortifyOnTile(selectedUnit, tile2) && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey)) {
                 gameState.validFortifyTargetTileKeys.push(tile2Key);
             }
 
@@ -1517,6 +1747,10 @@ function handleUnitSelectionClick(x, y) {
     gameState.hoveredUnitId = null;
     gameState.currentPlayer = 1;
     gameState.globalTurnNumber = 1;
+    gameState.visionCache = null;
+    gameState.fogAnimState = null;
+    gameState.visionDirty = true;
+    gameState.isPassDeviceTransition = false;
     updateGlobalTurnDisplay();
     gameState.isDragging = false;
     gameState.draggingUnit = null;
@@ -1608,13 +1842,15 @@ function handleUnitSelectionClick(x, y) {
             if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
                 const edgeKey = getEdgeKey(tile.q, tile.r, n_coord.q, n_coord.r);
                 if (!gameState.edges.has(edgeKey)) {
-                    gameState.edges.set(edgeKey, {
-                        q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r,
-                        get units() { 
+                    const newEdge = { q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r, bridge: false, bridgeHp: null, isPathway: true };
+                    Object.defineProperty(newEdge, 'units', {
+                        get: function() { 
                             return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!gameState.draggingUnit || u.id !== gameState.draggingUnit.id)); 
                         },
-                        bridge: false, bridgeHp: null, isPathway: true
+                        configurable: true,
+                        enumerable: false
                     });
+                    gameState.edges.set(edgeKey, newEdge);
                 }
             }
         });
@@ -1675,6 +1911,7 @@ function handleUnitSelectionClick(x, y) {
     updateSelectedUnitInfoPanel();
     checkVictoryCondition();
     updateSupplyPointsDisplay();
+    buildFineGridIndex();
 }
 
 ui.endTurnButton.addEventListener('click', () => {
@@ -1963,47 +2200,7 @@ canvas.addEventListener('contextmenu', (event) => {
 });
 
         window.onload = function () {
-
-            function showCalibrationCard() {
-                const dummyMaxUnit = {
-                    player: 1,
-                    typeId: 'MELEE',
-                    type: { name: 'Melee' },
-                    level: 3,
-                    stats: { hp: 12, maxHp: 12, speed: 4, damage: 3, defense: 1 },
-                    // Force 3 in all upgrades to fill every single pip slot visually
-                    upgrades: { health: 3, speed: 3, damage: 3, defense: 3 }
-                };
-
-                const calibrationDiv = document.createElement('div');
-                calibrationDiv.id = 'calibrationCardContainer';
-                calibrationDiv.style.position = 'fixed';
-                calibrationDiv.style.top = '20px';
-                calibrationDiv.style.left = '20px';
-                calibrationDiv.style.zIndex = '99999';
-                calibrationDiv.style.backgroundColor = 'rgba(48, 64, 80, 0.95)';
-                calibrationDiv.style.padding = '20px';
-                calibrationDiv.style.borderRadius = '12px';
-                calibrationDiv.style.border = '2px solid #FFC020';
-                calibrationDiv.style.boxShadow = '0 10px 30px rgba(0,0,0,0.8)';
-                calibrationDiv.style.cursor = 'move'; // Indicates it's draggable
-
-                // Note: font-size is strictly locked to 10px here so 1em = exactly 10px for your math!
-                calibrationDiv.innerHTML = `
-                    <h3 style="color: #FFC020; margin-top: 0; margin-bottom: 15px; font-family: 'Geostar', cursive; text-align: center; pointer-events: none;">Card Calibrator</h3>
-                    <div class="unit-card" style="font-size: 10px; margin: 0 auto; pointer-events: none;">
-                        ${getUnitCardHTML(dummyMaxUnit, false)}
-                    </div>
-                `;
-
-                document.body.appendChild(calibrationDiv);
-
-                // Re-use your existing drag code to make it movable
-                makeElementDraggable(calibrationDiv);
-            }
-            
-            showCalibrationCard();
-
+        
             // --- Initialize Debug Console System Immediately ---
             setupDebugConsoleSystem();
 
@@ -2011,15 +2208,30 @@ canvas.addEventListener('contextmenu', (event) => {
             document.getElementById('loadGameButton').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> Load Game`;
             document.getElementById('buildVersionDisplay').textContent = `FortHex Build ${BUILD_VERSION}`;
             
-            loadSettings(); // Load settings from localStorage into the gameSettings object
-            loadColorPreferences(); // Load color preferences
+            loadSettings(); 
+            loadColorPreferences(); 
 
+            // Sync UI checkboxes safely to match the loaded settings
+            const elAnim = document.getElementById('settingAnimations');
+            if (elAnim) elAnim.checked = gameSettings.animationsEnabled;
+            
+            const elFancy = document.getElementById('settingFancyVisuals');
+            if (elFancy) elFancy.checked = gameSettings.fancyVisualsEnabled;
+            
+            const elPass = document.getElementById('settingPassTurnConfirmation');
+            if (elPass) elPass.checked = gameSettings.passTurnConfirmationEnabled;
+            
+            const elTool = document.getElementById('settingTooltips');
+            if (elTool) elTool.checked = gameSettings.tooltipsEnabled;
 
-            // Sync UI checkboxes to match the loaded settings
-            document.getElementById('settingAnimations').checked = gameSettings.animationsEnabled;
-            document.getElementById('settingFancyVisuals').checked = gameSettings.fancyVisualsEnabled;
-            document.getElementById('settingPassTurnConfirmation').checked = gameSettings.passTurnConfirmationEnabled;
-            document.getElementById('settingTooltips').checked = gameSettings.tooltipsEnabled;
+            const elFog = document.getElementById('settingFogOfWar');
+            if (elFog) elFog.checked = gameSettings.fogOfWarEnabled;
+
+            const elBlur = document.getElementById('settingPassDeviceBlur');
+            if (elBlur) {
+                elBlur.checked = gameSettings.passDeviceBlurEnabled;
+                elBlur.disabled = !gameSettings.fogOfWarEnabled;
+            }
 
             // --- Connection Status Indicator ---
             const connectionIcon = document.getElementById('connectionStatusIcon');
@@ -2212,6 +2424,8 @@ canvas.addEventListener('contextmenu', (event) => {
             const passTurnCheckbox = document.getElementById('settingPassTurnConfirmation');
             const fancyVisualsCheckbox = document.getElementById('settingFancyVisuals');
             const tooltipsCheckbox = document.getElementById('settingTooltips');
+            const fogOfWarCheckbox = document.getElementById('settingFogOfWar'); 
+            const passDeviceBlurCheckbox = document.getElementById('settingPassDeviceBlur'); 
             const uiScaleSlider = document.getElementById('settingUiScale');
             const uiScaleValueLabel = document.getElementById('uiScaleValueLabel');
 
@@ -2226,6 +2440,8 @@ canvas.addEventListener('contextmenu', (event) => {
             passTurnCheckbox.checked = gameSettings.passTurnConfirmationEnabled;
             fancyVisualsCheckbox.checked = gameSettings.fancyVisualsEnabled;
             tooltipsCheckbox.checked = gameSettings.tooltipsEnabled;
+            fogOfWarCheckbox.checked = gameSettings.fogOfWarEnabled; 
+            passDeviceBlurCheckbox.checked = gameSettings.passDeviceBlurEnabled;
             applyUiScale(); 
 
             animationsCheckbox.addEventListener('change', (e) => {
@@ -2250,6 +2466,29 @@ canvas.addEventListener('contextmenu', (event) => {
                 saveSettings();
             });
 
+            if (fogOfWarCheckbox) {
+                fogOfWarCheckbox.addEventListener('change', (e) => {
+                    gameSettings.fogOfWarEnabled = e.target.checked;
+
+                    if (passDeviceBlurCheckbox) {
+                        passDeviceBlurCheckbox.disabled = !gameSettings.fogOfWarEnabled;
+                        if (!gameSettings.fogOfWarEnabled) {
+                            gameSettings.passDeviceBlurEnabled = false;
+                            passDeviceBlurCheckbox.checked = false;
+                        }
+                    }
+
+                    saveSettings();
+                    gameState.visionDirty = true; 
+                    gameState.needsRedraw = true; 
+                });
+            }
+
+            passDeviceBlurCheckbox.addEventListener('change', (e) => {
+                gameSettings.passDeviceBlurEnabled = e.target.checked;
+                saveSettings();
+            });
+            
             uiScaleSlider.addEventListener('input', (e) => {
                 const scaleValue = parseFloat(e.target.value);
                 gameSettings.uiScale = scaleValue;
@@ -2325,7 +2564,13 @@ canvas.addEventListener('contextmenu', (event) => {
             document.getElementById('loadGameModalCloseButton').addEventListener('click', hideLoadGameModal);
 
             document.getElementById('loadFromAutosaveButton').addEventListener('click', () => {
-                if (localStorage.getItem('forthexSaveGame')) {
+                // Must match the key loadAutoSave() will actually read, or the button
+                // reports "no autosave" for singleplayer / map-maker saves that do exist.
+                const activeAutosaveKey = gameState.mapMakerMode
+                    ? MAP_MAKER_AUTOSAVE_KEY
+                    : (gameState.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame');
+
+                if (localStorage.getItem(activeAutosaveKey)) {
                     loadAutoSave();
                     hideLoadGameModal();
                 } else {
