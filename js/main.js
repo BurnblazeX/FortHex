@@ -48,14 +48,27 @@ function checkVictoryCondition() {
     if (gameState.gameOver) return true;
     let victoryText = null;
 
-    if (gameState.isTrainingMode && gameState.globalTurnNumber >= 50) {
-        console.log("Stalemate reached. Forcing tiebreaker...");
-        const p1HP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
-        const p2HP = gameState.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
+    if (gameState.isTrainingMode && gameState.globalTurnNumber >= 30) {
+        console.log("Stalemate reached. Calculating Aggression...");
         
-        if (p1HP > p2HP) victoryText = "Player 1 Wins by Timeout (HP Tiebreaker)!";
-        else if (p2HP > p1HP) victoryText = "Player 2 Wins by Timeout (HP Tiebreaker)!";
-        else victoryText = "It's a Draw! (Timeout)";
+        // A standard army starts with 46 Total HP (12 + 10 + 13 + 11).
+        // The fewer hitpoints the enemy has remaining, the more damage you dealt!
+        const p1CurrentHP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
+        const p2CurrentHP = gameState.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
+        
+        // Calculate missing HP (Damage dealt to them)
+        const p1DamageDealt = 46 - p2CurrentHP;
+        const p2DamageDealt = 46 - p1CurrentHP;
+
+        // You only win the tiebreaker if you actually dealt damage AND dealt more than the enemy.
+        if (p1DamageDealt > p2DamageDealt && p1DamageDealt > 0) {
+            victoryText = "Player 1 Wins by Aggression (Tiebreaker)!";
+        } else if (p2DamageDealt > p1DamageDealt && p2DamageDealt > 0) {
+            victoryText = "Player 2 Wins by Aggression (Tiebreaker)!";
+        } else {
+            // If both dealt 0 damage (camping), or dealt exact same damage, it's a draw.
+            victoryText = "It's a Draw! (Timeout)";
+        }
     }
 
     if (gameState.gameMode === 'arcade') {

@@ -44,6 +44,7 @@ function loadColorPreferences() {
 }
 
 function autoSaveGame(isSilent = false) {
+    if (gameState.isTrainingMode) return;
     if (gameState.isDragging) {
         // console.log("[Autosave] Skipped: Unit is dragging."); // Optional spam reduction
         if (!isSilent) showInstruction("Cannot save while dragging.", 2000);

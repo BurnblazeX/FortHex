@@ -411,6 +411,7 @@
         }
 
         function updateRespawnQueueDisplay() {
+            if (gameState.isTrainingMode) return;
             const container = document.getElementById('reinforcementsContainer');
             const listEl = document.getElementById('reinforcementsList');
 
@@ -457,6 +458,7 @@
         }
 
         function logAction(message, player, duration = 3000) {
+            if (gameState.isTrainingMode) return;
             showInstruction(message, duration);
             gameState.actionLog.push({ message: message, player: player });
             if (gameState.actionLog.length > 25) {
@@ -1179,6 +1181,12 @@
                 line.className = `console-${type}`;
                 line.textContent = `> ${msg}`;
                 consoleContent.appendChild(line);
+                
+                // --- ANTI-LAG: Cap the console to 100 lines to prevent DOM Memory Leaks ---
+                while (consoleContent.childNodes.length > 100) {
+                    consoleContent.removeChild(consoleContent.firstChild);
+                }
+                
                 consoleContent.scrollTop = consoleContent.scrollHeight;
             }
 
