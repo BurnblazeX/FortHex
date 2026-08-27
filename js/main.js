@@ -2985,7 +2985,7 @@ async function runTrainingHyperLoop() {
     // Inject the HTML for the banner including the Touch STOP button
     if (banner) {
         banner.innerHTML = `
-            ⚠️ AI TOURNAMENT TRAINING ACTIVE ⚠️ <br> 
+            AI TOURNAMENT TRAINING ACTIVE  <br> 
             Generation: <span id="trainGenCount" style="color: #2ecc71;">0</span> |
             Champion WR: <span id="trainChampWR" style="color: #2ecc71;">--%</span> |
             Turns: <span id="trainTurnCount">0</span> <br>

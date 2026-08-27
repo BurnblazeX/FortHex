@@ -38,12 +38,15 @@ let matchesSinceEvolution = 0;
 // Stubbed: The old heuristic system used this. We keep an empty stub so main.js does not crash on timeout draws.
 function applyDrawPenalty(brain) {}
 
-function createBrain(generation, role, seedNetwork) {
+// AFTER
+function createBrain(generation, role, seedNetwork, seedWeights) {
     return {
         id: 'brain_' + Math.random().toString(36).slice(2, 9),
         generation: generation || 0,
         role: role || 'exploit',
-        weights: JSON.parse(JSON.stringify(DEFAULT_AI_BRAIN.weights)),
+        weights: seedWeights
+            ? { ...DEFAULT_AI_BRAIN.weights, ...JSON.parse(JSON.stringify(seedWeights)) }
+            : JSON.parse(JSON.stringify(DEFAULT_AI_BRAIN.weights)),
         network: seedNetwork ? JSON.parse(JSON.stringify(seedNetwork)) : createRandomNetwork(),
         matchesPlayed: 0,
         wins: 0,
@@ -82,10 +85,10 @@ function loadPopulation() {
                 // Top up if the population size config changed since the last save
                 while (aiPopulation.length < AI_POPULATION_SIZE) {
                     const champ = getChampionBrain();
-                    const isExplore = aiPopulation.filter(b => b.role === 'explore').length < AI_EXPLORE_COUNT;
+                    const isExplore = aiPopulation.filter(b => b.role === 'explore').length < AI_EXPLORE_COUNT; 
                     const brain = isExplore
-                        ? createBrain(champ.generation, 'explore', mutateNetwork(champ.network, AI_EXPLORE_MUTATION_RATE, AI_EXPLORE_MUTATION_STRENGTH))
-                        : createBrain(champ.generation, 'exploit', mutateNetwork(champ.network, AI_EXPLOIT_MUTATION_RATE, AI_EXPLOIT_MUTATION_STRENGTH));
+                        ? createBrain(champ.generation, 'explore', mutateNetwork(champ.network, AI_EXPLORE_MUTATION_RATE, AI_EXPLORE_MUTATION_STRENGTH), champ.weights)
+                        : createBrain(champ.generation, 'exploit', mutateNetwork(champ.network, AI_EXPLOIT_MUTATION_RATE, AI_EXPLOIT_MUTATION_STRENGTH), champ.weights);
                     aiPopulation.push(brain);
                 }
                 console.log(`[AI] Loaded tournament population: ${aiPopulation.length} brains.`);
@@ -149,30 +152,54 @@ function maybeEvolvePopulation() {
 
     const newPopulation = [];
     elites.forEach(e => newPopulation.push(
+    createBrain(
+        nextGen, 
+        'exploit',
+        mutateNetwork(e.network, AI_EXPLOIT_MUTATION_RATE, AI_EXPLOIT_MUTATION_STRENGTH),
+        e.weights
+    )
+));
+for (let i = 0; i < AI_EXPLORE_COUNT; i++) {
+    const parent = ranked[Math.floor(Math.random() * ranked.length)];
+    newPopulation.push(
         createBrain(
             nextGen, 
-            'exploit',
-            mutateNetwork(e.network, AI_EXPLOIT_MUTATION_RATE, AI_EXPLOIT_MUTATION_STRENGTH)
+            'explore',
+            mutateNetwork(parent.network, AI_EXPLORE_MUTATION_RATE, AI_EXPLORE_MUTATION_STRENGTH),
+            parent.weights
         )
-    ));
-    for (let i = 0; i < AI_EXPLORE_COUNT; i++) {
-        const parent = ranked[Math.floor(Math.random() * ranked.length)];
-        newPopulation.push(
-            createBrain(
-                nextGen, 
-                'explore',
-                mutateNetwork(parent.network, AI_EXPLORE_MUTATION_RATE, AI_EXPLORE_MUTATION_STRENGTH)
-            )
-        );
-    }
+    );
+}
 
     aiPopulation = newPopulation;
     savePopulation();
 }
 
-// Call this immediately so the population is ready when the script loads
-loadPopulation();
-aiBrain = getChampionBrain();
+// --- Tournament Match Pairing ---
+// Picks two distinct brains from the population, randomizes which side of the board
+// they play on (to avoid a positional bias), and starts a fresh match between them.
+function startNewTrainingMatch() {
+    if (!aiPopulation || aiPopulation.length < 2) loadPopulation();
+
+    let i = Math.floor(Math.random() * aiPopulation.length);
+    let j = Math.floor(Math.random() * aiPopulation.length);
+    while (j === i) j = Math.floor(Math.random() * aiPopulation.length);
+
+    const flip = Math.random() < 0.5;
+    const brainP1 = flip ? aiPopulation[i] : aiPopulation[j];
+    const brainP2 = flip ? aiPopulation[j] : aiPopulation[i];
+
+    gameState.matchBrains = { player1: brainP1, player2: brainP2 };
+    gameState.currentMatchSamples = []; // fresh NN-training sample buffer for this match
+    aiBrain = brainP1; // sane default; executeAITurn() repoints this every turn anyway
+
+    console.log(
+        `[AI Tournament] New match: [#${aiPopulation.indexOf(brainP1)}] (${brainP1.role}, WR ${(brainWinRate(brainP1) * 100).toFixed(0)}%, gen ${brainP1.generation}) ` +
+        `vs [#${aiPopulation.indexOf(brainP2)}] (${brainP2.role}, WR ${(brainWinRate(brainP2) * 100).toFixed(0)}%, gen ${brainP2.generation})`
+    );
+
+    initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
+}
 
 // --- AI Helper: Get Center Pixel of a Base ---
 function getBaseCenter(baseData) {
@@ -364,7 +391,10 @@ const ACTION_FEATURE_KEYS = [
 function featuresToVector(features) {
     const vec = new Float32Array(ACTION_FEATURE_KEYS.length);
     
-    const isAction = (type) => features.actionType && features.actionType.includes(type) ? 1.0 : 0.0;
+const isAction = (type) => {
+    if (!features.actionType) return 0.0;
+    return features.actionType.split('_').includes(type) ? 1.0 : 0.0;
+};
     const isClass = (type) => features.unitType === type ? 1.0 : 0.0;
 
     const vals = {
@@ -1060,3 +1090,6 @@ window.benchmarkGenerationalProgress = async function() {
         console.log("Evolution is struggling to beat random noise.");
     }
 };
+
+loadPopulation();
+aiBrain = getChampionBrain();
