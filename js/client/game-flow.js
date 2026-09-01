@@ -101,6 +101,30 @@ function ApplySingleplayerMatchOutcome(result) {
     finalizeTrainingSamples(result.aiPlayerNum, result.aiVictory ? 1 : 0);
 }
 
+// Shared tail of both victory paths: block further interaction, run out the
+// confetti window, then wait for a click to restart. checkVictoryCondition and
+// checkArcadeVictoryCondition carried byte-identical copies of this.
+// The rest of the two victory screens still differs on purpose - arcade sets
+// gameOver itself and skips the newMapButton/actionsPanel bits - so only the
+// genuinely identical part is shared here.
+function AwaitVictoryRestart() {
+    const interactionBlocker = document.getElementById('victoryInteractionBlocker');
+    interactionBlocker.style.display = 'block';
+
+    const CONFETTI_DURATION = 7000;
+    new Promise(resolve => setTimeout(resolve, CONFETTI_DURATION)).then(() => {
+        const restartGameOnClick = () => {
+            window.removeEventListener('click', restartGameOnClick);
+            window.removeEventListener('touchend', restartGameOnClick);
+            interactionBlocker.style.display = 'none';
+            location.reload();
+        };
+        window.addEventListener('click', restartGameOnClick);
+        window.addEventListener('touchend', restartGameOnClick);
+        showInstruction("Click anywhere to play again.", CONFETTI_DURATION);
+    });
+}
+
 function checkVictoryCondition() {
     const result = CheckVictoryCondition();
 
@@ -151,21 +175,7 @@ function checkVictoryCondition() {
     gameState.currentReachableMoves.clear();
     updateSelectedUnitInfoPanel();
 
-    const interactionBlocker = document.getElementById('victoryInteractionBlocker');
-    interactionBlocker.style.display = 'block';
-
-    const CONFETTI_DURATION = 7000;
-    new Promise(resolve => setTimeout(resolve, CONFETTI_DURATION)).then(() => {
-        const restartGameOnClick = () => {
-            window.removeEventListener('click', restartGameOnClick);
-            window.removeEventListener('touchend', restartGameOnClick);
-            interactionBlocker.style.display = 'none';
-            location.reload();
-        };
-        window.addEventListener('click', restartGameOnClick);
-        window.addEventListener('touchend', restartGameOnClick);
-        showInstruction("Click anywhere to play again.", CONFETTI_DURATION);
-    });
+    AwaitVictoryRestart();
 
     return true;
 }
@@ -322,21 +332,7 @@ function checkArcadeVictoryCondition() {
     triggerConfetti();
     
     // Block interaction immediately
-    const interactionBlocker = document.getElementById('victoryInteractionBlocker');
-    interactionBlocker.style.display = 'block';
-    
-    const CONFETTI_DURATION = 7000;
-    new Promise(resolve => setTimeout(resolve, CONFETTI_DURATION)).then(() => {
-        const restartGameOnClick = () => {
-            window.removeEventListener('click', restartGameOnClick);
-            window.removeEventListener('touchend', restartGameOnClick);
-            interactionBlocker.style.display = 'none';
-            location.reload();
-        };
-        window.addEventListener('click', restartGameOnClick);
-        window.addEventListener('touchend', restartGameOnClick);
-        showInstruction("Click anywhere to play again.", CONFETTI_DURATION);
-    });
+    AwaitVictoryRestart();
 
     return true;
 }

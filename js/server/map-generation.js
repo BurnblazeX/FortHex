@@ -16,10 +16,6 @@
 //   InitializeGridDimensions    two because the original interleaved a DOM
 //                               control rebuild between setting the radius and
 //                               building the grid (see those functions' notes).
-//
-// IsCoordInRadius is currently dead - nothing in the codebase calls it. Moved
-// anyway because the guide's step 9 names it explicitly; worth deleting if it
-// still has no callers by the end of A1.
 
 function GenerateImprovedMap(radius) {
     const tempTiles = new Map();
@@ -211,12 +207,6 @@ function ReconstructPath(cameFrom, currentKey) {
         totalPath.unshift(currentKey);
     }
     return totalPath;
-}
-
-function IsCoordInRadius(key, radius) {
-    const [q, r] = key.split(',').map(Number);
-    if (isNaN(q) || isNaN(r)) return false;
-    return Math.abs(q) <= radius && Math.abs(r) <= radius && Math.abs(q + r) <= radius;
 }
 
 function PlaceUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
