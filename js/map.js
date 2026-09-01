@@ -209,7 +209,7 @@ function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
             // than assuming P1=left/P2=right, which breaks for maps whose base camps were
             // set up on the opposite/rotated hemisphere.
             const getPlayerHomeQ = (player) => {
-                const tiles = getBaseCampTiles(gameState.baseCampPositions[`player${player}`]);
+                const tiles = GetBaseCamp(player);
                 if (tiles.length === 0) return null;
                 const sumQ = tiles.reduce((sum, key) => sum + Number(key.split(',')[0]), 0);
                 return sumQ / tiles.length;
@@ -1275,8 +1275,8 @@ function updateBaseCampLocations(sliderValue) {
     const defaults = BASE_CAMP_DEFAULTS[currentRadius];
     
     // 1. Clear old base camp tiles (Reset to Plains and remove flag)
-    const oldP1Tiles = getBaseCampTiles(gameState.baseCampPositions.player1);
-    const oldP2Tiles = getBaseCampTiles(gameState.baseCampPositions.player2);
+    const oldP1Tiles = GetBaseCamp(1);
+    const oldP2Tiles = GetBaseCamp(2);
     [...oldP1Tiles, ...oldP2Tiles].forEach(key => {
         const tile = gameState.tiles.get(key);
         if (tile) {

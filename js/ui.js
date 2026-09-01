@@ -559,17 +559,11 @@
             }
         }
 
+        // Thin wrapper — the actual gameState.supplyPoints mutation lives in
+        // js/server/actions.js's SetSupplyPointsForFlagStatus. Client-side files
+        // must not mutate gameState directly.
         function updateSupplyPointsBasedOnFlagStatus(playerNum) {
-            const playerFlag = gameState.flags[`p${playerNum}_flag`];
-            const playerSupplyKey = `player${playerNum}`;
-
-            if (playerFlag && playerFlag.status === 'carried') {
-                // Flag is stolen, set supply to 0.
-                gameState.supplyPoints[playerSupplyKey] = 0;
-            } else {
-                // Flag is at base, restore to max.
-                gameState.supplyPoints[playerSupplyKey] = 10;
-            }
+            SetSupplyPointsForFlagStatus(playerNum);
             updateSupplyPointsDisplay();
         }
 

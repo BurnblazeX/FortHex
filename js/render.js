@@ -2072,7 +2072,7 @@ function drawMapMakerHighlights() {
         if (Array.isArray(currentBase) && currentBase.length > 0 && currentBase.length < 3) {
             const validNeighbors = new Set();
             const enemyPlayer = player === 1 ? 2 : 1;
-            const enemyBaseSet = new Set(getBaseTileKeys(enemyPlayer));
+            const enemyBaseSet = new Set(GetBaseCamp(enemyPlayer));
 
             currentBase.forEach(key => {
                 const [q,r] = key.split(',').map(Number);

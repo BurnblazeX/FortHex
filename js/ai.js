@@ -686,8 +686,8 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                 const myFlagTileKey = getFlagTileKey(unit.player);
                 const enemyPlayer = unit.player === 1 ? 2 : 1;
                 const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
-                const enemyBaseTileKeys = new Set(getBaseTileKeys(enemyPlayer));
-                const myBaseTileKeys = new Set(getBaseTileKeys(unit.player));
+                const enemyBaseTileKeys = new Set(GetBaseCamp(enemyPlayer));
+                const myBaseTileKeys = new Set(GetBaseCamp(unit.player));
 
                 [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {
                     const tile = gameState.tiles.get(tileKey);
