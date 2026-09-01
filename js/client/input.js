@@ -17,7 +17,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 return;
             }
 
-            if (gameState.mapMakerMode) {
+            if (engine.state.mapMakerMode) {
                 gameState.isDragging = true;
                 gameState.mapMakerLastPaintedHexKey = null;
                 applyMapMakerBrush(x, y);
@@ -88,7 +88,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 return;
             }
 
-            if (gameState.mapMakerMode) {
+            if (engine.state.mapMakerMode) {
                 gameState.isDragging = true;
                 gameState.mapMakerLastPaintedHexKey = null;
                 applyMapMakerBrush(x, y);
@@ -161,7 +161,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         }
 
         function handleInteractionMove(x, y) {
-            if (gameState.mapMakerMode && gameState.isDragging) {
+            if (engine.state.mapMakerMode && gameState.isDragging) {
                 applyMapMakerBrush(x, y);
                 return;
             }
@@ -202,7 +202,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         }
 
         function handleInteractionEnd(x, y, isTouchEvent = false) {
-            if (gameState.mapMakerMode) {
+            if (engine.state.mapMakerMode) {
                 gameState.isDragging = false;
                 gameState.mapMakerLastPaintedHexKey = null;
                 gameState.needsRedraw = true;
@@ -225,8 +225,8 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                         
                         let isTargetKnownEnemy = false;
                         if (finalTargetEdgeData.units.some(u => u.player !== gameState.draggingUnit.player)) {
-                            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                                if (gameState.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
+                            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                                if (engine.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
                             } else {
                                 isTargetKnownEnemy = true;
                             }
@@ -292,7 +292,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         }    
 
         function handleTapLogic(x, y) {
-            if (gameState.mapMakerMode) return; 
+            if (engine.state.mapMakerMode) return; 
 
             if (gameState.mustUnfortify) {
                 // allow clicking an action target
@@ -396,8 +396,8 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             // Bypass enemy block if they are hidden in fog
             let isTargetKnownEnemy = false;
             if (finalTargetEdgeData.units.some(u => u.player !== selectedUnit.player)) {
-                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                    if (gameState.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
+                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                    if (engine.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
                 } else {
                     isTargetKnownEnemy = true;
                 }
@@ -569,8 +569,8 @@ function handleUnitSelectionClick(x, y) {
                                 break;
                             } else { 
                                 // --- FOG CHECK ---
-                                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                                    if (!gameState.visionCache.tiles.has(unit.position)) continue; // Treat as empty space
+                                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                                    if (!engine.visionCache.tiles.has(unit.position)) continue; // Treat as empty space
                                 }
                                 showInstruction(`Enemy ${unit.type.name} fortified.`); 
                                 return true; 
@@ -612,8 +612,8 @@ function handleUnitSelectionClick(x, y) {
                             break;
                         } else { 
                             // --- FOG CHECK ---
-                            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                                if (!gameState.visionCache.edges.has(unit.position)) continue; // Treat as empty space
+                            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                                if (!engine.visionCache.edges.has(unit.position)) continue; // Treat as empty space
                             }
                             showInstruction(`Enemy ${unit.type.name} on edge.`); 
                             return true; 
@@ -802,3 +802,31 @@ function handleUnitSelectionClick(x, y) {
             updateSelectedUnitInfoPanel();
         }
 
+
+// === Canvas input listener registration (moved from main.js — A1 step 12) ===
+//
+// The handlers themselves already lived here; only their registration moved,
+// so js/main.js reads as a list of wiring calls.
+
+function WireCanvasInput() {
+    // CANVAS EVENT LISTENERS (CRITICAL)
+    canvas.addEventListener('click', handleCanvasClick);
+    canvas.addEventListener('mousedown', handleCanvasMouseDown);
+    canvas.addEventListener('mousemove', handleCanvasMouseMove);
+    canvas.addEventListener('mouseup', handleCanvasMouseUp);
+    window.addEventListener('mouseup', handleCanvasMouseUp);
+    canvas.addEventListener('mouseleave', handleCanvasMouseLeave);
+    canvas.addEventListener('touchstart', handleCanvasTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleCanvasTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleCanvasTouchEnd);
+    canvas.addEventListener('touchcancel', handleCanvasTouchCancel);
+    canvas.addEventListener('contextmenu', (event) => {
+        if (engine.state.mapMakerMode) {
+            event.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const { x, y } = getRelativeCoordinates(event.clientX, event.clientY); 
+            eraseAt(x, y);
+
+        }
+    });
+}

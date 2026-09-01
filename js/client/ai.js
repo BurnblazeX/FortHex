@@ -752,7 +752,7 @@ async function executeAIAction(action) {
     await delay(400);
 
     const animateAndMove = async (unit, moveData) => {
-        if (!gameState.isTrainingMode) {
+        if (!engine.state.isTrainingMode) {
             if (engine.settings.fogOfWarEnabled && engine.state.gameMode === 'singleplayer' && unit.player !== engine.state.playerSide) {
                 gameState.potentialDebugPathToDraw = null;
             } else {
@@ -800,7 +800,7 @@ async function executeAIAction(action) {
 async function executeAITurn() {
     if (engine.state.gameOver) return;
 
-    if (gameState.isTrainingMode && gameState.matchBrains) {
+    if (engine.state.isTrainingMode && gameState.matchBrains) {
         aiBrain = gameState.matchBrains[`player${engine.state.currentPlayer}`] || getChampionBrain();
     } else {
         aiBrain = getChampionBrain();
@@ -919,7 +919,7 @@ function evolveBrain(brain, aiVictory, victoryReason, aiPlayerNum, matchHistory)
         brain.weights.promote_tendency = clampProb(brain.weights.promote_tendency - 0.02);
     }
 
-    if (!gameState.isTrainingMode) {
+    if (!engine.state.isTrainingMode) {
         console.log("[AI] Analyzing Human 'Gospel' Gameplay...");
         
         const humanPlayerNum = aiPlayerNum === 1 ? 2 : 1;
@@ -985,7 +985,7 @@ async function runHeadlessBenchmark(brainA, brainB, numMatches) {
     let winsA = 0, winsB = 0, draws = 0, totalTurns = 0;
     
     const origGameMode = engine.state.gameMode;
-    const origIsTraining = gameState.isTrainingMode;
+    const origIsTraining = engine.state.isTrainingMode;
     const origMatchBrains = gameState.matchBrains;
     const origEvolveBrain = window.evolveBrain;
     const origSavePop = window.savePopulation;
@@ -1008,7 +1008,7 @@ async function runHeadlessBenchmark(brainA, brainB, numMatches) {
     };
 
     engine.state.gameMode = 'local';
-    gameState.isTrainingMode = true;
+    engine.state.isTrainingMode = true;
     
     console.log(`[Benchmark] Starting ${numMatches} matches... Run stopBenchmark() to abort.`);
 
@@ -1061,7 +1061,7 @@ async function runHeadlessBenchmark(brainA, brainB, numMatches) {
     window.setTimeout = origSetTimeout;
     
     engine.state.gameMode = origGameMode;
-    gameState.isTrainingMode = origIsTraining;
+    engine.state.isTrainingMode = origIsTraining;
     gameState.matchBrains = origMatchBrains;
     
     const actualMatches = winsA + winsB + draws;

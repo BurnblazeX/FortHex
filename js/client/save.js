@@ -1,6 +1,68 @@
+// === Save payload assembly ===
+//
+// Before the engine.state cutover a save was just `{...gameState}` plus the
+// tiles/edges Maps, because gameState held everything. It doesn't any more, so
+// spreading it silently dropped every engine-owned field (units, currentPlayer,
+// flags, supplyPoints, gridRadius...) out of both the autosave and the .fhsave
+// file, and loading rebuilt an empty radius-3 board. These two helpers are the
+// single place that knows which fields live on which side.
+//
+// fineGrid is deliberately absent: it's derived, and rehydrateGameState()
+// rebuilds it via buildFineGridIndex().
+const ENGINE_SAVE_FIELDS = [
+    'gameMode', 'playerSide', 'gridRadius', 'playerColorSelections',
+    'units', 'currentPlayer', 'globalTurnNumber', 'actionLog', 'matchHistory',
+    'unitIdCounter', 'flags', 'respawnQueue', 'unitCounts', 'supplyPoints',
+    'baseCampPositions', 'gameOver', 'arcadeTotalTurns', 'isTrainingMode',
+    'mapMakerMode', 'playerActionTaken'
+];
+
+function BuildSaveState() {
+    const payload = { ...gameState };
+
+    ENGINE_SAVE_FIELDS.forEach(field => {
+        payload[field] = engine.state[field];
+    });
+
+    // Maps aren't JSON-serializable
+    payload.tiles = Array.from(engine.state.tiles.entries());
+    payload.edges = Array.from(engine.state.edges.entries());
+    payload.currentReachableMoves = Array.from(gameState.currentReachableMoves.entries());
+
+    payload.saveVersion = BUILD_VERSION;
+    return payload;
+}
+
+// Splits a loaded save back across the two owners. Call before
+// rehydrateGameState(), which expects engine.state.tiles/edges to hold the
+// raw arrays and turns them back into Maps.
+function ApplyLoadedState(loadedState) {
+    ENGINE_SAVE_FIELDS.forEach(field => {
+        if (loadedState[field] !== undefined) {
+            engine.state[field] = loadedState[field];
+        }
+    });
+    if (loadedState.tiles !== undefined) engine.state.tiles = loadedState.tiles;
+    if (loadedState.edges !== undefined) engine.state.edges = loadedState.edges;
+
+    // What's left is the client's half. Strip the engine keys so gameState
+    // doesn't accumulate a stale shadow copy of state it no longer owns.
+    gameState = loadedState;
+    ENGINE_SAVE_FIELDS.forEach(field => { delete gameState[field]; });
+    delete gameState.tiles;
+    delete gameState.edges;
+}
+
 function saveSettings() {
     try {
-        const settingsString = JSON.stringify(gameSettings);
+        // animationsEnabled and fogOfWarEnabled live on engine.settings now, but
+        // they're still user preferences that have to survive a reload - the
+        // engine owns the value, localStorage just persists it.
+        const settingsString = JSON.stringify({
+            ...gameSettings,
+            animationsEnabled: engine.settings.animationsEnabled,
+            fogOfWarEnabled: engine.settings.fogOfWarEnabled,
+        });
         localStorage.setItem(SETTINGS_STORAGE_KEY, settingsString);
     } catch (error) {
         console.error("Could not save settings:", error);
@@ -11,8 +73,10 @@ function loadSettings() {
     try {
         const savedSettingsString = localStorage.getItem(SETTINGS_STORAGE_KEY);
         if (savedSettingsString) {
-            const loadedSettings = JSON.parse(savedSettingsString);
-            gameSettings = Object.assign({}, gameSettings, loadedSettings);
+            const { animationsEnabled, fogOfWarEnabled, ...clientPrefs } = JSON.parse(savedSettingsString);
+            gameSettings = Object.assign({}, gameSettings, clientPrefs);
+            if (typeof animationsEnabled === 'boolean') engine.settings.animationsEnabled = animationsEnabled;
+            if (typeof fogOfWarEnabled === 'boolean') engine.settings.fogOfWarEnabled = fogOfWarEnabled;
         }
     } catch (error) {
         console.error("Could not load settings:", error);
@@ -44,7 +108,7 @@ function loadColorPreferences() {
 }
 
 function autoSaveGame(isSilent = false) {
-    if (gameState.isTrainingMode) return;
+    if (engine.state.isTrainingMode) return;
     if (gameState.isDragging) {
         // console.log("[Autosave] Skipped: Unit is dragging."); // Optional spam reduction
         if (!isSilent) showInstruction("Cannot save while dragging.", 2000);
@@ -65,17 +129,7 @@ function autoSaveGame(isSilent = false) {
             console.log("Swap State:", gameState.swapState);
         }
 
-        // Create a temporary, serializable version of the game state
-        const serializableState = { ...gameState };
-        
-        // Manually convert Map objects to arrays for JSON compatibility
-        serializableState.tiles = Array.from(engine.state.tiles.entries());
-        serializableState.edges = Array.from(engine.state.edges.entries());
-        serializableState.currentReachableMoves = Array.from(gameState.currentReachableMoves.entries());
-
-        serializableState.saveVersion = BUILD_VERSION; 
-
-        const gameStateString = JSON.stringify(serializableState);
+        const gameStateString = JSON.stringify(BuildSaveState());
         const saveKey = engine.state.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame';
         
         console.log(`Saving to key: ${saveKey}`);
@@ -113,12 +167,7 @@ function saveGameToFile() {
 
     try {
         // --- Serialize the game state (same as autosave) ---
-        const serializableState = { ...gameState };
-        serializableState.tiles = Array.from(engine.state.tiles.entries());
-        serializableState.edges = Array.from(engine.state.edges.entries());
-        serializableState.currentReachableMoves = Array.from(gameState.currentReachableMoves.entries());
-        serializableState.saveVersion = BUILD_VERSION;
-        const gameStateString = JSON.stringify(serializableState, null, 2); // Using indentation for readability
+        const gameStateString = JSON.stringify(BuildSaveState(), null, 2); // Using indentation for readability
 
         // --- Trigger the file download ---
         const blob = new Blob([gameStateString], { type: 'application/json' });
@@ -264,7 +313,7 @@ function createMapDataObject() {
 function loadAutoSave() {
     console.group("[LoadAutosave] Process Started");
 
-    if (gameState.mapMakerMode) {
+    if (engine.state.mapMakerMode) {
         const savedMapString = localStorage.getItem(MAP_MAKER_AUTOSAVE_KEY);
         if (!savedMapString) {
             showInstruction("No autosaved map found.", 2000);
@@ -306,7 +355,7 @@ function loadAutoSave() {
 
             // 3. Apply State
             console.log("Applying State...");
-            gameState = loadedState;
+            ApplyLoadedState(loadedState);
             
             // RESTORE THE CORRECT SCALE (In case loadedState had undefined/wrong scale)
             gameState.renderScale = correctScale;
@@ -392,8 +441,8 @@ function rehydrateGameState() {
         // --- TRANSIENT VISUAL STATE RESET ---
         // Prevents loaded JSON objects from breaking Map/Set functions
         gameState.fogAnimState = null;
-        gameState.visionCache = null;
-        gameState.visionDirty = true;
+        engine.visionCache = null;
+        engine.visionDirty = true;
         gameState.isPassDeviceTransition = false;
 
         // 5. Restore Unit Logic (Getters & Stats)
@@ -437,7 +486,7 @@ function rehydrateGameState() {
         engine.state.edges.forEach((edge, edgeKey) => {
             Object.defineProperty(edge, 'units', {
                 get: function() { 
-                    return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && u.id !== gameState.draggingUnit?.id); 
+                    return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!engine.unitVisibilityFilter || engine.unitVisibilityFilter(u)));
                 },
                 configurable: true,
                 enumerable: false
@@ -487,7 +536,7 @@ function rehydrateGameState() {
 
 
 function autoSaveMap() {
-    if (!gameState.mapMakerMode) return;
+    if (!engine.state.mapMakerMode) return;
     try {
         const mapData = createMapDataObject();
         localStorage.setItem(MAP_MAKER_AUTOSAVE_KEY, JSON.stringify(mapData));
@@ -511,7 +560,7 @@ function loadMapFromDataObject(mapData) {
         return false;
     }
 
-    if (!gameState.mapMakerMode) {
+    if (!engine.state.mapMakerMode) {
         enterMapMakerMode();
     }
 

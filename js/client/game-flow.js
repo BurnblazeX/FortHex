@@ -3,27 +3,28 @@
 // Same pattern as js/client/actions.js (A1 step 7): each wrapper keeps the
 // original name/signature so every existing call site keeps working, calls
 // the pure function of the same name (capitalized) in
-// js/server/turn-lifecycle.js, and does the DOM/UI/AI-scheduling work the
-// original inline code did, driven by what the pure function returns.
+// js/server/turn-lifecycle.js, drains the engine's event queue via
+// HandleActionEvents(), and does the DOM/UI/AI-scheduling work the original
+// inline code did, driven by what the pure function returns.
 
 function applyStartOfTurnZoCDamage() {
     const result = ApplyStartOfTurnZoCDamage();
-    HandleActionEvents(result.events);
+    HandleActionEvents();
 }
 
 function applyMountainAttrition() {
     const result = ApplyMountainAttrition();
-    HandleActionEvents(result.events);
+    HandleActionEvents();
 }
 
 function applyStartOfTurnHealing() {
     const result = ApplyStartOfTurnHealing();
-    HandleActionEvents(result.events);
+    HandleActionEvents();
 }
 
 function logSiegeStatus() {
     const result = LogSiegeStatus();
-    HandleActionEvents(result.events);
+    HandleActionEvents();
 }
 
 function handleRespawnQueue() {
@@ -38,7 +39,7 @@ function handleRespawnQueue() {
     if (result.unitReady) {
         console.log(`[Respawn] Player ${result.player} unit ready.`);
 
-        if (gameState.isTrainingMode || (engine.state.gameMode === 'singleplayer' && result.player !== engine.state.playerSide)) {
+        if (engine.state.isTrainingMode || (engine.state.gameMode === 'singleplayer' && result.player !== engine.state.playerSide)) {
             updateRespawnQueueDisplay();
             return;
         }
@@ -53,6 +54,53 @@ function handleRespawnQueue() {
     updateRespawnQueueDisplay();
 }
 
+// AI population bookkeeping for a finished match. This lived inside
+// CheckVictoryCondition until the js/server/ purge - it has to be client-side
+// because the brain population is localStorage-backed (see §7 of the A1 guide),
+// and reaching for it from the engine made js/server/ unrunnable in a Worker.
+function ApplyTrainingMatchOutcome(result) {
+    if (!gameState.matchBrains) return;
+
+    if (result.winningPlayer) {
+        const losingPlayer = result.winningPlayer === 1 ? 2 : 1;
+        const winnerBrain = gameState.matchBrains[`player${result.winningPlayer}`];
+        const loserBrain = gameState.matchBrains[`player${losingPlayer}`];
+
+        winnerBrain.matchesPlayed++;
+        winnerBrain.wins++;
+        loserBrain.matchesPlayed++;
+        loserBrain.losses++;
+
+        evolveBrain(winnerBrain, true, result.victoryText, result.winningPlayer, engine.state.matchHistory);
+        evolveBrain(loserBrain, false, result.victoryText, losingPlayer, engine.state.matchHistory);
+
+        finalizeTrainingSamples(result.winningPlayer, 1);
+        finalizeTrainingSamples(losingPlayer, 0);
+    } else if (result.isDraw) {
+        const brainA = gameState.matchBrains.player1;
+        const brainB = gameState.matchBrains.player2;
+
+        [brainA, brainB].forEach(brain => {
+            brain.matchesPlayed++;
+            brain.draws = (brain.draws || 0) + 1;
+            applyDrawPenalty(brain);
+        });
+
+        finalizeTrainingSamples(1, 0.5);
+        finalizeTrainingSamples(2, 0.5);
+    }
+}
+
+// Champion-brain update for a finished singleplayer match, hoisted out of
+// CheckVictoryCondition for the same reason as ApplyTrainingMatchOutcome.
+function ApplySingleplayerMatchOutcome(result) {
+    const championBrain = getChampionBrain();
+    championBrain.matchesPlayed++;
+    if (result.aiVictory) championBrain.wins++; else championBrain.losses++;
+    evolveBrain(championBrain, result.aiVictory, result.victoryText, result.aiPlayerNum, engine.state.matchHistory);
+    finalizeTrainingSamples(result.aiPlayerNum, result.aiVictory ? 1 : 0);
+}
+
 function checkVictoryCondition() {
     const result = CheckVictoryCondition();
 
@@ -63,10 +111,11 @@ function checkVictoryCondition() {
         return false;
     }
 
-    HandleActionEvents(result.events);
+    HandleActionEvents();
 
     if (result.isTrainingMode) {
         console.log(`[TRAINING] ${result.victoryText}`);
+        ApplyTrainingMatchOutcome(result);
         if (result.needsPopulationMaintenance) {
             // localStorage-touching — must stay client-side (see
             // js/server/turn-lifecycle.js header comment).
@@ -76,6 +125,10 @@ function checkVictoryCondition() {
         startNewTrainingMatch();
         setTimeout(() => { executeAITurn(); }, 0);
         return true;
+    }
+
+    if (result.isSingleplayerVictory) {
+        ApplySingleplayerMatchOutcome(result);
     }
 
     if (result.needsSavePopulation) {
@@ -135,9 +188,12 @@ async function proceedToEndTurn() {
         }
     }
 
-    const result = await AdvanceTurn();
+    const { result } = await SendAction('end-turn', {});
 
     if (result.arcadeMaxTurnsReached) {
+        // Drain before bailing out: AdvanceTurn may have queued logs before it
+        // hit the turn cap, and this path never reaches the drain below.
+        HandleActionEvents();
         checkArcadeVictoryCondition();
         return;
     }
@@ -156,14 +212,14 @@ async function proceedToEndTurn() {
     // Fires immediately, before any pass-device overlay — matches original
     // timing (ZoC/attrition/healing/siege/resupply logs all fired inline,
     // before the overlay-vs-finalizeVisuals branch).
-    HandleActionEvents(result.events);
+    HandleActionEvents();
 
     // Respawn queue UI decision, using the tick AdvanceTurn already
     // performed (must not call handleRespawnQueue here — it would tick the
     // timers a second time).
     if (result.respawnResult.hasQueue && result.respawnResult.unitReady) {
         console.log(`[Respawn] Player ${result.respawnResult.player} unit ready.`);
-        const suppressModal = gameState.isTrainingMode ||
+        const suppressModal = engine.state.isTrainingMode ||
             (engine.state.gameMode === 'singleplayer' && result.respawnResult.player !== engine.state.playerSide);
         if (!suppressModal) {
             try {
@@ -202,7 +258,7 @@ async function proceedToEndTurn() {
 
         if (!engine.state.gameOver && engine.state.gameMode === 'singleplayer' && engine.state.currentPlayer !== engine.state.playerSide) {
             ui.endTurnButton.disabled = true;
-            if (!gameState.isTrainingMode) {
+            if (!engine.state.isTrainingMode) {
                 setTimeout(() => { executeAITurn(); }, 1500);
             }
         } else {
@@ -229,6 +285,22 @@ async function proceedToEndTurn() {
 // checkArcadeVictoryCondition is a near-duplicate of checkVictoryCondition's
 // victory-screen tail (js/client/game-flow.js) — flagging as a
 // simplification candidate, not merging it as part of this relocation.
+
+// Client half of the arcade forced swap; the pick itself is PickForcedSwap in
+// js/server/turn-lifecycle.js.
+function handleForcedSwap() {
+    const choice = PickForcedSwap();
+    if (!choice.applicable) return;
+
+    if (!choice.victim) {
+        proceedToEndTurn();
+        return;
+    }
+
+    hideRespawnModal();
+    performSwap(choice.victim, choice.newType);
+    proceedToEndTurn();
+}
 
 function checkArcadeVictoryCondition() {
     const p1HP = engine.state.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
@@ -337,7 +409,7 @@ function showPassDeviceOverlay(nextPlayer, callback) {
     countdownEl.textContent = timeLeft;
     overlay.style.display = 'flex';
 
-    if (gameSettings.animationsEnabled) {
+    if (engine.settings.animationsEnabled) {
         overlay.animate([
             { opacity: 0 },
             { opacity: 1 }
@@ -370,7 +442,7 @@ function showPassDeviceOverlay(nextPlayer, callback) {
         window.removeEventListener('resize', syncOverlaySize);
         
         gameState.isPassDeviceTransition = false;
-        gameState.visionDirty = true;
+        engine.visionDirty = true;
         gameState.needsRedraw = true;
         
         const finishResolve = () => {
@@ -378,7 +450,7 @@ function showPassDeviceOverlay(nextPlayer, callback) {
             if (callback) callback();
         };
 
-        if (gameSettings.animationsEnabled && !isForceAbort) {
+        if (engine.settings.animationsEnabled && !isForceAbort) {
             const anim = overlay.animate([
                 { opacity: 1 },
                 { opacity: 0 }
@@ -403,7 +475,7 @@ function handleGenerateNewMap() {
             gameState.draggingUnit = null;
             
             // 1. Generate the map tiles
-            const newLayout = generateImprovedMap(engine.state.gridRadius);
+            const newLayout = GenerateImprovedMap(engine.state.gridRadius);
             
             // 2. Resolve the correct base camps for the current slider/radius BEFORE placing
             // units, so procedural placement lines up with the actual bases instead of
@@ -412,7 +484,7 @@ function handleGenerateNewMap() {
             const sliderEl = document.getElementById('baseCampSlider');
             const sliderVal = sliderEl ? sliderEl.value : '3';
             
-            const correctedBaseCamps = computeRotatedBaseCampPositions(engine.state.gridRadius, sliderVal);
+            const correctedBaseCamps = ComputeRotatedBaseCampPositions(engine.state.gridRadius, sliderVal);
 
             // 3. Initialize the grid with these tiles and the corrected base camps
             initializeGrid(newLayout, null, correctedBaseCamps);
@@ -452,7 +524,7 @@ function startSingleplayerGame(playerSide) {
 // must not mutate gameState directly.
 function updateAllHealingStatus() {
             const result = RecalculateHealingEligibility();
-            HandleActionEvents(result.events);
+            HandleActionEvents();
         }
 
 // Archers holding a mountain peak bleed HP unless they are BOTH supplied and their

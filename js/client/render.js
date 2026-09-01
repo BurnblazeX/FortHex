@@ -11,7 +11,7 @@ function getPerspectivePlayer() {
             const { x, y } = axialToPixel(q, r);
             const currentHexSize = HEX_SIZE * gameState.renderScale; 
             const tileKey = getTileKey(q, r);
-            const useFancyVisuals = gameSettings.fancyVisualsEnabled && !gameState.mapMakerMode;
+            const useFancyVisuals = gameSettings.fancyVisualsEnabled && !engine.state.mapMakerMode;
 
             if (useFancyVisuals) {
                 // --- FANCY VISUALS ON ---
@@ -153,7 +153,7 @@ function getPerspectivePlayer() {
 
             // Logic: Fancy visuals are active if the Setting is ON AND we are NOT in the Map Editor.
             // This allows them to show up during "Test Map" (since mapMakerMode is false then), but not during editing.
-            const useFancyVisuals = gameSettings.fancyVisualsEnabled && !gameState.mapMakerMode;
+            const useFancyVisuals = gameSettings.fancyVisualsEnabled && !engine.state.mapMakerMode;
 
             engine.state.edges.forEach(edge => {
                 const tileA = engine.state.tiles.get(getTileKey(edge.q1, edge.r1));
@@ -246,7 +246,7 @@ function getPerspectivePlayer() {
             let isAnimating = false;
 
             // Determine if the system is globally active
-            const isSystemActive = gameState.isPassDeviceTransition || (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode);
+            const isSystemActive = gameState.isPassDeviceTransition || (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode);
 
             // If system is disabled, check if there's lingering fog left to animate out
             let hasLingeringFog = false;
@@ -270,7 +270,7 @@ function getPerspectivePlayer() {
 
             // Helper to interpolate current fog value
             const getAnimValue = (map, key, target) => {
-                if (!gameSettings.animationsEnabled) return target;
+                if (!engine.settings.animationsEnabled) return target;
                 let current = map.has(key) ? map.get(key) : (isSystemActive ? 1.0 : 0.0);
                 
                 if (current !== target) {
@@ -293,8 +293,8 @@ function getPerspectivePlayer() {
 
                 if (gameState.isPassDeviceTransition) {
                     // Targets remain 1.0
-                } else if (isSystemActive && gameState.visionCache) {
-                    if (gameState.visionCache.tiles.has(tileKey)) targetCenter = 0.0;
+                } else if (isSystemActive && engine.visionCache) {
+                    if (engine.visionCache.tiles.has(tileKey)) targetCenter = 0.0;
                     for (let k = 0; k < 6; k++) {
                         const dirIdx = MAP_DIRECTION_TO_EDGE_INDEX.indexOf(k);
                         const neighborDir = AXIAL_DIRECTIONS[dirIdx];
@@ -302,10 +302,10 @@ function getPerspectivePlayer() {
                         
                         if (!engine.state.edges.has(edgeKey)) {
                             // If the edge doesn't exist on the map (it's an outer boundary), 
-                            if (gameState.visionCache.tiles.has(tileKey)) {
+                            if (engine.visionCache.tiles.has(tileKey)) {
                                 targetEdges[k] = 0.0;
                             }
-                        } else if (gameState.visionCache.edges.has(edgeKey)) {
+                        } else if (engine.visionCache.edges.has(edgeKey)) {
                             targetEdges[k] = 0.0;
                         }
                     }
@@ -463,8 +463,8 @@ function drawFortificationOutlines() {
             if (!tile) return;
 
             const { x: centerX, y: centerY } = axialToPixel(tile.q, tile.r);
-            const isCenterVisible = gameState.visionCache ? gameState.visionCache.tiles.has(tileKey) : true;
-            const applyFog = engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache;
+            const isCenterVisible = engine.visionCache ? engine.visionCache.tiles.has(tileKey) : true;
+            const applyFog = engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache;
 
             for (let i = 0; i < 6; i++) {
                 const neighborDir = AXIAL_DIRECTIONS[i];
@@ -478,7 +478,7 @@ function drawFortificationOutlines() {
                     // --- PER-SEGMENT FOG CHECK ---
                     if (applyFog && playerOwner !== getPerspectivePlayer() && !tile.isBaseCampTile) {
                         const edgeKey = getEdgeKey(tile.q, tile.r, neighborQ, neighborR);
-                        const isEdgeVisible = gameState.visionCache.edges.has(edgeKey);
+                        const isEdgeVisible = engine.visionCache.edges.has(edgeKey);
                         
                         // If this specific edge isn't visible, skip drawing this line!
                         // (Even if the center is visible, we don't draw hidden borders)
@@ -537,8 +537,8 @@ function drawFortificationOutlines() {
                                   (tile2 && tile2.fortifiedByPlayer === opponentPlayer);
 
                 if (isContested) {
-                    if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                        if (!gameState.visionCache.edges.has(edgeKey)) return;
+                    if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                        if (!engine.visionCache.edges.has(edgeKey)) return;
                     }
                     const p1_center = axialToPixel(edge.q1, edge.r1);
                     const p2_center = axialToPixel(edge.q2, edge.r2);
@@ -731,7 +731,7 @@ function drawFortificationOutlines() {
     };
 
     // 1. GAMEPLAY MODE (Uses engine.state.flags)
-    if (!gameState.mapMakerMode && engine.state.flags) {
+    if (!engine.state.mapMakerMode && engine.state.flags) {
         Object.values(engine.state.flags).forEach(flag => {
             if (flag.status === 'at_base' && flag.homePosition) {
                 if (Array.isArray(flag.homePosition)) {
@@ -750,7 +750,7 @@ function drawFortificationOutlines() {
         });
     }
     // 2. MAP MAKER MODE (Expansive Preview)
-    else if (gameState.mapMakerMode && engine.state.gridRadius === 4) {
+    else if (engine.state.mapMakerMode && engine.state.gridRadius === 4) {
         for(let p = 1; p <= 2; p++) {
             const base = engine.state.baseCampPositions[`player${p}`];
             if (Array.isArray(base) && base.length === 3) {
@@ -760,7 +760,7 @@ function drawFortificationOutlines() {
         }
     }
             // 3. MAP MAKER MODE (Standard Preview)
-            else if (gameState.mapMakerMode && engine.state.gridRadius === 3) {
+            else if (engine.state.mapMakerMode && engine.state.gridRadius === 3) {
                 if (engine.state.flags) {
                     Object.values(engine.state.flags).forEach(flag => {
                         const edge = engine.state.edges.get(flag.homePosition);
@@ -988,7 +988,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
 
         function drawUnits() {
             if (gameState.isPassDeviceTransition) return;
-            const isEffectivelyDragging = gameState.isDragging && !gameState.mapMakerMode;
+            const isEffectivelyDragging = gameState.isDragging && !engine.state.mapMakerMode;
             const animatedUnitIds = new Set(gameState.activeAnimations.map(a => (a.unit || a.attacker).id));
             const offsetDistance = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
 
@@ -1003,8 +1003,8 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     
                     edgeUnitsOnly.forEach((unit, index) => {
                         if (animatedUnitIds.has(unit.id)) return;
-                        if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                            if (unit.player !== getPerspectivePlayer() && !gameState.visionCache.edges.has(unit.position)) return;
+                        if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                            if (unit.player !== getPerspectivePlayer() && !engine.visionCache.edges.has(unit.position)) return;
                         }
                         let unitX = mid.x, unitY = mid.y;
                         if (edgeUnitsOnly.length > 1) {
@@ -1020,8 +1020,8 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             engine.state.units.forEach(unit => {
                 if (animatedUnitIds.has(unit.id)) return;
                 if (unit.isFortified && unit.positionType === 'center' && (!isEffectivelyDragging || unit.id !== gameState.draggingUnit.id)) {
-                    if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                        if (unit.player !== getPerspectivePlayer() && !gameState.visionCache.tiles.has(unit.position)) return;
+                    if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                        if (unit.player !== getPerspectivePlayer() && !engine.visionCache.tiles.has(unit.position)) return;
                     }
                     const tile = engine.state.tiles.get(unit.position);
                     if (tile) {
@@ -1106,8 +1106,8 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     ctx.arc(mid.x, mid.y, highlightRadius, 0, 2 * Math.PI);
                     
                     let isObscured = false;
-                    if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                        if (!gameState.visionCache.edges.has(edgeKey)) {
+                    if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                        if (!engine.visionCache.edges.has(edgeKey)) {
                             isObscured = true;
                         }
                     }
@@ -1277,7 +1277,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
         }
 
         function triggerDamageVisual(targetUnit, attackStatus = 'normal') {
-            if (gameState.isTrainingMode || !gameSettings.animationsEnabled) return;
+            if (engine.state.isTrainingMode || !engine.settings.animationsEnabled) return;
             // Get the unit's screen position and size for the effect
             let targetX, targetY, targetRadius;
             if (targetUnit.isFortified) {
@@ -1742,7 +1742,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
 
         function hasIdleAnimations() {
             // No supply lines or flags in arcade/map maker mode
-            if (engine.state.gameMode === 'arcade' || gameState.mapMakerMode) return false;
+            if (engine.state.gameMode === 'arcade' || engine.state.mapMakerMode) return false;
             
             return engine.state.units.some(u => {
                 if (!u.isFortified) return false;
@@ -1775,7 +1775,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             lastFrameTime = currentTime;
 
             // 2. ARCADE LOGIC 
-            if (engine.state.gameMode === 'arcade' && !engine.state.gameOver && !gameState.mapMakerMode) {
+            if (engine.state.gameMode === 'arcade' && !engine.state.gameOver && !engine.state.mapMakerMode) {
                 const waitingForStart = engine.state.globalTurnNumber === 1 && engine.state.currentPlayer === 1 && !gameState.arcadeGameStartedInteraction;
 
                 if (gameState.activeAnimations.length === 0 && !waitingForStart) { 
@@ -1802,16 +1802,16 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 }
             }
 
-            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode) {
+            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode) {
                 const perspectivePlayer = getPerspectivePlayer();
-                if (gameState.visionDirty || !gameState.visionCache || gameState.visionCache.player !== perspectivePlayer) {
+                if (engine.visionDirty || !engine.visionCache || engine.visionCache.player !== perspectivePlayer) {
                     const newVision = computePlayerVision(perspectivePlayer);
-                    gameState.visionCache = {
+                    engine.visionCache = {
                         player: perspectivePlayer,
                         tiles: newVision.tiles,
                         edges: newVision.edges
                     };
-                    gameState.visionDirty = false;
+                    engine.visionDirty = false;
                     gameState.needsRedraw = true; 
                 }
             }
@@ -1869,7 +1869,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 currentDrawingColors.player2.accent = TEAM_COLORS.player2.accent;
             }
 
-            if (gameState.mapMakerMode) {
+            if (engine.state.mapMakerMode) {
                 canvas.style.transition = 'outline-color 0.4s ease-in-out';
                 canvas.style.outlineColor = '#F0F0F0';
             } else if (engine.state.gameOver) {
@@ -1967,7 +1967,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             }
             
             // Guarantee fresh fog logic on complete reload
-            gameState.visionDirty = true;
+            engine.visionDirty = true;
             gameState.needsRedraw = true;
             
             // A single call to gameLoop will trigger a full redraw of the canvas
@@ -1978,8 +1978,8 @@ function drawBridges() {
     if (gameState.isPassDeviceTransition) return;
     engine.state.edges.forEach((edge, edgeKey) => { 
         if (edge.bridge) {
-            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                if (!gameState.visionCache.edges.has(edgeKey)) return; // Skip drawing
+            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                if (!engine.visionCache.edges.has(edgeKey)) return; // Skip drawing
             }
             drawBridge(edge); 
         }
@@ -2024,8 +2024,8 @@ function drawSupplyLines() {
             }
 
             path.forEach(edgeKey => {
-                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                    if (unit.player !== getPerspectivePlayer() && !gameState.visionCache.edges.has(edgeKey)) {
+                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                    if (unit.player !== getPerspectivePlayer() && !engine.visionCache.edges.has(edgeKey)) {
                         return; // Skip drawing this specific unseen segment
                     }
                 }
@@ -2060,7 +2060,7 @@ function drawSupplyLines() {
 }
 
 function drawMapMakerHighlights() {
-    if (!gameState.mapMakerMode) return;
+    if (!engine.state.mapMakerMode) return;
     
     const brush = gameState.mapMakerBrush;
     if (brush.type === 'base_camp' && engine.state.gridRadius === 4) {

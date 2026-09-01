@@ -19,9 +19,9 @@ function initializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
     ui.endTurnButton.disabled = false;
     gameState.selectedUnit = null;
     gameState.hoveredUnitId = null;
-    gameState.visionCache = null;
+    engine.visionCache = null;
     gameState.fogAnimState = null;
-    gameState.visionDirty = true;
+    engine.visionDirty = true;
     gameState.isPassDeviceTransition = false;
     gameState.isDragging = false;
     gameState.draggingUnit = null;
@@ -31,7 +31,6 @@ function initializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
     gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
     gameState.swapState = 'none';
     gameState.unitToSwap = null;
-    gameState.arcadeTotalTurns = 0;
     gameState.arcadeGameStartedInteraction = false;
 
     ui.endTurnButton.classList.remove('arcade-timer-active');

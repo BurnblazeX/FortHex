@@ -70,10 +70,6 @@
             return String(num).padStart(2, '0');
         }
 
-        function isLand(tileType) {
-            return tileType === TILE_TYPES.PLAINS || tileType === TILE_TYPES.FOREST || tileType === TILE_TYPES.MOUNTAIN;
-        }
-
         // Function to set CSS Variables from a colors object (defaults to TEAM_COLORS)
         function updateCssVariables(sourceColors = TEAM_COLORS) {
             const root = document.documentElement;
@@ -91,7 +87,7 @@
             // This function is now ONLY responsible for text updates.
             gameState.needsRedraw = true;
             // The canvas outline color is handled in the gameLoop.
-            if (gameState.mapMakerMode) {
+            if (engine.state.mapMakerMode) {
                 // If we enter map maker mode, we still want to hide the turn text.
                 // The gameLoop will handle hiding the border.
                 return;
@@ -121,7 +117,7 @@
 
         function updateSelectedUnitInfoPanel() {
             gameState.needsRedraw = true;
-    if (gameState.mapMakerMode) return;
+    if (engine.state.mapMakerMode) return;
     
     const { selectedUnit, currentActionState } = gameState;
 
@@ -411,7 +407,7 @@
         }
 
         function updateRespawnQueueDisplay() {
-            if (gameState.isTrainingMode) return;
+            if (engine.state.isTrainingMode) return;
             const container = document.getElementById('reinforcementsContainer');
             const listEl = document.getElementById('reinforcementsList');
 
@@ -458,7 +454,7 @@
         }
 
         function logAction(message, player, duration = 3000) {
-            if (gameState.isTrainingMode) return;
+            if (engine.state.isTrainingMode) return;
             showInstruction(message, duration);
             engine.state.actionLog.push({ message: message, player: player });
             if (engine.state.actionLog.length > 25) {
@@ -501,7 +497,7 @@
                 const activePlayer = logObject.player;
 
                 // --- FOG OF WAR FILTER ---
-                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode) {
+                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode) {
                     const viewer = (engine.state.gameMode === 'singleplayer' && engine.state.playerSide) ? engine.state.playerSide : engine.state.currentPlayer;
                     let isRelevant = false;
                     
@@ -966,7 +962,7 @@
             const fileBtn = document.getElementById('loadFromFileButton');
             const fileInput = document.getElementById('fileLoaderInput');
     
-            if (gameState.mapMakerMode) {
+            if (engine.state.mapMakerMode) {
                 autosaveBtn.textContent = "Load Autosave Map";
                 fileBtn.textContent = "Load Map File";
                 // Accept only .fhmap files
@@ -1071,7 +1067,7 @@
         const queue = engine.state.respawnQueue[queueKey];
         if (queue.length > 0 && queue[0].turnsRemaining <= 0) {
             // --- FIX: Prevent AI from opening the modal ---
-            if (gameState.isTrainingMode || (engine.state.gameMode === 'singleplayer' && player !== engine.state.playerSide)) {
+            if (engine.state.isTrainingMode || (engine.state.gameMode === 'singleplayer' && player !== engine.state.playerSide)) {
                 return; // AI handles its own loop
             }
             // Re-open for next charge
@@ -1222,9 +1218,9 @@
                 }
                 // Abort Training
                 if (e.altKey && (e.key === 'x' || e.key === 'X')) {
-                    if (gameState.isTrainingMode) {
+                    if (engine.state.isTrainingMode) {
                         console.log("--- TRAINING SIMULATION ABORTED BY USER ---");
-                        gameState.isTrainingMode = false;
+                        engine.state.isTrainingMode = false;
                         engine.state.gameOver = true; // Kills the execution loop
                         document.getElementById('trainingBanner').style.display = 'none';
                         
@@ -1236,7 +1232,7 @@
                         
                         // --- PROPER SETTINGS RESTORATION ---
                         if (gameState.preTrainingSettings) {
-                            gameSettings.animationsEnabled = gameState.preTrainingSettings.animations;
+                            engine.settings.animationsEnabled = gameState.preTrainingSettings.animations;
                             gameSettings.fancyVisualsEnabled = gameState.preTrainingSettings.fancy;
                         } else {
                             loadSettings(); // Safe fallback
@@ -1530,7 +1526,7 @@ function createCardBackDOM() {
             const touch = event.touches[0]; 
             const { x, y } = getRelativeCoordinates(touch.clientX, touch.clientY);
 
-            if (gameState.mapMakerMode) {
+            if (engine.state.mapMakerMode) {
                 const currentTime = Date.now();
                 const timeSinceLastTap = currentTime - lastTap;
                 const distance = pointDistance({x, y}, lastTapPosition);
@@ -1587,7 +1583,7 @@ function handleCanvasTouchCancel(event) {
 }
 
         function handleCanvasClick(event) {
-            if (gameState.mapMakerMode) return;
+            if (engine.state.mapMakerMode) return;
             if (engine.state.gameOver || event.button !== 0) return;
             if (isLikelySyntheticFromTouch()) return;
             if (dragOperationJustConcluded) { 

@@ -1,12 +1,22 @@
 // === Actions (MIXED functions split, client wrapper half — A1 step 7) ===
 //
 // Thin wrappers matching the ORIGINAL function names/signatures from core.js,
-// so every existing call site (main.js, ai.js, map.js, ui.js, save.js, and
-// core.js's still-untouched animation-deferred functions) keeps working
-// unchanged. Each wrapper calls the pure function of the same name (but
-// capitalized) in js/server/actions.js, then drains/handles the returned
-// events and does the client-owned state + UI work the original inline code
-// did — see FortHex_A1_Server_Core_Guide.md §3.
+// so every existing call site (main.js, ai.js, ui.js, save.js, map-maker.js)
+// keeps working unchanged. Each wrapper calls the pure function of the same
+// name (but capitalized) in js/server/actions.js, then drains the engine's
+// event queue and does the client-owned state + UI work the original inline
+// code did — see FortHex_A1_Server_Core_Guide.md §3.
+//
+// Wrappers used to be handed an events array in the return value. Since the
+// queue formalization they call HandleActionEvents() with no argument and it
+// drains engine.DrainEvents() instead. The return value now carries only the
+// facts a wrapper branches on.
+//
+// One consequence worth knowing: the queue is per-engine-instance, not
+// per-call. If a wrapper takes an early return between calling into the engine
+// and draining, whatever was queued isn't lost - it just gets flushed by the
+// next drain. Every early return that could strand events has an explicit
+// drain (see the arcade turn-cap branch in game-flow.js).
 //
 // applyFortificationDamageOnMove has no wrapper here: nothing outside
 // handleMoveAction calls it (checked — grep found zero other call sites), and
@@ -20,6 +30,13 @@ function HandleActionEvent(event) {
             break;
         case 'UNIT_DAMAGED':
             triggerDamageVisual(event.unit, event.attackStatus);
+            break;
+        case 'SUPPLY_CHANGED':
+            updateSupplyPointsDisplay();
+            break;
+        case 'VISION_INVALIDATED':
+            engine.visionDirty = true;
+            gameState.needsRedraw = true;
             break;
         case 'FLAG_CAPTURED': {
             // Healing eligibility (unit.canHeal) is already recomputed server-side
@@ -58,13 +75,35 @@ function HandleActionEvent(event) {
     }
 }
 
-function HandleActionEvents(events) {
-    events.forEach(HandleActionEvent);
+// Handles the events an engine function returned, then flushes anything the
+// engine queued via engine.Emit(). Deep helpers like recalculatePlayerSupplyNetwork
+// and SpawnUnit sit too far down the call chain to thread an events array back
+// out of, so they emit instead - this is the single drain point that picks
+// those up.
+function HandleActionEvents() {
+    transport.Flush();
+}
+
+// Player intents go to the server as {type:'action'} messages and come back as
+// {type:'state-sync'}. The events are dispatched by the subscriber registered
+// in js/main.js; what's returned here is the result the wrapper branches on.
+// Server-internal cascades (DestroyUnit, SeverSupplyLinesForPlayer, the
+// turn-lifecycle sub-steps) deliberately do NOT go through here - they aren't
+// things a client requests, they're consequences the server decided on.
+function SendAction(action, payload) {
+    return transport.Send(MakeActionMessage(action, payload));
+}
+
+// Thin wrapper over js/server/rules.js's SpawnUnit, so its callers in ai.js,
+// main.js and ui.js keep the original name/signature and still get the
+// respawn log lines that used to be a direct logAction() call inside it.
+function spawnUnit(player, unitType) {
+    return SendAction('spawn-unit', { player, unitType }).result;
 }
 
 function destroyUnit(unitToDestroy, reason = "destroyed") {
     const result = DestroyUnit(unitToDestroy, reason);
-    HandleActionEvents(result.events);
+    HandleActionEvents();
 
     if (engine.state.gameMode !== 'arcade') {
         updateRespawnQueueDisplay();
@@ -90,7 +129,7 @@ function destroyUnit(unitToDestroy, reason = "destroyed") {
         canvas.style.cursor = 'default';
     }
 
-    gameState.visionDirty = true;
+    engine.visionDirty = true;
     checkVictoryCondition();
     gameState.needsRedraw = true;
 }
@@ -103,18 +142,17 @@ function handleUnitDeath(unitToDie, reason = "destroyed") {
 
 function severSupplyLinesForPlayer(playerNum) {
     const result = SeverSupplyLinesForPlayer(playerNum);
-    HandleActionEvents(result.events);
+    HandleActionEvents();
 }
 
 function attemptToResupplyForts(playerNum) {
     const result = AttemptToResupplyForts(playerNum);
-    HandleActionEvents(result.events);
+    HandleActionEvents();
     updateSupplyPointsDisplay();
 }
 
 function applyUnitUpgrade(unit, statType) {
-    const result = ApplyUnitUpgrade(unit, statType);
-    HandleActionEvents(result.events);
+    const { result } = SendAction('upgrade-unit', { unit, statType });
     if (result.success) {
         updateSelectedUnitInfoPanel();
     }
@@ -122,8 +160,7 @@ function applyUnitUpgrade(unit, statType) {
 }
 
 function performSwap(unit, newType) {
-    const result = ApplyClassSwap(unit, newType);
-    HandleActionEvents(result.events);
+    const { result } = SendAction('swap-class', { unit, newType });
 
     gameState.swapState = 'complete';
     gameState.unitToSwap = null;
@@ -133,16 +170,15 @@ function performSwap(unit, newType) {
 }
 
 function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
-    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
-    const result = ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path);
+    const { result } = SendAction('move', { unit: unitToMove, targetEdgeKey, cost: costToMove, path });
     if (!result.unitFound) {
         console.error("CRITICAL: Unit not found.");
         return;
     }
-    HandleActionEvents(result.events);
 
-    gameState.visionDirty = true;
+    engine.visionDirty = true;
     gameState.needsRedraw = true;
 
     checkVictoryCondition();
@@ -182,7 +218,7 @@ async function completeBuildBridge(targetEdgeKey) {
     gameState.currentReachableMoves.clear(); // client-owned, cleared immediately
 
     const duration = 500;
-    if (gameSettings.animationsEnabled) {
+    if (engine.settings.animationsEnabled) {
         gameState.activeAnimations.push({
             type: 'build_bridge',
             unit: selectedUnit,
@@ -197,9 +233,8 @@ async function completeBuildBridge(targetEdgeKey) {
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 
-    const result = await ApplyBuildBridge(selectedUnit, targetEdgeKey, duration);
-    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
-    HandleActionEvents(result.events);
+    await SendAction('build-bridge', { unit: selectedUnit, targetEdgeKey, duration });
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 }
@@ -222,7 +257,7 @@ async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
     }
 
     const duration = 600;
-    if (gameSettings.animationsEnabled) {
+    if (engine.settings.animationsEnabled) {
         gameState.activeAnimations.push({
             type: 'unfortify',
             unit: unitToUnfortify,
@@ -236,15 +271,15 @@ async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 
-    const result = await ApplyUnfortify(unitToUnfortify, targetEdgeKey, duration);
+    await SendAction('unfortify', { unit: unitToUnfortify, targetEdgeKey, duration });
 
-    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
     gameState.mustUnfortify = false;
     ui.endTurnButton.disabled = false;
 
-    HandleActionEvents(result.events);
+    HandleActionEvents();
 
-    gameState.visionDirty = true;
+    engine.visionDirty = true;
 
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
@@ -281,7 +316,7 @@ async function completeFortify(unitToFortify, targetTileKeyToFortify) {
     gameState.currentReachableMoves.clear(); // client-owned, cleared immediately
 
     const duration = 450;
-    if (gameSettings.animationsEnabled) {
+    if (engine.settings.animationsEnabled) {
         gameState.activeAnimations.push({
             type: 'fortify',
             unit: unitToFortify,
@@ -294,12 +329,11 @@ async function completeFortify(unitToFortify, targetTileKeyToFortify) {
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 
-    const result = await ApplyFortify(unitToFortify, targetTileKeyToFortify, duration);
+    await SendAction('fortify', { unit: unitToFortify, targetTileKey: targetTileKeyToFortify, duration });
 
-    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
-    HandleActionEvents(result.events);
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
-    gameState.visionDirty = true;
+    engine.visionDirty = true;
     gameState.currentReachableMoves.clear();
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
@@ -326,7 +360,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     // This computes `duration`, which is all the server-side ApplyAttack needs
     // to know how long to wait before applying the real mutation. ---
     let duration = 0;
-    if (gameSettings.animationsEnabled) {
+    if (engine.settings.animationsEnabled) {
         if (targetUnitInfo.isBridgeTarget) {
             const bridgeEdge = engine.state.edges.get(targetUnitInfo.edgeKey);
             if (bridgeEdge) {
@@ -385,8 +419,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         }
     }
 
-    const result = await ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration);
-    HandleActionEvents(result.events);
+    const { result } = await SendAction('attack', { attackingUnit, targetUnitInfo, attackType, duration });
 
     // Replicate original's post-mutation currentReachableMoves branching
     // (client-owned) — attackingUnit is the same object ApplyAttack just

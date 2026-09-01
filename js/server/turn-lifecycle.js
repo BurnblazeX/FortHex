@@ -1,21 +1,20 @@
 // === Turn Lifecycle (MIXED functions split, pure half — A1 step 8) ===
 //
-// Same split pattern as js/server/actions.js (A1 step 7): pure state mutation
-// + returned events, thin client wrapper of the same name in
-// js/client/game-flow.js does the actual DOM/UI/AI-scheduling work.
+// Same split pattern as js/server/actions.js (A1 step 7): pure state mutation,
+// player-visible outcomes pushed onto the engine's event queue via
+// engine.Emit(), and a thin client wrapper of the same name in
+// js/client/game-flow.js that drains the queue and does the DOM/UI/
+// AI-scheduling work.
 //
-// checkVictoryCondition and proceedToEndTurn also pull in the AI-reaction
-// logic (evolveBrain, brain win/loss bookkeeping, finalizeTrainingSamples) per
-// explicit user request — these are plain computation with zero localStorage/
-// DOM dependency (verified by grep across ai.js). What stays client-side:
-// savePopulation/loadPopulation/maybeEvolvePopulation/startNewTrainingMatch,
-// which are localStorage-entangled (maybeEvolvePopulation calls
-// savePopulation internally, startNewTrainingMatch conditionally calls
-// loadPopulation) — the guide's own §7 guardrail already flags these as
-// staying client-only until AI persistence is redesigned, not something this
-// step should route around. executeAITurn (the actual AI move-playing loop)
-// also stays client-side — it's async UI-turn orchestration, not a reaction
-// to compute.
+// The AI-reaction logic that used to live in CheckVictoryCondition (evolveBrain,
+// brain win/loss bookkeeping, finalizeTrainingSamples) is NOT here any more.
+// It was moved to ApplyTrainingMatchOutcome/ApplySingleplayerMatchOutcome in
+// js/client/game-flow.js during the js/server/ purge: the brain population is
+// localStorage-backed and client-only per the guide's §7 guardrail, so calling
+// into it from here made this file unrunnable in a Worker. CheckVictoryCondition
+// now returns the raw outcome (winningPlayer, isDraw, aiPlayerNum) and lets the
+// client decide what to do with it. executeAITurn stays client-side too - it's
+// async UI-turn orchestration, not a reaction to compute.
 //
 // engine.state.gameOver moves from "client-owned by default" (A1 step 4's
 // tentative classification, since it wasn't in the guide's explicit §5.1
@@ -27,7 +26,7 @@ function DetermineVictoryText() {
     if (engine.state.gameOver) return null;
     let victoryText = null;
 
-    if (gameState.isTrainingMode && engine.state.globalTurnNumber >= 30) {
+    if (engine.state.isTrainingMode && engine.state.globalTurnNumber >= 30) {
         const p1CurrentHP = engine.state.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
         const p2CurrentHP = engine.state.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
 
@@ -118,16 +117,21 @@ function DetermineVictoryText() {
 }
 
 // Returns a result object the client wrapper uses to decide what to show:
-//   victory: false — nothing else meaningful, wrapper just re-enables the
+//   victory: false - nothing else meaningful, wrapper just re-enables the
 //     "new map" button.
-//   victory: true, isTrainingMode: true — wrapper restarts training
+//   victory: true, isTrainingMode: true - wrapper restarts training
 //     (startNewTrainingMatch/executeAITurn) instead of showing the victory
-//     screen. needsPopulationMaintenance tells it to call
-//     maybeEvolvePopulation()+savePopulation() (localStorage, must stay
-//     client-side).
-//   victory: true, isTrainingMode: false — wrapper shows the standard DOM
-//     victory screen. needsSavePopulation covers the singleplayer
-//     champion-brain-update case.
+//     screen, and does the brain bookkeeping for the finished match.
+//   victory: true, isTrainingMode: false - wrapper shows the standard DOM
+//     victory screen, and updates the champion brain when isSingleplayerVictory.
+//
+// The AI population bookkeeping that used to run here (matchBrains win/loss
+// tallies, evolveBrain, finalizeTrainingSamples) moved to the wrapper in
+// js/client/game-flow.js. It has to: the brain population is client-side for
+// A1 because it is backed by localStorage, so reaching for it from here made
+// the server unrunnable in a Worker. What this function returns instead is the
+// raw outcome - who won, whether it was a draw, which player the AI was - and
+// the client decides what to do with it.
 function CheckVictoryCondition() {
     if (engine.state.gameOver) return { victory: true, alreadyOver: true };
 
@@ -136,42 +140,13 @@ function CheckVictoryCondition() {
         return { victory: false };
     }
 
-    const events = [];
 
-    if (gameState.isTrainingMode) {
-        let winningPlayer = null;
-        if (victoryText.includes("Player 1")) winningPlayer = 1;
-        else if (victoryText.includes("Player 2")) winningPlayer = 2;
+    let winningPlayer = null;
+    if (victoryText.includes("Player 1")) winningPlayer = 1;
+    else if (victoryText.includes("Player 2")) winningPlayer = 2;
+    const isDraw = victoryText.includes("Draw");
 
-        if (winningPlayer && gameState.matchBrains) {
-            const losingPlayer = winningPlayer === 1 ? 2 : 1;
-            const winnerBrain = gameState.matchBrains[`player${winningPlayer}`];
-            const loserBrain = gameState.matchBrains[`player${losingPlayer}`];
-
-            winnerBrain.matchesPlayed++;
-            winnerBrain.wins++;
-            loserBrain.matchesPlayed++;
-            loserBrain.losses++;
-
-            evolveBrain(winnerBrain, true, victoryText, winningPlayer, engine.state.matchHistory);
-            evolveBrain(loserBrain, false, victoryText, losingPlayer, engine.state.matchHistory);
-
-            finalizeTrainingSamples(winningPlayer, 1);
-            finalizeTrainingSamples(losingPlayer, 0);
-        } else if (victoryText.includes("Draw") && gameState.matchBrains) {
-            const brainA = gameState.matchBrains.player1;
-            const brainB = gameState.matchBrains.player2;
-
-            [brainA, brainB].forEach(brain => {
-                brain.matchesPlayed++;
-                brain.draws = (brain.draws || 0) + 1;
-                applyDrawPenalty(brain);
-            });
-
-            finalizeTrainingSamples(1, 0.5);
-            finalizeTrainingSamples(2, 0.5);
-        }
-
+    if (engine.state.isTrainingMode) {
         engine.state.gameOver = false;
 
         return {
@@ -179,22 +154,18 @@ function CheckVictoryCondition() {
             isTrainingMode: true,
             needsPopulationMaintenance: true,
             victoryText,
-            events,
+            winningPlayer,
+            isDraw,
         };
     }
 
     let isSingleplayerVictory = false;
     let aiVictory = false;
+    let aiPlayerNum = null;
     if (engine.state.gameMode === 'singleplayer') {
         isSingleplayerVictory = true;
-        const aiPlayerNum = engine.state.playerSide === 1 ? 2 : 1;
+        aiPlayerNum = engine.state.playerSide === 1 ? 2 : 1;
         aiVictory = victoryText.includes(`Player ${aiPlayerNum}`);
-
-        const championBrain = getChampionBrain();
-        championBrain.matchesPlayed++;
-        if (aiVictory) championBrain.wins++; else championBrain.losses++;
-        evolveBrain(championBrain, aiVictory, victoryText, aiPlayerNum, engine.state.matchHistory);
-        finalizeTrainingSamples(aiPlayerNum, aiVictory ? 1 : 0);
     }
 
     engine.state.gameOver = true;
@@ -204,14 +175,41 @@ function CheckVictoryCondition() {
         isTrainingMode: false,
         isSingleplayerVictory,
         aiVictory,
+        aiPlayerNum,
         needsSavePopulation: isSingleplayerVictory,
         victoryText,
-        events,
+        winningPlayer,
+        isDraw,
+    };
+}
+
+// Arcade forces a random class swap on a random unit. Choosing the victim and
+// the replacement type is a rule - it reads unit state and honours the
+// "a fortified unit can't become a class with no defense" constraint - so it
+// lives here. Showing the modal and ending the turn is the client's half
+// (handleForcedSwap in js/client/game-flow.js). Split out of core.js when the
+// /js root was cleaned up.
+function PickForcedSwap() {
+    if (engine.state.gameMode !== 'arcade') return { applicable: false };
+
+    const myUnits = engine.state.units.filter(u => u.player === engine.state.currentPlayer);
+    if (myUnits.length === 0) return { applicable: true, victim: null };
+
+    const victim = myUnits[Math.floor(Math.random() * myUnits.length)];
+    const validTypes = Object.values(UNIT_TYPES).filter(t => {
+        if (t.name === victim.type.name) return false;
+        if (victim.isFortified && t.defense <= 0) return false;
+        return true;
+    });
+
+    return {
+        applicable: true,
+        victim,
+        newType: validTypes[Math.floor(Math.random() * validTypes.length)]
     };
 }
 
 function ApplyStartOfTurnZoCDamage() {
-    const events = [];
     const activePlayer = engine.state.currentPlayer;
     const enemyPlayer = activePlayer === 1 ? 2 : 1;
     let unitsToDestroy = [];
@@ -252,7 +250,7 @@ function ApplyStartOfTurnZoCDamage() {
 
             if (checkTileZoC(tile1, tile1Key) || checkTileZoC(tile2, tile2Key)) {
                 unit.hp -= FORTIFICATION_DAMAGE;
-                events.push({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
+                engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
 
                 zocEvents.push({
                     unitId: unit.id,
@@ -261,7 +259,7 @@ function ApplyStartOfTurnZoCDamage() {
                     isFatal: unit.hp <= 0
                 });
 
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
                 if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
                     unitsToDestroy.push(unit);
                 }
@@ -269,7 +267,7 @@ function ApplyStartOfTurnZoCDamage() {
         } else if (unit.positionType === 'center' && unit.isFortified) {
             if (activePlayerBaseTiles.includes(unit.fortifiedTileKey)) {
                 unit.hp -= FORTIFICATION_DAMAGE;
-                events.push({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
+                engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
 
                 zocEvents.push({
                     unitId: unit.id,
@@ -278,7 +276,7 @@ function ApplyStartOfTurnZoCDamage() {
                     isFatal: unit.hp <= 0
                 });
 
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes Base Camp ZoC. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes Base Camp ZoC. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
                 if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
                     unitsToDestroy.push(unit);
                 }
@@ -297,14 +295,12 @@ function ApplyStartOfTurnZoCDamage() {
 
     for (const u of unitsToDestroy) {
         const deathResult = DestroyUnitIfExists(u, "zoc_turn_start");
-        events.push(...deathResult.events);
     }
 
-    return { events };
+    return {};
 }
 
 function ApplyMountainAttrition() {
-    const events = [];
     const activePlayer = engine.state.currentPlayer;
     const attritionEvents = [];
     const unitsToDestroy = [];
@@ -324,7 +320,7 @@ function ApplyMountainAttrition() {
         const damage = unit.mountainAttritionTurns;
 
         unit.hp -= damage;
-        events.push({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
+        engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
 
         attritionEvents.push({
             unitId: unit.id,
@@ -333,7 +329,7 @@ function ApplyMountainAttrition() {
             isFatal: unit.hp <= 0
         });
 
-        events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes ${damage} mountain attrition. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
+        engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes ${damage} mountain attrition. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
 
         if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
             unitsToDestroy.push(unit);
@@ -351,19 +347,17 @@ function ApplyMountainAttrition() {
 
     unitsToDestroy.forEach(u => {
         const deathResult = DestroyUnitIfExists(u, "mountain_attrition");
-        events.push(...deathResult.events);
     });
 
-    return { events };
+    return {};
 }
 
 function ApplyStartOfTurnHealing() {
-    const events = [];
-    if (engine.state.gameMode === 'arcade') return { events };
+    if (engine.state.gameMode === 'arcade') return {};
 
     const playerFlag = engine.state.flags[`p${engine.state.currentPlayer}_flag`];
     if (playerFlag && playerFlag.status === 'carried') {
-        return { events };
+        return {};
     }
 
     let healingEvents = [];
@@ -398,12 +392,12 @@ function ApplyStartOfTurnHealing() {
             });
 
             if (oldHp < unit.maxHp && unit.hp === unit.maxHp) {
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} healed to full HP.`, player: activePlayer, duration: 2500 });
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} healed to full HP.`, player: activePlayer, duration: 2500 });
             } else if (unit.hp === unit.maxHp + 1) {
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} gained a shield!`, player: activePlayer, duration: 2500 });
-                events.push({ type: 'SHIELD_GAINED', unit });
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} gained a shield!`, player: activePlayer, duration: 2500 });
+                engine.Emit({ type: 'SHIELD_GAINED', unit });
             } else {
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} healed 1 HP.`, player: activePlayer, duration: 2500 });
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} healed 1 HP.`, player: activePlayer, duration: 2500 });
             }
         }
     });
@@ -417,12 +411,11 @@ function ApplyStartOfTurnHealing() {
         });
     }
 
-    return { events };
+    return {};
 }
 
 function LogSiegeStatus() {
-    const events = [];
-    if (engine.state.gameMode === 'arcade' || !engine.state.flags) return { events };
+    if (engine.state.gameMode === 'arcade' || !engine.state.flags) return {};
 
     const activePlayer = engine.state.currentPlayer;
     const playerFlag = engine.state.flags[`p${activePlayer}_flag`];
@@ -430,7 +423,7 @@ function LogSiegeStatus() {
     if (playerFlag && playerFlag.status === 'carried') {
         const existingLog = engine.state.actionLog[engine.state.actionLog.length - 1];
         if (!existingLog || !existingLog.message.includes('Healing is disabled')) {
-            events.push({ type: 'LOG', text: `P${activePlayer}'s flag is stolen! All healing is disabled.`, player: activePlayer });
+            engine.Emit({ type: 'LOG', text: `P${activePlayer}'s flag is stolen! All healing is disabled.`, player: activePlayer });
         }
     }
 
@@ -442,12 +435,12 @@ function LogSiegeStatus() {
             });
 
             if (isIntercepted) {
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} is under siege and cannot heal!`, player: activePlayer });
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} is under siege and cannot heal!`, player: activePlayer });
             }
         }
     });
 
-    return { events };
+    return {};
 }
 
 // Pure half of handleRespawnQueue: decrements timers (engine-owned
@@ -482,20 +475,19 @@ function ApplyRespawnQueueTick() {
 // pass-device overlay / AI-kickoff-timer / autosave / arcade-timer UI
 // orchestration stays in the client wrapper (js/client/game-flow.js).
 async function AdvanceTurn() {
-    const events = [];
 
     if (engine.state.gameMode === 'arcade' && engine.state.currentPlayer === 2) {
-        gameState.arcadeTotalTurns++;
-        if (gameState.arcadeTotalTurns >= ARCADE_MAX_TURNS) {
-            return { arcadeMaxTurnsReached: true, events };
+        engine.state.arcadeTotalTurns++;
+        if (engine.state.arcadeTotalTurns >= ARCADE_MAX_TURNS) {
+            return { arcadeMaxTurnsReached: true };
         }
     }
 
     const previousPlayer = engine.state.currentPlayer;
-    gameState.playerActionTaken[`player${previousPlayer}`] = false;
+    engine.state.playerActionTaken[`player${previousPlayer}`] = false;
 
     engine.state.currentPlayer = engine.state.currentPlayer === 1 ? 2 : 1;
-    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = false;
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = false;
 
     let turnNumberAdvanced = false;
     if (previousPlayer === 2 && engine.state.currentPlayer === 1) {
@@ -525,7 +517,6 @@ async function AdvanceTurn() {
                 unit.turnsFortifiedAtBase++;
                 if (unit.turnsFortifiedAtBase > MAX_BASE_CAMP_TURNS) {
                     const deathResult = DestroyUnitIfExists(unit, "cowardice");
-                    events.push(...deathResult.events);
                 }
             }
         }
@@ -534,19 +525,14 @@ async function AdvanceTurn() {
     const respawnResult = ApplyRespawnQueueTick();
 
     const zocResult = ApplyStartOfTurnZoCDamage();
-    events.push(...zocResult.events);
 
     const resupplyResult = AttemptToResupplyForts(engine.state.currentPlayer);
-    events.push(...resupplyResult.events);
 
     const siegeResult = LogSiegeStatus();
-    events.push(...siegeResult.events);
 
     const attritionResult = ApplyMountainAttrition();
-    events.push(...attritionResult.events);
 
     const healingResult = ApplyStartOfTurnHealing();
-    events.push(...healingResult.events);
 
     // NOTE: "Turn Begins" is NOT pushed here even though it looks like it
     // belongs with the other turn-start logs above — in the original, it
@@ -558,6 +544,5 @@ async function AdvanceTurn() {
         arcadeMaxTurnsReached: false,
         turnNumberAdvanced,
         respawnResult,
-        events,
     };
 }

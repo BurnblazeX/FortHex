@@ -1,36 +1,47 @@
 // === Actions (MIXED functions split, pure half — A1 step 7) ===
 //
 // These are the pure-mutation halves of core.js's MIXED action functions.
-// Each returns a plain event array instead of calling UI functions directly —
-// see FortHex_A1_Server_Core_Guide.md §3. The client wrapper of the same
-// (lowercase) name in js/client/actions.js drains these events and does the
-// actual logAction/UI/animation work, exactly reproducing what the original
-// single function did.
+// None of them call UI functions. Anything the player needs to be told about
+// goes out as a flat, serializable event via engine.Emit() - see
+// FortHex_A1_Server_Core_Guide.md §3. The client wrapper of the same
+// (lowercase) name in js/client/actions.js drains the queue with
+// HandleActionEvents() and does the actual logAction/UI/animation work,
+// reproducing what the original single function did.
 //
-// Still reference the bare global `gameState` (see [[feedback_a1_migration_approach]]
-// precedent from steps 5/6 — no live engine instance exists to route through yet).
+// These functions originally each built a local `events` array and returned
+// it; the queue formalization replaced that with engine.Emit(). The practical
+// difference is that helpers nested several calls deep (DestroyUnit,
+// AttemptToResupplyForts, ApplyFortificationDamageOnMove...) no longer have to
+// hand their events back up through every caller to reach the client - they
+// emit straight onto the instance queue. Return values now carry only the
+// facts the wrapper branches on (destroyed, success, flagCapturedForPlayer...).
+//
+// This is also the shape Track B's transports need: "drain and render" and
+// "drain and send over the wire" become the same drain, different sink.
+//
+// Everything here reads and writes the live engine instance - no client
+// globals, no DOM. js/server/ has to stay runnable in a bare Worker.
 //
 // updateSupplyPointsBasedOnFlagStatus (ui.js) and updateAllHealingStatus
-// (main.js) used to mutate gameState directly from client-side files. Client
-// files must not alter gameState directly — their state-mutating logic now
-// lives here as SetSupplyPointsForFlagStatus/RecalculateHealingEligibility,
-// and ui.js/main.js's versions became thin wrappers (call the helper here,
-// then do the actual UI refresh) so their existing external callers keep
-// working unchanged.
+// (main.js) used to mutate game state directly from client-side files. Client
+// files must not do that - their state-mutating logic now lives here as
+// SetSupplyPointsForFlagStatus/RecalculateHealingEligibility, and
+// ui.js/main.js's versions became thin wrappers (call the helper here, then do
+// the actual UI refresh) so their existing external callers keep working.
 //
 // completeFortify/completeUnfortify/completeBuildBridge/completeAttack are
-// handled with the async pattern below: per user design, animationsEnabled
-// becomes server-relevant — the server delays applying the real mutation by
-// the animation's duration (when animations are on) so the authoritative
-// state change lands at roughly the same time as the client's purely-visual
+// handled with the async pattern below: per user design, animationsEnabled is
+// server-relevant - the server delays applying the real mutation by the
+// animation's duration (when animations are on) so the authoritative state
+// change lands at roughly the same time as the client's purely-visual
 // animation, instead of the old callback-driven `animation.onComplete` model.
 // See [[project_forthex_animation_fow_design]].
 
 // Moved from main.js — delay() has no DOM dependency, and the async action
-// functions below need it too. Still referencing the bare global gameState/
-// gameSettings for now, same as everything else in this file.
+// functions below need it too. Reads engine.state.isTrainingMode so training
+// matches don't pay for animation waits.
 function delay(ms) {
-    if (gameState.isTrainingMode) {
+    if (engine.state.isTrainingMode) {
         return Promise.resolve();
     }
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -41,7 +52,7 @@ function delay(ms) {
 // authoritative state changes land when the (client-drawn) animation finishes
 // instead of instantly. Skipped entirely when animations are off.
 async function WaitForAnimation(durationMs) {
-    if (!gameSettings.animationsEnabled) return;
+    if (!engine.settings.animationsEnabled) return;
     console.log('[Server] Waiting for animation to complete...');
     await delay(durationMs);
 }
@@ -55,13 +66,12 @@ async function ApplyBuildBridge(unit, targetEdgeKey, duration = 500) {
 
     await WaitForAnimation(duration);
 
-    const events = [];
     const edgeToBridge = engine.state.edges.get(targetEdgeKey);
     edgeToBridge.bridge = true;
     edgeToBridge.bridgeHp = BRIDGE_MAX_HP;
-    events.push({ type: 'LOG', text: `${unit.type.name} built bridge on ${targetEdgeKey.substring(0,7)}... HP: ${edgeToBridge.bridgeHp}`, player: engine.state.currentPlayer, duration: 3000 });
+    engine.Emit({ type: 'LOG', text: `${unit.type.name} built bridge on ${targetEdgeKey.substring(0,7)}... HP: ${edgeToBridge.bridgeHp}`, player: engine.state.currentPlayer, duration: 3000 });
 
-    return { events };
+    return {};
 }
 
 async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
@@ -76,7 +86,6 @@ async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
 
     await WaitForAnimation(duration);
 
-    const events = [];
     const unfortifyingPlayer = unit.player;
 
     unit.fortifyCooldown = unit.turnsFortified * 5;
@@ -105,15 +114,15 @@ async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
                 fromTile: startTileKey,
                 toEdge: targetEdgeKey,
                 relativeLocation: 'edge',
-                unitState: getUnitSnapshot(unit)
+                unitState: GetUnitSnapshot(unit)
             }
         });
     }
-    events.push({ type: 'LOG', text: `${unit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, player: unfortifyingPlayer, duration: 2500 });
+    engine.Emit({ type: 'LOG', text: `${unit.type.name} unfortified to ${targetEdgeKey.substring(0,7)}...`, player: unfortifyingPlayer, duration: 2500 });
 
     recalculatePlayerSupplyNetwork(unfortifyingPlayer);
 
-    return { events, unfortifyingPlayer };
+    return { unfortifyingPlayer };
 }
 
 async function ApplyFortify(unit, targetTileKey, duration = 450) {
@@ -122,7 +131,6 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
 
     await WaitForAnimation(duration);
 
-    const events = [];
     const fortifyingPlayer = unit.player;
     const targetTileObject = engine.state.tiles.get(targetTileKey);
 
@@ -147,11 +155,11 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
             payload: {
                 tile: targetTileKey,
                 relativeLocation: 'center',
-                unitState: getUnitSnapshot(unit)
+                unitState: GetUnitSnapshot(unit)
             }
         });
     }
-    events.push({ type: 'LOG', text: `${unit.type.name} fortified on tile ${targetTileKey.substring(0,5)}...`, player: fortifyingPlayer, duration: 2500 });
+    engine.Emit({ type: 'LOG', text: `${unit.type.name} fortified on tile ${targetTileKey.substring(0,5)}...`, player: fortifyingPlayer, duration: 2500 });
 
     let flagCapturedForPlayer = null;
     if (engine.state.gameMode !== 'arcade' && engine.state.flags) {
@@ -166,13 +174,11 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
                 enemyFlagObj.carrierId = unit.id;
                 unit.isCarryingFlag = true;
 
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} has captured the flag from the fort!`, player: engine.state.currentPlayer });
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} has captured the flag from the fort!`, player: engine.state.currentPlayer });
 
                 const healingResult = RecalculateHealingEligibility();
-                events.push(...healingResult.events);
 
                 const severResult = SeverSupplyLinesForPlayer(enemyPlayer);
-                events.push(...severResult.events);
 
                 const victimPlayerQueue = engine.state.respawnQueue[`player${enemyPlayer}`];
                 victimPlayerQueue.forEach(item => {
@@ -185,7 +191,7 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
                 SetSupplyPointsForFlagStatus(enemyPlayer);
 
                 flagCapturedForPlayer = enemyPlayer;
-                events.push({ type: 'FLAG_CAPTURED', player: enemyPlayer, carrierId: unit.id, carrierUnit: unit });
+                engine.Emit({ type: 'FLAG_CAPTURED', player: enemyPlayer, carrierId: unit.id, carrierUnit: unit });
             }
         }
     }
@@ -195,7 +201,7 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
         if (playerFlag && playerFlag.status !== 'carried') {
             recalculatePlayerSupplyNetwork(fortifyingPlayer);
         } else {
-            events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} fortified, but is unsupplied due to stolen flag.`, player: fortifyingPlayer, duration: 3000 });
+            engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} fortified, but is unsupplied due to stolen flag.`, player: fortifyingPlayer, duration: 3000 });
         }
     }
 
@@ -216,7 +222,7 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
                         isFatal: enemyUnit.hp <= 0
                     });
 
-                    events.push({ type: 'LOG', text: `P${enemyUnit.player} ${enemyUnit.type.name} takes ZoC. HP: ${enemyUnit.hp}`, player: fortifyingPlayer });
+                    engine.Emit({ type: 'LOG', text: `P${enemyUnit.player} ${enemyUnit.type.name} takes ZoC. HP: ${enemyUnit.hp}`, player: fortifyingPlayer });
                     if (enemyUnit.hp <= 0 && !unitsToDestroy.find(u => u.id === enemyUnit.id)) unitsToDestroy.push(enemyUnit);
                 }
             });
@@ -235,10 +241,9 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
 
     unitsToDestroy.forEach(u => {
         const deathResult = DestroyUnitIfExists(u, "zoc_fort");
-        events.push(...deathResult.events);
     });
 
-    return { events, flagCapturedForPlayer };
+    return { flagCapturedForPlayer };
 }
 
 // duration is computed by the client wrapper (pixel-distance-dependent for
@@ -252,8 +257,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
 
     await WaitForAnimation(duration);
 
-    const events = [];
-    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
     let baseDamage = 0;
     if (attackingUnit.stats && typeof attackingUnit.stats.damage === 'number') {
@@ -327,7 +331,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
         const bridgeEdge = engine.state.edges.get(targetUnitInfo.edgeKey);
         if (bridgeEdge && bridgeEdge.bridge) {
             bridgeEdge.bridgeHp -= baseDamage;
-            events.push({ type: 'UNIT_DAMAGED', unit: { position: targetUnitInfo.edgeKey, isFortified: false }, attackStatus: 'normal' });
+            engine.Emit({ type: 'UNIT_DAMAGED', unit: { position: targetUnitInfo.edgeKey, isFortified: false }, attackStatus: 'normal' });
             logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} targets bridge for ${baseDamage}.<br>Bridge HP: ${bridgeEdge.bridgeHp}/${BRIDGE_MAX_HP}.`);
 
             if (bridgeEdge.bridgeHp <= 0) {
@@ -350,11 +354,9 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                         logParts.push(`P${unitOnCollapse.player} ${unitOnCollapse.type.name} fell as the bridge collapsed and takes ${fallDamage} damage! HP: ${unitOnCollapse.hp}`);
                         if (unitOnCollapse.hp <= 0) {
                             const deathResult = DestroyUnitIfExists(unitOnCollapse, "bridge_collapse");
-                            events.push(...deathResult.events);
                         }
                     } else {
                         const deathResult = DestroyUnitIfExists(unitOnCollapse, "bridge_collapse");
-                        events.push(...deathResult.events);
                     }
                 });
             }
@@ -411,7 +413,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
 
             actualDamage = Math.max(1, actualDamage);
             if (defenseMessage) logParts.push(defenseMessage);
-            events.push({ type: 'UNIT_DAMAGED', unit: targetUnit, attackStatus });
+            engine.Emit({ type: 'UNIT_DAMAGED', unit: targetUnit, attackStatus });
 
             if (attackType === 'Archer' && targetUnitInfo.edgeKey && !targetUnit.isFortified) {
                 const edgeOfTarget = engine.state.edges.get(targetUnitInfo.edgeKey);
@@ -429,12 +431,11 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                         const liveSplitTarget = engine.state.units.find(u => u.id === unitToHit.id);
                         if (liveSplitTarget) {
                             liveSplitTarget.hp -= splitDamage;
-                            events.push({ type: 'UNIT_DAMAGED', unit: liveSplitTarget, attackStatus });
+                            engine.Emit({ type: 'UNIT_DAMAGED', unit: liveSplitTarget, attackStatus });
                             logParts.push(`P${liveSplitTarget.player} ${liveSplitTarget.type.name} takes ${splitDamage} damage. HP: ${liveSplitTarget.hp}`);
                             if (attackingUnit.player !== liveSplitTarget.player) liveSplitTarget.lastAttackedByHostileOnTurn = engine.state.globalTurnNumber;
                             if (liveSplitTarget.hp <= 0) {
                                 const deathResult = DestroyUnitIfExists(liveSplitTarget, "destroyed");
-                                events.push(...deathResult.events);
                             }
                         }
                     });
@@ -445,7 +446,6 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                     logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
                     if (targetUnit.hp <= 0) {
                         const deathResult = DestroyUnitIfExists(targetUnit, "destroyed");
-                        events.push(...deathResult.events);
                         ledgerPayload.isKill = true;
                     }
                 }
@@ -456,7 +456,6 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                 logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
                 if (targetUnit.hp <= 0) {
                     const deathResult = DestroyUnitIfExists(targetUnit, "destroyed");
-                    events.push(...deathResult.events);
                     ledgerPayload.isKill = true;
                 }
             }
@@ -468,12 +467,11 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                     let retDmg = retaliatingArcher.stats ? retaliatingArcher.stats.damage : retaliatingArcher.type.damage;
                     const retaliationDamage = Math.ceil(retDmg / 2);
                     attackingUnit.hp -= retaliationDamage;
-                    events.push({ type: 'UNIT_DAMAGED', unit: attackingUnit, attackStatus: 'normal' });
+                    engine.Emit({ type: 'UNIT_DAMAGED', unit: attackingUnit, attackStatus: 'normal' });
                     logParts.push(`Cavalry Screen! P${retaliatingArcher.player} ${retaliatingArcher.type.name} retaliates for ${retaliationDamage} damage.<br>Attacker HP: ${attackingUnit.hp}/${attackingUnit.maxHp}`);
                     ledgerModifiers.push(`RETALIATION_DMG_${retaliationDamage}`);
                     if (attackingUnit.hp <= 0) {
                         const deathResult = DestroyUnitIfExists(attackingUnit, "retaliation");
-                        events.push(...deathResult.events);
                     }
                 }
             }
@@ -492,15 +490,30 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
             payload: {
                 ...ledgerPayload,
                 modifiers: ledgerModifiers,
-                attackerState: getUnitSnapshot(attackingUnit),
-                targetState: targetUnitInfo.unit ? getUnitSnapshot(targetUnitInfo.unit) : null
+                attackerState: GetUnitSnapshot(attackingUnit),
+                targetState: targetUnitInfo.unit ? GetUnitSnapshot(targetUnitInfo.unit) : null
             }
         });
     }
 
-    events.push({ type: 'LOG', text: logParts.join('<br>'), player: engine.state.currentPlayer, duration: 4500 });
+    engine.Emit({ type: 'LOG', text: logParts.join('<br>'), player: engine.state.currentPlayer, duration: 4500 });
 
-    return { events, spearWalled, bridgeDestroyed };
+    return { spearWalled, bridgeDestroyed };
+}
+
+// Compact per-unit record attached to matchHistory entries. Moved here from
+// core.js during the js/server/ purge - it's pure, and every caller is in this
+// file, but living client-side meant ApplyMoveAction threw ReferenceError the
+// moment the server actually ran in a Worker.
+function GetUnitSnapshot(unit) {
+    if (!unit) return null;
+    return {
+        id: unit.id,
+        hp: unit.hp, // Getter accesses unit.stats.hp
+        mp: Number(unit.currentMove.toFixed(2)), // Clean float precision
+        pos: unit.position,
+        isFortified: unit.isFortified
+    };
 }
 
 function SetSupplyPointsForFlagStatus(playerNum) {
@@ -510,8 +523,7 @@ function SetSupplyPointsForFlagStatus(playerNum) {
 }
 
 function RecalculateHealingEligibility() {
-    const events = [];
-    if (engine.state.gameMode === 'arcade') return { events };
+    if (engine.state.gameMode === 'arcade') return {};
 
     const p1FlagStolen = engine.state.flags.p1_flag.status === 'carried';
     const p2FlagStolen = engine.state.flags.p2_flag.status === 'carried';
@@ -524,14 +536,13 @@ function RecalculateHealingEligibility() {
         }
     });
 
-    if (p1FlagStolen) events.push({ type: 'LOG', text: `P1's flag is stolen! Healing is disabled.`, player: 2, duration: 3000 });
-    if (p2FlagStolen) events.push({ type: 'LOG', text: `P2's flag is stolen! Healing is disabled.`, player: 1, duration: 3000 });
+    if (p1FlagStolen) engine.Emit({ type: 'LOG', text: `P1's flag is stolen! Healing is disabled.`, player: 2, duration: 3000 });
+    if (p2FlagStolen) engine.Emit({ type: 'LOG', text: `P2's flag is stolen! Healing is disabled.`, player: 1, duration: 3000 });
 
-    return { events };
+    return {};
 }
 
 function DestroyUnit(unitToDestroy, reason = "destroyed") {
-    const events = [];
     const activePlayer = engine.state.currentPlayer;
     const destroyedPlayer = unitToDestroy.player;
     const wasFortified = unitToDestroy.isFortified;
@@ -542,7 +553,7 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
             flag.status = 'at_base';
             flag.carrierId = null;
             unitToDestroy.isCarryingFlag = false;
-            events.push({ type: 'LOG', text: `The P${flag.player} flag has been returned to base!`, player: activePlayer });
+            engine.Emit({ type: 'LOG', text: `The P${flag.player} flag has been returned to base!`, player: activePlayer });
 
             SetSupplyPointsForFlagStatus(flag.player);
             recalculatePlayerSupplyNetwork(flag.player);
@@ -560,15 +571,15 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
 
     // --- CENTRALIZED DEATH LOGGING ---
     if (reason === "bridge_collapse") {
-        events.push({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name} fell as the bridge collapsed!`, player: activePlayer, duration: 3500 });
+        engine.Emit({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name} fell as the bridge collapsed!`, player: activePlayer, duration: 3500 });
     } else if (reason === "zoc_move" || reason === "zoc_turn_start" || reason === "fort_zoc" || reason === "zoc_fort") {
-        events.push({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name} destroyed by ZoC!`, player: activePlayer, duration: 3500 });
+        engine.Emit({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name} destroyed by ZoC!`, player: activePlayer, duration: 3500 });
     } else if (reason === "cowardice") {
-        events.push({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name} was destroyed for cowardice!`, player: activePlayer, duration: 3500 });
+        engine.Emit({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name} was destroyed for cowardice!`, player: activePlayer, duration: 3500 });
     } else if (reason === "crushed") {
-        events.push({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name}'s defenses collapsed, and they were crushed with no escape!`, player: activePlayer, duration: 3500 });
+        engine.Emit({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name}'s defenses collapsed, and they were crushed with no escape!`, player: activePlayer, duration: 3500 });
     } else {
-        events.push({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name} has been destroyed!`, player: activePlayer, duration: 3000 });
+        engine.Emit({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name} has been destroyed!`, player: activePlayer, duration: 3000 });
     }
 
     // --- Nuclear Tile Clearing ---
@@ -596,24 +607,24 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
         }
     }
 
-    return { events, destroyedUnitId: unitToDestroy.id };
+    return { destroyedUnitId: unitToDestroy.id };
 }
 
 // Pure counterpart of handleUnitDeath: the existence check + delegate to DestroyUnit.
 function DestroyUnitIfExists(unitToDie, reason = "destroyed") {
     const unitExists = engine.state.units.some(u => u.id === unitToDie.id);
-    if (!unitExists) return { events: [], destroyedUnitId: null };
+    if (!unitExists) return { destroyedUnitId: null };
     return DestroyUnit(unitToDie, reason);
 }
 
 function SeverSupplyLinesForPlayer(playerNum) {
-    const events = [{ type: 'LOG', text: `P${playerNum}'s flag was stolen! Supply lines have been broken.`, player: playerNum === 1 ? 2 : 1 }];
+    engine.Emit({ type: 'LOG', text: `P${playerNum}'s flag was stolen! Supply lines have been broken.`, player: playerNum === 1 ? 2 : 1 });
     engine.state.units.forEach(unit => {
         if (unit.player === playerNum && unit.isFortified) {
             unit.supplyLine = null;
         }
     });
-    return { events };
+    return {};
 }
 
 // Consolidated from three near-duplicate functions per user request:
@@ -629,8 +640,7 @@ function SeverSupplyLinesForPlayer(playerNum) {
 // original use cases: a single newly-fortified unit, a full post-flag-return
 // recompute, or a routine per-turn resupply attempt.
 function AttemptToResupplyForts(playerNum) {
-    const events = [];
-    if (engine.state.gameMode === 'arcade' || !engine.state.flags) return { events };
+    if (engine.state.gameMode === 'arcade' || !engine.state.flags) return {};
 
     const wasSupplied = new Map();
     engine.state.units.forEach(u => {
@@ -641,18 +651,17 @@ function AttemptToResupplyForts(playerNum) {
 
     engine.state.units.forEach(u => {
         if (u.player === playerNum && u.isFortified && u.supplyLine && !wasSupplied.get(u.id)) {
-            events.push({ type: 'LOG', text: `P${playerNum} ${u.type.name} is now in supply! (Cost: ${Math.round(u.supplyLine.cost)})`, player: playerNum });
+            engine.Emit({ type: 'LOG', text: `P${playerNum} ${u.type.name} is now in supply! (Cost: ${Math.round(u.supplyLine.cost)})`, player: playerNum });
         }
     });
 
-    return { events };
+    return {};
 }
 
 function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
-    const events = [];
-    if (!unitMoving || unitMoving.isFortified || unitMoving.positionType !== 'edge') return { destroyed: false, events };
+    if (!unitMoving || unitMoving.isFortified || unitMoving.positionType !== 'edge') return { destroyed: false };
     const tileCoords = parseEdgeKey(newEdgeKey);
-    if (tileCoords.some(coord => isNaN(coord.q))) return { destroyed: false, events };
+    if (tileCoords.some(coord => isNaN(coord.q))) return { destroyed: false };
     let unitDestroyed = false;
     const enemyPlayer = unitMoving.player === 1 ? 2 : 1;
 
@@ -679,10 +688,9 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
                 });
             }
 
-            events.push({ type: 'LOG', text: `P${unitMoving.player} ${unitMoving.type.name} takes ZoC. HP: ${unitMoving.hp}`, player: engine.state.currentPlayer, duration: 3500 });
+            engine.Emit({ type: 'LOG', text: `P${unitMoving.player} ${unitMoving.type.name} takes ZoC. HP: ${unitMoving.hp}`, player: engine.state.currentPlayer, duration: 3500 });
             if (unitMoving.hp <= 0) {
                 const deathResult = DestroyUnit(unitMoving, "zoc_move");
-                events.push(...deathResult.events);
                 unitDestroyed = true;
             }
             return true;
@@ -698,20 +706,19 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
     if (!checkAndApply(tile1, tile1Key)) {
         checkAndApply(tile2, tile2Key);
     }
-    return { destroyed: unitDestroyed, events };
+    return { destroyed: unitDestroyed };
 }
 
 function ApplyUnitUpgrade(unit, statType) {
-    const events = [];
     if (!unit || unit.level >= UPGRADE_CONSTANTS.MAX_LEVEL) {
         console.warn("Upgrade failed: Max level reached or invalid unit.");
-        return { success: false, events };
+        return { success: false };
     }
 
     const validStats = ['health', 'speed', 'damage', 'defense'];
     if (!validStats.includes(statType)) {
         console.error("Upgrade failed: Invalid stat type", statType);
-        return { success: false, events };
+        return { success: false };
     }
 
     unit.level++;
@@ -749,13 +756,13 @@ function ApplyUnitUpgrade(unit, statType) {
         penaltyApplied = penaltyAmount;
     }
 
-    events.push({ type: 'UNIT_DAMAGED', unit, attackStatus: 'upgrade' });
+    engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'upgrade' });
 
     let logMsg = `${unit.type.name} reached Level ${unit.level}! (+${boostAmount} ${statType})`;
     if (penaltyApplied > 0) {
         logMsg += ` (Penalty: -${penaltyApplied} ${pairedStat})`;
     }
-    events.push({ type: 'LOG', text: logMsg, player: unit.player });
+    engine.Emit({ type: 'LOG', text: logMsg, player: unit.player });
 
     if (typeof engine !== 'undefined') {
         engine.actionManager.SubmitAction({
@@ -767,17 +774,16 @@ function ApplyUnitUpgrade(unit, statType) {
                 stat: statType,
                 level: unit.level,
                 penaltyStat: penaltyApplied > 0 ? pairedStat : null,
-                unitState: getUnitSnapshot(unit)
+                unitState: GetUnitSnapshot(unit)
             }
         });
     }
 
-    return { success: true, events };
+    return { success: true };
 }
 
 // Pure half of performSwap.
 function ApplyClassSwap(unit, newType) {
-    const events = [];
     const oldRatio = unit.stats.hp / unit.stats.maxHp;
 
     const newTypeKey = newType.typeName ? newType.typeName.toUpperCase() : newType.name.toUpperCase();
@@ -802,16 +808,15 @@ function ApplyClassSwap(unit, newType) {
 
     unit.currentMove = unit.stats.speed;
 
-    events.push({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
-    events.push({ type: 'LOG', text: `P${unit.player} morphed ${oldType} into ${template.name}.`, player: unit.player });
+    engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
+    engine.Emit({ type: 'LOG', text: `P${unit.player} morphed ${oldType} into ${template.name}.`, player: unit.player });
 
-    return { events };
+    return {};
 }
 
 function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
-    const events = [];
     const masterUnit = engine.state.units.find(u => u.id === unitToMove.id);
-    if (!masterUnit) return { events, unitFound: false };
+    if (!masterUnit) return { unitFound: false };
     const unit = masterUnit;
     const originPos = unit.position;
 
@@ -848,9 +853,9 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
             actualCost = accumulatedCost;
             unit.ambushed = true;
             if (actualTarget === originPos) {
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} was ambushed and halted immediately!`, player: engine.state.currentPlayer, duration: 3000 });
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} was ambushed and halted immediately!`, player: engine.state.currentPlayer, duration: 3000 });
             } else {
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} was ambushed and halted at ${actualTarget.substring(0,5)}...`, player: engine.state.currentPlayer, duration: 3000 });
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} was ambushed and halted at ${actualTarget.substring(0,5)}...`, player: engine.state.currentPlayer, duration: 3000 });
             }
         }
     }
@@ -882,10 +887,9 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
             enemyFlagObj.carrierId = unit.id;
             unit.isCarryingFlag = true;
             unit.currentMove = 0;
-            events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} has picked up the flag!`, player: engine.state.currentPlayer });
+            engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} has picked up the flag!`, player: engine.state.currentPlayer });
 
             const severResult = SeverSupplyLinesForPlayer(enemyPlayer);
-            events.push(...severResult.events);
 
             const victimPlayerQueue = engine.state.respawnQueue[`player${enemyPlayer}`];
             victimPlayerQueue.forEach(item => {
@@ -898,35 +902,32 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
             SetSupplyPointsForFlagStatus(enemyPlayer);
 
             const healingResult = RecalculateHealingEligibility();
-            events.push(...healingResult.events);
 
             flagCapturedForPlayer = enemyPlayer;
-            events.push({ type: 'FLAG_CAPTURED', player: enemyPlayer, carrierId: unit.id, carrierUnit: unit });
+            engine.Emit({ type: 'FLAG_CAPTURED', player: enemyPlayer, carrierId: unit.id, carrierUnit: unit });
         }
     }
 
     const fortDamageResult = ApplyFortificationDamageOnMove(unit, actualTarget);
-    events.push(...fortDamageResult.events);
     const unitDestroyedByZoC = fortDamageResult.destroyed;
 
     if (typeof engine !== 'undefined') {
         engine.actionManager.SubmitAction({
             type: "MOVE", turn: engine.state.globalTurnNumber, player: engine.state.currentPlayer,
-            actorId: unit.id, payload: { from: originPos, to: actualTarget, cost: actualCost, unitState: getUnitSnapshot(unit) }
+            actorId: unit.id, payload: { from: originPos, to: actualTarget, cost: actualCost, unitState: GetUnitSnapshot(unit) }
         });
     }
 
     let shouldRecalcReachableMoves = false;
     let unitStillAlive = !unitDestroyedByZoC && unit.hp > 0;
     if (unitStillAlive) {
-        if (!ambushed) events.push({ type: 'LOG', text: `${unit.type.name} moved. MP: ${Math.floor(unit.currentMove)}`, player: engine.state.currentPlayer });
+        if (!ambushed) engine.Emit({ type: 'LOG', text: `${unit.type.name} moved. MP: ${Math.floor(unit.currentMove)}`, player: engine.state.currentPlayer });
         if (unit.currentMove >= 1 && (!unit.hasPerformedMajorAction || unit.type.canMoveAfterAttack) && !unit.ambushed) {
             shouldRecalcReachableMoves = true;
         }
     }
 
     return {
-        events,
         unitFound: true,
         unit,
         ambushed,

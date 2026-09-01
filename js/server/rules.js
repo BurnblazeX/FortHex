@@ -1,28 +1,29 @@
-// === Rules (PURE, moved from core.js verbatim — A1 step 5) ===
+// === Rules (PURE, moved from core.js — A1 step 5) ===
 //
-// These still reference the bare global `gameState`/`gameSettings` rather than
-// `this.state`/`this.settings`. Per the "relocate only" decision (see chat), the
-// this.state rewrite + instance wiring is deferred until the composition root
-// actually exists (A1 step 11/12) — converting now would break every existing
-// caller in render.js/ai.js/map.js/ui.js/core.js/main.js, since nothing routes
-// through a live engine instance yet.
+// Every function here reads and writes the live engine instance
+// (engine.state / engine.settings). Nothing in this file touches the DOM, the
+// client's gameState, or any client function - that was true only after the
+// js/server/ purge; before it, spawnUnit called logAction() and
+// recalculatePlayerSupplyNetwork called updateSupplyPointsDisplay() directly.
+// Both now emit events instead (LOG, VISION_INVALIDATED, SUPPLY_CHANGED),
+// drained by HandleActionEvents in js/client/actions.js.
 //
-// spawnUnit and recalculatePlayerSupplyNetwork keep their logAction()/
-// updateSupplyPointsDisplay() UI calls for the same reason — the guide's step 5
-// asks for those to be stripped in favor of emitted events, but that's really
-// the MIXED-function event-emission pattern (step 7), and applying it here
-// alone would silently drop log messages/UI updates with nothing yet consuming
-// the events. Deferred, not forgotten.
+// spawnUnit was renamed SpawnUnit in that same pass and gained a thin
+// same-named client wrapper, so its three call sites (ai.js, main.js, ui.js)
+// are unchanged and now get their log lines through the event drain.
 //
 // A few functions here (getTileKeysOfEdge, getSideTileKeys,
 // hasCombinedArmsSupport, collectTargetsFromAttackRange, GetBaseCamp,
 // isInternalBaseEdge, isEdgeAdjacentToSpearWall) aren't in the guide's explicit
-// §4 list, but are pure rules-helpers depended on by functions that are —
+// §4 list, but are pure rules-helpers depended on by functions that are, so
+// they moved alongside them rather than being left behind.
 //
 // GetBaseCamp was originally two near-duplicate functions (getBaseTileKeys +
 // getBaseCampTiles) doing the same array-or-edge-string normalization under
-// different names/signatures — merged into one per user request.
-// moved alongside them rather than left behind.
+// different names/signatures - merged into one per user request.
+//
+// Naming note: this file is the last js/server/ module still on camelCase.
+// The newer server files use PascalCase; renaming these is a separate pass.
 
  // === Fine Grid System ===
 
@@ -701,7 +702,7 @@ function getAttackRangeFineCells(unit) {
             };
         }
 
-        function spawnUnit(player, unitType) {
+        function SpawnUnit(player, unitType) {
             const baseData = engine.state.baseCampPositions[`player${player}`];
             let potentialSpawnEdges = [];
 
@@ -754,13 +755,12 @@ function getAttackRangeFineCells(unit) {
                 const newUnit = createUnit(player, unitType, spawnEdgeKey);
                 engine.state.units.push(newUnit);
                 
-                logAction(`P${player} ${unitType.name} has returned to the fight!`, player);
-                gameState.visionDirty = true;
-                gameState.needsRedraw = true; 
+                engine.Emit({ type: 'LOG', text: `P${player} ${unitType.name} has returned to the fight!`, player });
+                engine.Emit({ type: 'VISION_INVALIDATED' });
                 return true;
             }
-            
-            logAction(`P${player} Base is blocked! Cannot respawn ${unitType.name}.`, player);
+
+            engine.Emit({ type: 'LOG', text: `P${player} Base is blocked! Cannot respawn ${unitType.name}.`, player });
             return false;
         }
 
@@ -845,7 +845,7 @@ function getAttackRangeFineCells(unit) {
         }
 
         function getPossibleMoves(unit) {
-            if (gameState.mapMakerMode) {
+            if (engine.state.mapMakerMode) {
                 return new Map(); 
             }
             if (!unit || unit.currentMove < 1 || unit.isFortified) return new Map();
@@ -907,8 +907,8 @@ function getAttackRangeFineCells(unit) {
             
             let enemyBlocks = false;
             if (nextAdjacentEdgeObject.units.some(u => u.player !== unit.player)) {
-                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
-                    if (gameState.visionCache.edges.has(nextAdjacentEdgeKey)) {
+                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
+                    if (engine.visionCache.edges.has(nextAdjacentEdgeKey)) {
                         enemyBlocks = true;
                     }
                 } else {
@@ -1092,7 +1092,7 @@ function getAttackRangeFineCells(unit) {
             });
 
             engine.state.supplyPoints[playerSupplyKey] = maxSupply - Math.round(networkSupplyCost);
-            updateSupplyPointsDisplay();
+            engine.Emit({ type: 'SUPPLY_CHANGED', player: playerNum, newValue: engine.state.supplyPoints[playerSupplyKey] });
         }
 
         function getPotentialUnfortifyTargets(unit) {

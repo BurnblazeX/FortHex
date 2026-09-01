@@ -5,7 +5,7 @@
 // gameState resets, not cleanly grouped) — the client-owned fields
 // (selectedUnit, hoveredUnitId, visionCache, fogAnimState, visionDirty,
 // isPassDeviceTransition, isDragging, draggingUnit, currentReachableMoves,
-// arcadeTurnTimer, swapState, unitToSwap, arcadeTotalTurns,
+// arcadeTurnTimer, swapState, unitToSwap,
 // arcadeGameStartedInteraction) and every DOM/UI-refresh call all moved to
 // the client wrapper (js/client/match-setup.js), reordered to run before/
 // after this function rather than interleaved — safe because nothing in
@@ -13,10 +13,8 @@
 // to completion; nothing repaints until the next render tick regardless of
 // exact statement order).
 //
-// Still calls into map.js's placeUnitsOnNewGeneratedMap, which hasn't been
-// split yet (that's step 9, deferred until after main.js is finished per
-// user request) — whatever map.js currently is, this just calls it exactly
-// as the original did.
+// Unit placement for generated maps goes through PlaceUnitsOnNewGeneratedMap
+// in js/server/map-generation.js, split out of map.js in step 9.
 
 function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData = null) {
     // 1. Setup Base Camp Defaults if needed
@@ -38,6 +36,7 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
     engine.state.actionLog = [];
     engine.state.matchHistory = [];
     engine.state.respawnQueue = { player1: [], player2: [] };
+    engine.state.arcadeTotalTurns = 0;
 
     engine.state.unitCounts = {
         player1: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 },
@@ -106,7 +105,7 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
                     const newEdge = { q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r, bridge: false, bridgeHp: null, isPathway: true };
                     Object.defineProperty(newEdge, 'units', {
                         get: function() {
-                            return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!gameState.draggingUnit || u.id !== gameState.draggingUnit.id));
+                            return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!engine.unitVisibilityFilter || engine.unitVisibilityFilter(u)));
                         },
                         configurable: true,
                         enumerable: false
@@ -131,7 +130,7 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
         });
     } else if (tileLayoutMap && tileLayoutMap !== DEFAULT_MAP_LAYOUT_RADIUS_3) {
         const limit = getMaxUnitsForCurrentMap();
-        placeUnitsOnNewGeneratedMap(limit);
+        PlaceUnitsOnNewGeneratedMap(limit);
     } else {
         if (engine.state.gameMode === 'arcade') {
             engine.state.units.push(createUnit(1, 'MELEE', getEdgeKey(1, -2, 0, -2)));

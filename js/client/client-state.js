@@ -1,9 +1,9 @@
-// --- Live Engine Instance ---
-// Genuinely separate state, not an alias of gameState — engine-owned fields
-// (tiles/edges/units/currentPlayer/etc.) live here now, not in gameState. See
-// [[project_forthex_a1_track]] for why: the user explicitly rejected aliasing
-// gameState to engine.state in favor of a real cutover.
-const engine = CreateEngineInstance();
+// === Client-owned state ===
+//
+// The engine instance and its unitVisibilityFilter used to be created here as a
+// module-load side effect. They moved to js/main.js's composition root, which
+// is where object creation and wiring belong - this file is just the client's
+// own state now.
 
 // --- Game State (client-owned only, as of the engine.state cutover) ---
 let gameState = {
@@ -27,7 +27,6 @@ let gameState = {
     // Logical Game State
     currentActionState: ACTION_STATES.IDLE,
     mustUnfortify: false,
-    mapMakerMode: false,
     mapMakerBrush: { type: 'tile', value: TILE_TYPES.PLAINS, player: null },
     mapMakerLastPaintedHexKey: null,
 
@@ -47,19 +46,15 @@ let gameState = {
     lastDebugPathKey: null,
     debugAttackRangeHighlights: [],
     visualEffects: [],
-    playerActionTaken: { player1: false, player2: false },
     isTestingMap: false,
     fillToolActive: false,
     needsRedraw: true,
-    visionCache: { player: null, tiles: new Set(), edges: new Set() },
-    visionDirty: true,
     isPassDeviceTransition: false
 };
 
 let currentDrawingColors = JSON.parse(JSON.stringify(TEAM_COLORS));
 
 let gameSettings = {
-    animationsEnabled: true,
     fancyVisualsEnabled: true,
     passTurnConfirmationEnabled: true,
     tooltipsEnabled: true,
