@@ -17,19 +17,19 @@
 // also stays client-side — it's async UI-turn orchestration, not a reaction
 // to compute.
 //
-// gameState.gameOver moves from "client-owned by default" (A1 step 4's
+// engine.state.gameOver moves from "client-owned by default" (A1 step 4's
 // tentative classification, since it wasn't in the guide's explicit §5.1
 // list) to genuinely engine-owned now that real turn-lifecycle logic needs to
 // set it authoritatively. Flagging the reclassification rather than doing it
 // silently.
 
 function DetermineVictoryText() {
-    if (gameState.gameOver) return null;
+    if (engine.state.gameOver) return null;
     let victoryText = null;
 
-    if (gameState.isTrainingMode && gameState.globalTurnNumber >= 30) {
-        const p1CurrentHP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
-        const p2CurrentHP = gameState.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
+    if (gameState.isTrainingMode && engine.state.globalTurnNumber >= 30) {
+        const p1CurrentHP = engine.state.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
+        const p2CurrentHP = engine.state.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
 
         const p1DamageDealt = 46 - p2CurrentHP;
         const p2DamageDealt = 46 - p1CurrentHP;
@@ -43,11 +43,11 @@ function DetermineVictoryText() {
         }
     }
 
-    if (gameState.gameMode === 'arcade') {
-        const player1Units = gameState.units.filter(u => u.player === 1);
-        const player2Units = gameState.units.filter(u => u.player === 2);
+    if (engine.state.gameMode === 'arcade') {
+        const player1Units = engine.state.units.filter(u => u.player === 1);
+        const player2Units = engine.state.units.filter(u => u.player === 2);
 
-        if (gameState.tiles.size > 0) {
+        if (engine.state.tiles.size > 0) {
             if (player1Units.length === 0 && player2Units.length > 0) {
                 victoryText = "Player 2 Wins by Annihilation!";
             } else if (player2Units.length === 0 && player1Units.length > 0) {
@@ -57,10 +57,10 @@ function DetermineVictoryText() {
             }
         }
     } else {
-        for (const unit of gameState.units) {
+        for (const unit of engine.state.units) {
             if (unit.isCarryingFlag) {
                 const carrierPlayer = unit.player;
-                const carrierHomeBaseData = gameState.baseCampPositions[`player${carrierPlayer}`];
+                const carrierHomeBaseData = engine.state.baseCampPositions[`player${carrierPlayer}`];
                 let isHome = false;
 
                 if (Array.isArray(carrierHomeBaseData)) {
@@ -99,10 +99,10 @@ function DetermineVictoryText() {
         }
 
         if (!victoryText) {
-            const player1Units = gameState.units.filter(u => u.player === 1);
-            const player2Units = gameState.units.filter(u => u.player === 2);
+            const player1Units = engine.state.units.filter(u => u.player === 1);
+            const player2Units = engine.state.units.filter(u => u.player === 2);
 
-            if (gameState.tiles.size > 0) {
+            if (engine.state.tiles.size > 0) {
                 if (player1Units.length === 0 && player2Units.length > 0) {
                     victoryText = "Player 2 Wins by Annihilation!";
                 } else if (player2Units.length === 0 && player1Units.length > 0) {
@@ -129,7 +129,7 @@ function DetermineVictoryText() {
 //     victory screen. needsSavePopulation covers the singleplayer
 //     champion-brain-update case.
 function CheckVictoryCondition() {
-    if (gameState.gameOver) return { victory: true, alreadyOver: true };
+    if (engine.state.gameOver) return { victory: true, alreadyOver: true };
 
     const victoryText = DetermineVictoryText();
     if (!victoryText) {
@@ -153,8 +153,8 @@ function CheckVictoryCondition() {
             loserBrain.matchesPlayed++;
             loserBrain.losses++;
 
-            evolveBrain(winnerBrain, true, victoryText, winningPlayer, gameState.matchHistory);
-            evolveBrain(loserBrain, false, victoryText, losingPlayer, gameState.matchHistory);
+            evolveBrain(winnerBrain, true, victoryText, winningPlayer, engine.state.matchHistory);
+            evolveBrain(loserBrain, false, victoryText, losingPlayer, engine.state.matchHistory);
 
             finalizeTrainingSamples(winningPlayer, 1);
             finalizeTrainingSamples(losingPlayer, 0);
@@ -172,7 +172,7 @@ function CheckVictoryCondition() {
             finalizeTrainingSamples(2, 0.5);
         }
 
-        gameState.gameOver = false;
+        engine.state.gameOver = false;
 
         return {
             victory: true,
@@ -185,19 +185,19 @@ function CheckVictoryCondition() {
 
     let isSingleplayerVictory = false;
     let aiVictory = false;
-    if (gameState.gameMode === 'singleplayer') {
+    if (engine.state.gameMode === 'singleplayer') {
         isSingleplayerVictory = true;
-        const aiPlayerNum = gameState.playerSide === 1 ? 2 : 1;
+        const aiPlayerNum = engine.state.playerSide === 1 ? 2 : 1;
         aiVictory = victoryText.includes(`Player ${aiPlayerNum}`);
 
         const championBrain = getChampionBrain();
         championBrain.matchesPlayed++;
         if (aiVictory) championBrain.wins++; else championBrain.losses++;
-        evolveBrain(championBrain, aiVictory, victoryText, aiPlayerNum, gameState.matchHistory);
+        evolveBrain(championBrain, aiVictory, victoryText, aiPlayerNum, engine.state.matchHistory);
         finalizeTrainingSamples(aiPlayerNum, aiVictory ? 1 : 0);
     }
 
-    gameState.gameOver = true;
+    engine.state.gameOver = true;
 
     return {
         victory: true,
@@ -212,12 +212,12 @@ function CheckVictoryCondition() {
 
 function ApplyStartOfTurnZoCDamage() {
     const events = [];
-    const activePlayer = gameState.currentPlayer;
+    const activePlayer = engine.state.currentPlayer;
     const enemyPlayer = activePlayer === 1 ? 2 : 1;
     let unitsToDestroy = [];
     let zocEvents = [];
 
-    const activePlayerBaseData = gameState.baseCampPositions[`player${activePlayer}`];
+    const activePlayerBaseData = engine.state.baseCampPositions[`player${activePlayer}`];
     let activePlayerBaseTiles = [];
 
     if (Array.isArray(activePlayerBaseData)) {
@@ -226,7 +226,7 @@ function ApplyStartOfTurnZoCDamage() {
         activePlayerBaseTiles = activePlayerBaseData.split('_');
     }
 
-    gameState.units.forEach(unit => {
+    engine.state.units.forEach(unit => {
         if (unit.player !== enemyPlayer) return;
 
         if (unit.positionType === 'edge' && !unit.isFortified) {
@@ -236,15 +236,15 @@ function ApplyStartOfTurnZoCDamage() {
 
             const tile1Key = getTileKey(edgeTileCoords[0].q, edgeTileCoords[0].r);
             const tile2Key = getTileKey(edgeTileCoords[1].q, edgeTileCoords[1].r);
-            const tile1 = gameState.tiles.get(tile1Key);
-            const tile2 = gameState.tiles.get(tile2Key);
+            const tile1 = engine.state.tiles.get(tile1Key);
+            const tile2 = engine.state.tiles.get(tile2Key);
 
             const checkTileZoC = (tile, tKey) => {
                 if (!tile) return false;
                 if (activePlayerBaseTiles.includes(tKey)) return true;
 
                 if (tile.fortifiedByPlayer === activePlayer) {
-                    const fortUnit = gameState.units.find(u => u.isFortified && u.position === tKey && u.player === activePlayer);
+                    const fortUnit = engine.state.units.find(u => u.isFortified && u.position === tKey && u.player === activePlayer);
                     if (fortUnit && !isZoCSuppressed(fortUnit)) return true;
                 }
                 return false;
@@ -286,10 +286,10 @@ function ApplyStartOfTurnZoCDamage() {
         }
     });
 
-    if (zocEvents.length > 0 && typeof ActionManager !== 'undefined') {
-        ActionManager.submitAction({
+    if (zocEvents.length > 0 && typeof engine !== 'undefined') {
+        engine.actionManager.SubmitAction({
             type: "TURN_START_ZOC",
-            turn: gameState.globalTurnNumber,
+            turn: engine.state.globalTurnNumber,
             player: activePlayer,
             payload: { events: zocEvents }
         });
@@ -305,14 +305,14 @@ function ApplyStartOfTurnZoCDamage() {
 
 function ApplyMountainAttrition() {
     const events = [];
-    const activePlayer = gameState.currentPlayer;
+    const activePlayer = engine.state.currentPlayer;
     const attritionEvents = [];
     const unitsToDestroy = [];
 
-    gameState.units.forEach(unit => {
+    engine.state.units.forEach(unit => {
         if (unit.player !== activePlayer || !isUnitOnMountainPeak(unit)) return;
 
-        const playerFlag = gameState.flags ? gameState.flags[`p${unit.player}_flag`] : null;
+        const playerFlag = engine.state.flags ? engine.state.flags[`p${unit.player}_flag`] : null;
         const flagStolen = !!(playerFlag && playerFlag.status === 'carried');
 
         if (!flagStolen && isUnitSupplied(unit)) {
@@ -340,10 +340,10 @@ function ApplyMountainAttrition() {
         }
     });
 
-    if (attritionEvents.length > 0 && typeof ActionManager !== 'undefined') {
-        ActionManager.submitAction({
+    if (attritionEvents.length > 0 && typeof engine !== 'undefined') {
+        engine.actionManager.SubmitAction({
             type: "TURN_START_MOUNTAIN_ATTRITION",
-            turn: gameState.globalTurnNumber,
+            turn: engine.state.globalTurnNumber,
             player: activePlayer,
             payload: { events: attritionEvents }
         });
@@ -359,21 +359,21 @@ function ApplyMountainAttrition() {
 
 function ApplyStartOfTurnHealing() {
     const events = [];
-    if (gameState.gameMode === 'arcade') return { events };
+    if (engine.state.gameMode === 'arcade') return { events };
 
-    const playerFlag = gameState.flags[`p${gameState.currentPlayer}_flag`];
+    const playerFlag = engine.state.flags[`p${engine.state.currentPlayer}_flag`];
     if (playerFlag && playerFlag.status === 'carried') {
         return { events };
     }
 
     let healingEvents = [];
 
-    gameState.units.forEach(unit => {
-        if (unit.player !== gameState.currentPlayer || !unit.isFortified || unit.hp >= (unit.maxHp + 1)) {
+    engine.state.units.forEach(unit => {
+        if (unit.player !== engine.state.currentPlayer || !unit.isFortified || unit.hp >= (unit.maxHp + 1)) {
             return;
         }
 
-        const recentlyAttacked = gameState.globalTurnNumber < unit.lastAttackedByHostileOnTurn + 2;
+        const recentlyAttacked = engine.state.globalTurnNumber < unit.lastAttackedByHostileOnTurn + 2;
         if (recentlyAttacked) {
             return;
         }
@@ -385,7 +385,7 @@ function ApplyStartOfTurnHealing() {
         if (isUnitSupplied(unit)) {
             const oldHp = unit.hp;
             unit.hp++;
-            const activePlayer = gameState.currentPlayer;
+            const activePlayer = engine.state.currentPlayer;
 
             let type = 'HEAL';
             if (unit.hp === unit.maxHp + 1) type = 'SHIELD';
@@ -408,11 +408,11 @@ function ApplyStartOfTurnHealing() {
         }
     });
 
-    if (healingEvents.length > 0 && typeof ActionManager !== 'undefined') {
-        ActionManager.submitAction({
+    if (healingEvents.length > 0 && typeof engine !== 'undefined') {
+        engine.actionManager.SubmitAction({
             type: "TURN_START_HEAL",
-            turn: gameState.globalTurnNumber,
-            player: gameState.currentPlayer,
+            turn: engine.state.globalTurnNumber,
+            player: engine.state.currentPlayer,
             payload: { events: healingEvents }
         });
     }
@@ -422,22 +422,22 @@ function ApplyStartOfTurnHealing() {
 
 function LogSiegeStatus() {
     const events = [];
-    if (gameState.gameMode === 'arcade' || !gameState.flags) return { events };
+    if (engine.state.gameMode === 'arcade' || !engine.state.flags) return { events };
 
-    const activePlayer = gameState.currentPlayer;
-    const playerFlag = gameState.flags[`p${activePlayer}_flag`];
+    const activePlayer = engine.state.currentPlayer;
+    const playerFlag = engine.state.flags[`p${activePlayer}_flag`];
 
     if (playerFlag && playerFlag.status === 'carried') {
-        const existingLog = gameState.actionLog[gameState.actionLog.length - 1];
+        const existingLog = engine.state.actionLog[engine.state.actionLog.length - 1];
         if (!existingLog || !existingLog.message.includes('Healing is disabled')) {
             events.push({ type: 'LOG', text: `P${activePlayer}'s flag is stolen! All healing is disabled.`, player: activePlayer });
         }
     }
 
-    gameState.units.forEach(unit => {
+    engine.state.units.forEach(unit => {
         if (unit.player === activePlayer && unit.isFortified && unit.supplyLine && unit.supplyLine.path) {
             const isIntercepted = unit.supplyLine.path.some(edgeKey => {
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 return edge && edge.units.some(u => u.player !== unit.player);
             });
 
@@ -455,11 +455,11 @@ function LogSiegeStatus() {
 // showing the respawn modal (human) or letting the AI/training loop handle it
 // silently is a client-side decision — the wrapper makes it.
 function ApplyRespawnQueueTick() {
-    if (gameState.gameMode === 'arcade') return { hasQueue: false, unitReady: false };
+    if (engine.state.gameMode === 'arcade') return { hasQueue: false, unitReady: false };
 
-    const player = gameState.currentPlayer;
+    const player = engine.state.currentPlayer;
     const queueKey = `player${player}`;
-    const queue = gameState.respawnQueue[queueKey];
+    const queue = engine.state.respawnQueue[queueKey];
 
     if (!queue || queue.length === 0) {
         return { hasQueue: false, unitReady: false };
@@ -484,27 +484,27 @@ function ApplyRespawnQueueTick() {
 async function AdvanceTurn() {
     const events = [];
 
-    if (gameState.gameMode === 'arcade' && gameState.currentPlayer === 2) {
+    if (engine.state.gameMode === 'arcade' && engine.state.currentPlayer === 2) {
         gameState.arcadeTotalTurns++;
         if (gameState.arcadeTotalTurns >= ARCADE_MAX_TURNS) {
             return { arcadeMaxTurnsReached: true, events };
         }
     }
 
-    const previousPlayer = gameState.currentPlayer;
+    const previousPlayer = engine.state.currentPlayer;
     gameState.playerActionTaken[`player${previousPlayer}`] = false;
 
-    gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
-    gameState.playerActionTaken[`player${gameState.currentPlayer}`] = false;
+    engine.state.currentPlayer = engine.state.currentPlayer === 1 ? 2 : 1;
+    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = false;
 
     let turnNumberAdvanced = false;
-    if (previousPlayer === 2 && gameState.currentPlayer === 1) {
-        gameState.globalTurnNumber++;
+    if (previousPlayer === 2 && engine.state.currentPlayer === 1) {
+        engine.state.globalTurnNumber++;
         turnNumberAdvanced = true;
     }
 
-    gameState.units.forEach(unit => {
-        if (unit.player === gameState.currentPlayer) {
+    engine.state.units.forEach(unit => {
+        if (unit.player === engine.state.currentPlayer) {
             unit.hasPerformedMajorAction = false;
             unit.spearWalled = false;
             unit.ambushed = false;
@@ -536,7 +536,7 @@ async function AdvanceTurn() {
     const zocResult = ApplyStartOfTurnZoCDamage();
     events.push(...zocResult.events);
 
-    const resupplyResult = AttemptToResupplyForts(gameState.currentPlayer);
+    const resupplyResult = AttemptToResupplyForts(engine.state.currentPlayer);
     events.push(...resupplyResult.events);
 
     const siegeResult = LogSiegeStatus();

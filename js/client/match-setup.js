@@ -38,7 +38,7 @@ function initializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
     ui.endTurnButton.style.background = '';
     ui.endTurnButton.textContent = "End Turn";
 
-    if (gameState.gameMode === 'arcade') {
+    if (engine.state.gameMode === 'arcade') {
         ui.endTurnButton.classList.add('arcade-timer-active');
     }
     document.getElementById('supplyPointsContainer').style.display = 'block';

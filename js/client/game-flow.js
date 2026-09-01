@@ -27,7 +27,7 @@ function logSiegeStatus() {
 }
 
 function handleRespawnQueue() {
-    if (gameState.gameMode === 'arcade') return;
+    if (engine.state.gameMode === 'arcade') return;
 
     const result = ApplyRespawnQueueTick();
     if (!result.hasQueue) {
@@ -38,7 +38,7 @@ function handleRespawnQueue() {
     if (result.unitReady) {
         console.log(`[Respawn] Player ${result.player} unit ready.`);
 
-        if (gameState.isTrainingMode || (gameState.gameMode === 'singleplayer' && result.player !== gameState.playerSide)) {
+        if (gameState.isTrainingMode || (engine.state.gameMode === 'singleplayer' && result.player !== engine.state.playerSide)) {
             updateRespawnQueueDisplay();
             return;
         }
@@ -118,7 +118,7 @@ function checkVictoryCondition() {
 }
 
 async function proceedToEndTurn() {
-    if (gameState.isDragging || gameState.gameOver) return;
+    if (gameState.isDragging || engine.state.gameOver) return;
 
     // A pending forced retreat must be resolved before the turn can end.
     if (gameState.mustUnfortify) {
@@ -128,7 +128,7 @@ async function proceedToEndTurn() {
 
     // Arcade swap-pending guard — client-owned swapState, checked before any
     // engine-state mutation happens.
-    if (gameState.gameMode === 'arcade' && gameState.globalTurnNumber >= 2) {
+    if (engine.state.gameMode === 'arcade' && engine.state.globalTurnNumber >= 2) {
         if (gameState.swapState === 'selecting_unit' || gameState.swapState === 'selecting_class') {
             showInstruction("You must swap a unit first!", 2000);
             return;
@@ -164,7 +164,7 @@ async function proceedToEndTurn() {
     if (result.respawnResult.hasQueue && result.respawnResult.unitReady) {
         console.log(`[Respawn] Player ${result.respawnResult.player} unit ready.`);
         const suppressModal = gameState.isTrainingMode ||
-            (gameState.gameMode === 'singleplayer' && result.respawnResult.player !== gameState.playerSide);
+            (engine.state.gameMode === 'singleplayer' && result.respawnResult.player !== engine.state.playerSide);
         if (!suppressModal) {
             try {
                 showRespawnModal(result.respawnResult.player);
@@ -181,26 +181,26 @@ async function proceedToEndTurn() {
         updateSelectedUnitInfoPanel();
         updateSupplyPointsDisplay();
 
-        if (gameState.gameMode === 'arcade') {
+        if (engine.state.gameMode === 'arcade') {
             gameState.arcadeTurnTimer = ARCADE_TURN_TIME_SEC;
             gameState.hasSwappedThisTurn = false;
 
-            if (gameState.globalTurnNumber >= 2) {
+            if (engine.state.globalTurnNumber >= 2) {
                 gameState.swapState = 'selecting_unit';
-                showInstruction(`Player ${gameState.currentPlayer}'s Turn. SELECT UNIT TO SWAP.`, 4000);
+                showInstruction(`Player ${engine.state.currentPlayer}'s Turn. SELECT UNIT TO SWAP.`, 4000);
             } else {
                 gameState.swapState = 'none';
-                showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
+                showInstruction(`Player ${engine.state.currentPlayer}'s turn.`);
             }
         } else {
-            showInstruction(`Player ${gameState.currentPlayer}'s turn.`);
+            showInstruction(`Player ${engine.state.currentPlayer}'s turn.`);
         }
 
-        logAction(`Player ${gameState.currentPlayer}'s Turn Begins`, gameState.currentPlayer);
+        logAction(`Player ${engine.state.currentPlayer}'s Turn Begins`, engine.state.currentPlayer);
         autoSaveGame(true);
         checkVictoryCondition();
 
-        if (!gameState.gameOver && gameState.gameMode === 'singleplayer' && gameState.currentPlayer !== gameState.playerSide) {
+        if (!engine.state.gameOver && engine.state.gameMode === 'singleplayer' && engine.state.currentPlayer !== engine.state.playerSide) {
             ui.endTurnButton.disabled = true;
             if (!gameState.isTrainingMode) {
                 setTimeout(() => { executeAITurn(); }, 1500);
@@ -211,8 +211,8 @@ async function proceedToEndTurn() {
     };
 
     // --- TRIGGER OVERLAY IF ENABLED ---
-    if (gameState.gameMode === 'local' && gameSettings.passDeviceBlurEnabled) {
-        showPassDeviceOverlay(gameState.currentPlayer, finalizeVisuals);
+    if (engine.state.gameMode === 'local' && gameSettings.passDeviceBlurEnabled) {
+        showPassDeviceOverlay(engine.state.currentPlayer, finalizeVisuals);
     } else {
         finalizeVisuals();
     }
@@ -231,8 +231,8 @@ async function proceedToEndTurn() {
 // simplification candidate, not merging it as part of this relocation.
 
 function checkArcadeVictoryCondition() {
-    const p1HP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
-    const p2HP = gameState.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
+    const p1HP = engine.state.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
+    const p2HP = engine.state.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
     
     let victoryText = "";
     if (p1HP > p2HP) victoryText = "Time Limit! Player 1 Wins by Health!";
@@ -241,7 +241,7 @@ function checkArcadeVictoryCondition() {
     
     ui.victoryMessage.textContent = victoryText;
     ui.victoryMessage.style.display = 'block';
-    gameState.gameOver = true;
+    engine.state.gameOver = true;
     gameState.currentActionState = ACTION_STATES.IDLE;
     gameState.selectedUnit = null;
     gameState.currentReachableMoves.clear();
@@ -403,16 +403,16 @@ function handleGenerateNewMap() {
             gameState.draggingUnit = null;
             
             // 1. Generate the map tiles
-            const newLayout = generateImprovedMap(gameState.gridRadius);
+            const newLayout = generateImprovedMap(engine.state.gridRadius);
             
             // 2. Resolve the correct base camps for the current slider/radius BEFORE placing
             // units, so procedural placement lines up with the actual bases instead of
             // whatever a previously-loaded preset (River Fork/Volcano Island - which put P1/P2
-            // on opposite hemispheres) left behind in gameState.baseCampPositions.
+            // on opposite hemispheres) left behind in engine.state.baseCampPositions.
             const sliderEl = document.getElementById('baseCampSlider');
             const sliderVal = sliderEl ? sliderEl.value : '3';
             
-            const correctedBaseCamps = computeRotatedBaseCampPositions(gameState.gridRadius, sliderVal);
+            const correctedBaseCamps = computeRotatedBaseCampPositions(engine.state.gridRadius, sliderVal);
 
             // 3. Initialize the grid with these tiles and the corrected base camps
             initializeGrid(newLayout, null, correctedBaseCamps);
@@ -425,11 +425,11 @@ function startSingleplayerGame(playerSide) {
     hideAllModals(); 
     
     // Set the game mode state
-    gameState.gameMode = 'singleplayer';
-    gameState.playerSide = playerSide;
+    engine.state.gameMode = 'singleplayer';
+    engine.state.playerSide = playerSide;
 
     // --- FIX: Reset Map Dimensions for Standard Play ---
-    gameState.gridRadius = 3;
+    engine.state.gridRadius = 3;
     gameState.renderScale = 1.0;
     gameState.renderOffset = { x: 0, y: 0 };
     // ---------------------------------------------------
@@ -438,7 +438,7 @@ function startSingleplayerGame(playerSide) {
     initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
     showInstruction(`Singleplayer game started. You are Player ${playerSide}.`, 3000);
     // If the human chose to be P2, the AI (P1) must take the first turn.
-    if (gameState.playerSide === 2) {
+    if (engine.state.playerSide === 2) {
         console.log("Player is P2, triggering AI's first turn.");
         ui.endTurnButton.disabled = true; // Disable button during AI turn
         setTimeout(() => {

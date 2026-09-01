@@ -1,7 +1,7 @@
         // --- Game Configuration & Constants ---
         // Shared between client and server: both sides need the identical values here.
         // See FortHex_A1_Server_Core_Guide.md §4.0.
-        const BUILD_VERSION = "B29//4";
+        const BUILD_VERSION = "InDev B30";
         const HEX_SIZE = 70;
         const CANVAS_WIDTH_NORMAL = (2 * 3 + 1.5) * (HEX_SIZE * Math.sqrt(3));
         const CANVAS_HEIGHT_NORMAL = (2 * 3 + 1) * (HEX_SIZE * 2 * 0.75) + HEX_SIZE;

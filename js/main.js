@@ -23,9 +23,9 @@ ui.endTurnButton.addEventListener('click', () => {
         }
     } else {
         // --- Original End Turn Functionality ---
-        const playerHasActed = gameState.playerActionTaken[`player${gameState.currentPlayer}`];
+        const playerHasActed = gameState.playerActionTaken[`player${engine.state.currentPlayer}`];
 
-        if (playerHasActed || !gameSettings.passTurnConfirmationEnabled || gameState.gameOver) {
+        if (playerHasActed || !gameSettings.passTurnConfirmationEnabled || engine.state.gameOver) {
             proceedToEndTurn();
         } else {
             document.getElementById('customConfirmMessage').textContent = 'You have not performed any actions. Are you sure you want to end your turn?';
@@ -62,7 +62,7 @@ document.getElementById('newMapButton').addEventListener('click', () => {
     const generateButton = document.getElementById('generateMapFromModalButton');
     const customMapButton = document.getElementById('customMapButton');
 
-    if (gameState.mapMakerMode || gameState.gameMode === 'singleplayer') {
+    if (gameState.mapMakerMode || engine.state.gameMode === 'singleplayer') {
         generateButton.disabled = true;
     } else {
         generateButton.disabled = false;
@@ -322,12 +322,12 @@ canvas.addEventListener('contextmenu', (event) => {
             if (elTool) elTool.checked = gameSettings.tooltipsEnabled;
 
             const elFog = document.getElementById('settingFogOfWar');
-            if (elFog) elFog.checked = gameSettings.fogOfWarEnabled;
+            if (elFog) elFog.checked = engine.settings.fogOfWarEnabled;
 
             const elBlur = document.getElementById('settingPassDeviceBlur');
             if (elBlur) {
                 elBlur.checked = gameSettings.passDeviceBlurEnabled;
-                elBlur.disabled = !gameSettings.fogOfWarEnabled;
+                elBlur.disabled = !engine.settings.fogOfWarEnabled;
             }
 
             // --- Connection Status Indicator ---
@@ -397,11 +397,11 @@ canvas.addEventListener('contextmenu', (event) => {
                 // Then, hide the menu modal.
                 hideAllModals();
                 
-                gameState.gameMode = 'local';
-                gameState.playerSide = null;
+                engine.state.gameMode = 'local';
+                engine.state.playerSide = null;
 
                 // --- FIX: Reset Map Dimensions for Standard Play ---
-                gameState.gridRadius = 3;
+                engine.state.gridRadius = 3;
                 gameState.renderScale = 1.0;
                 gameState.renderOffset = { x: 0, y: 0 };
                 // ---------------------------------------------------
@@ -537,7 +537,7 @@ canvas.addEventListener('contextmenu', (event) => {
             passTurnCheckbox.checked = gameSettings.passTurnConfirmationEnabled;
             fancyVisualsCheckbox.checked = gameSettings.fancyVisualsEnabled;
             tooltipsCheckbox.checked = gameSettings.tooltipsEnabled;
-            fogOfWarCheckbox.checked = gameSettings.fogOfWarEnabled; 
+            fogOfWarCheckbox.checked = engine.settings.fogOfWarEnabled; 
             passDeviceBlurCheckbox.checked = gameSettings.passDeviceBlurEnabled;
             applyUiScale(); 
 
@@ -565,11 +565,11 @@ canvas.addEventListener('contextmenu', (event) => {
 
             if (fogOfWarCheckbox) {
                 fogOfWarCheckbox.addEventListener('change', (e) => {
-                    gameSettings.fogOfWarEnabled = e.target.checked;
+                    engine.settings.fogOfWarEnabled = e.target.checked;
 
                     if (passDeviceBlurCheckbox) {
-                        passDeviceBlurCheckbox.disabled = !gameSettings.fogOfWarEnabled;
-                        if (!gameSettings.fogOfWarEnabled) {
+                        passDeviceBlurCheckbox.disabled = !engine.settings.fogOfWarEnabled;
+                        if (!engine.settings.fogOfWarEnabled) {
                             gameSettings.passDeviceBlurEnabled = false;
                             passDeviceBlurCheckbox.checked = false;
                         }
@@ -665,7 +665,7 @@ canvas.addEventListener('contextmenu', (event) => {
                 // reports "no autosave" for singleplayer / map-maker saves that do exist.
                 const activeAutosaveKey = gameState.mapMakerMode
                     ? MAP_MAKER_AUTOSAVE_KEY
-                    : (gameState.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame');
+                    : (engine.state.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame');
 
                 if (localStorage.getItem(activeAutosaveKey)) {
                     loadAutoSave();
@@ -715,7 +715,7 @@ canvas.addEventListener('contextmenu', (event) => {
 
                                 rehydrateGameState();
                                 
-                                if (gameState.gameMode === 'arcade') {
+                                if (engine.state.gameMode === 'arcade') {
                                     ui.endTurnButton.classList.add('arcade-timer-active');
                                 } else {
                                     ui.endTurnButton.classList.remove('arcade-timer-active');
@@ -748,10 +748,10 @@ canvas.addEventListener('contextmenu', (event) => {
 
                                 initializeGrid(tileMap, correctedUnits);
 
-                                gameState.baseCampPositions = JSON.parse(JSON.stringify(data.baseCampPositions));
-                                if (gameState.flags) {
-                                    gameState.flags.p1_flag.homePosition = gameState.baseCampPositions.player1;
-                                    gameState.flags.p2_flag.homePosition = gameState.baseCampPositions.player2;
+                                engine.state.baseCampPositions = JSON.parse(JSON.stringify(data.baseCampPositions));
+                                if (engine.state.flags) {
+                                    engine.state.flags.p1_flag.homePosition = engine.state.baseCampPositions.player1;
+                                    engine.state.flags.p2_flag.homePosition = engine.state.baseCampPositions.player2;
                                 }
 
                                 showInstruction(`Custom map '${file.name}' loaded.`, 4000);
@@ -780,17 +780,17 @@ const respawnChoicesDiv = document.getElementById('respawnChoices');
                         const unitType = UNIT_TYPES[unitTypeName];
                         
                         if (unitType) {
-                            const spawnSuccess = spawnUnit(gameState.currentPlayer, unitType);
+                            const spawnSuccess = spawnUnit(engine.state.currentPlayer, unitType);
 
                             if (spawnSuccess) {
-                                const queueKey = `player${gameState.currentPlayer}`;
-                                gameState.respawnQueue[queueKey].shift(); 
+                                const queueKey = `player${engine.state.currentPlayer}`;
+                                engine.state.respawnQueue[queueKey].shift(); 
                                 updateRespawnQueueDisplay(); 
-                                const queue = gameState.respawnQueue[queueKey];
+                                const queue = engine.state.respawnQueue[queueKey];
                                 const nextInQueue = queue.length > 0 ? queue[0] : null;
 
                                 if (nextInQueue && nextInQueue.turnsRemaining <= 0) {
-                                    showRespawnModal(gameState.currentPlayer);
+                                    showRespawnModal(engine.state.currentPlayer);
                                 } else {
                                     hideRespawnModal();
                                 }
@@ -803,7 +803,7 @@ const respawnChoicesDiv = document.getElementById('respawnChoices');
                 });
             }
 
-            gameState.gridRadius = 3; // Use the default value directly
+            engine.state.gridRadius = 3; // Use the default value directly
             initializeGrid();
             // This is the important call to our new function
             updateCssVariables(); 
@@ -843,7 +843,7 @@ const respawnChoicesDiv = document.getElementById('respawnChoices');
                 const container = document.getElementById('color-options');
                 if (!container) return;
                 const circles = container.querySelectorAll('.color-option-circle');
-                const activeThemeIndex = gameState.playerColorSelections[playerKey];
+                const activeThemeIndex = engine.state.playerColorSelections[playerKey];
 
                 circles.forEach((circle, index) => {
                     const theme = COLOR_THEMES[index];
@@ -895,7 +895,7 @@ const respawnChoicesDiv = document.getElementById('respawnChoices');
 
                 // 1. Update the live TEAM_COLORS object for ONLY the selected player
                 TEAM_COLORS[playerKey] = { ...COLOR_THEMES[themeIndex][playerKey] };
-                gameState.playerColorSelections[playerKey] = themeIndex; // Remember this selection
+                engine.state.playerColorSelections[playerKey] = themeIndex; // Remember this selection
 
                 // 2. Update the active circle visuals
                 const container = circle.parentElement;
@@ -1011,7 +1011,7 @@ function abortTrainingMode() {
     
     console.log("--- TRAINING SIMULATION ABORTED BY USER ---");
     gameState.isTrainingMode = false;
-    gameState.gameOver = true; // Kills the execution loop
+    engine.state.gameOver = true; // Kills the execution loop
     document.getElementById('trainingBanner').style.display = 'none';
     
     const blocker = document.getElementById('trainingInteractionBlocker');
@@ -1044,9 +1044,9 @@ function abortTrainingMode() {
     
     // Full Board Sanitization
     setTimeout(() => { 
-        gameState.gameMode = 'local';
-        gameState.playerSide = null;
-        gameState.gameOver = false;
+        engine.state.gameMode = 'local';
+        engine.state.playerSide = null;
+        engine.state.gameOver = false;
         
         clearSelectionAndDebugState(); 
         initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
@@ -1086,8 +1086,8 @@ async function runTrainingHyperLoop() {
         for (let i = 0; i < 5; i++) {
             if (!gameState.isTrainingMode) break;
 
-            if (gameState.gameOver) {
-                gameState.gameOver = false;
+            if (engine.state.gameOver) {
+                engine.state.gameOver = false;
                 startNewTrainingMatch();
             } else {
                 await executeAITurn();
@@ -1125,8 +1125,8 @@ function startTrainingMode() {
     hideAllModals(); 
     
     gameState.isTrainingMode = true;
-    gameState.gameMode = 'singleplayer';
-    gameState.playerSide = null; // Setting to null means BOTH players are AI
+    engine.state.gameMode = 'singleplayer';
+    engine.state.playerSide = null; // Setting to null means BOTH players are AI
 
     // --- PROPER SETTINGS BACKUP & OVERRIDE ---
     // 1. Backup all configurable settings
@@ -1174,7 +1174,7 @@ function startTrainingMode() {
     }
     blocker.style.display = 'block';
 
-    gameState.gridRadius = 3;
+    engine.state.gridRadius = 3;
     gameState.renderScale = 1.0;
     gameState.renderOffset = { x: 0, y: 0 };
     startNewTrainingMatch(); // picks the first tournament pairing and initializes the grid

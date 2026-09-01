@@ -23,28 +23,28 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 applyMapMakerBrush(x, y);
                 return;
             }
-            if (gameState.gameOver) return;
+            if (engine.state.gameOver) return;
 
             // --- ARCADE TIMER TRIGGER ---
             // Timer starts only after P1 interacts on Turn 1
-            if (gameState.gameMode === 'arcade' && !gameState.arcadeGameStartedInteraction) {
+            if (engine.state.gameMode === 'arcade' && !gameState.arcadeGameStartedInteraction) {
                 gameState.arcadeGameStartedInteraction = true;
             }
             // ----------------------------
 
             // --- ARCADE SWAP INTERCEPTION ---
-            if (gameState.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
+            if (engine.state.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
                 const baseClickRadius = isTouchEvent ? UNIT_CLICK_RADIUS * 1.5 : UNIT_CLICK_RADIUS;
                 const clickRadius = baseClickRadius * gameState.renderScale;
                 
                 // Simple finding logic for Swap Click
                 let clickedUnit = null;
                 const edgeUnits = [];
-                gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
+                engine.state.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
                 
                 for (let i = edgeUnits.length - 1; i >= 0; i--) {
                      const {unit, edge} = edgeUnits[i];
-                     if (unit.player !== gameState.currentPlayer) continue;
+                     if (unit.player !== engine.state.currentPlayer) continue;
                      const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                      // (Simplified math from main handler for brevity, full implementation recommended in production)
                      if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < clickRadius) {
@@ -54,9 +54,9 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 }
                 // Also check fortified units (though rare in arcade)
                 if (!clickedUnit) {
-                    for (const unit of gameState.units) {
-                         if (unit.player === gameState.currentPlayer && unit.isFortified) {
-                             const tile = gameState.tiles.get(unit.position);
+                    for (const unit of engine.state.units) {
+                         if (unit.player === engine.state.currentPlayer && unit.isFortified) {
+                             const tile = engine.state.tiles.get(unit.position);
                              if (tile) {
                                  const {x: tx, y: ty} = axialToPixel(tile.q, tile.r);
                                  if (Math.sqrt((x - tx)**2 + (y - ty)**2) < clickRadius) {
@@ -94,7 +94,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 applyMapMakerBrush(x, y);
                 return;
             }
-            if (gameState.gameOver || gameState.currentActionState !== ACTION_STATES.IDLE && gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED) return;
+            if (engine.state.gameOver || gameState.currentActionState !== ACTION_STATES.IDLE && gameState.currentActionState !== ACTION_STATES.UNIT_SELECTED) return;
 
             dragOperationJustConcluded = false; 
             clearDebugPath();
@@ -110,12 +110,12 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             // ----------------------------------------------
 
             const edgeUnits = [];
-            gameState.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
+            engine.state.edges.forEach(edge => edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }));
             
             for (let i = edgeUnits.length - 1; i >= 0; i--) {
                 const {unit, edge} = edgeUnits[i];
-                if (unit.player !== gameState.currentPlayer) continue;
-                if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) continue; 
+                if (unit.player !== engine.state.currentPlayer) continue;
+                if (engine.state.gameMode === 'singleplayer' && unit.player !== engine.state.playerSide) continue; 
                 if (unit.isFortified || unit.currentMove < 1) continue;
                 if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
                 if (unit.spearWalled) continue;
@@ -175,7 +175,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 
                 let foundPathUnderCursor = null;
                 for (const [targetEdgeKey, moveData] of gameState.currentReachableMoves) {
-                     const finalTargetEdgeData = gameState.edges.get(targetEdgeKey); if (!finalTargetEdgeData) continue;
+                     const finalTargetEdgeData = engine.state.edges.get(targetEdgeKey); if (!finalTargetEdgeData) continue;
                      const mid = getEdgeMidpoint(finalTargetEdgeData.q1, finalTargetEdgeData.r1, finalTargetEdgeData.q2, finalTargetEdgeData.r2);
                      if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < scaledHighlightRadius) { 
                         foundPathUnderCursor = moveData.path; 
@@ -218,14 +218,14 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 const dropRadius = (isTouchEvent ? HIGHLIGHT_CLICK_RADIUS * 1.2 : HIGHLIGHT_CLICK_RADIUS) * gameState.renderScale;
                 
                 for (const [targetEdgeKey, moveData] of gameState.currentReachableMoves) {
-                    const finalTargetEdgeData = gameState.edges.get(targetEdgeKey); if (!finalTargetEdgeData) continue;
+                    const finalTargetEdgeData = engine.state.edges.get(targetEdgeKey); if (!finalTargetEdgeData) continue;
                     const mid = getEdgeMidpoint(finalTargetEdgeData.q1, finalTargetEdgeData.r1, finalTargetEdgeData.q2, finalTargetEdgeData.r2);
                     if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < dropRadius) {
                         const costToMove = moveData.cost; 
                         
                         let isTargetKnownEnemy = false;
                         if (finalTargetEdgeData.units.some(u => u.player !== gameState.draggingUnit.player)) {
-                            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                                 if (gameState.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
                             } else {
                                 isTargetKnownEnemy = true;
@@ -307,13 +307,13 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 let clickedFlagPlayer = null;
                 const checkFlagClick = (player) => {
                     let flagX, flagY;
-                    const baseData = gameState.baseCampPositions[`player${player}`];
+                    const baseData = engine.state.baseCampPositions[`player${player}`];
                     
-                    if (gameState.gridRadius === 4 && Array.isArray(baseData)) {
+                    if (engine.state.gridRadius === 4 && Array.isArray(baseData)) {
                         const pos = calculateBaseCentroid(baseData);
                         if (pos) { flagX = pos.x; flagY = pos.y; }
-                    } else if (gameState.gridRadius !== 4 && typeof baseData === 'string') {
-                        const edge = gameState.edges.get(baseData);
+                    } else if (engine.state.gridRadius !== 4 && typeof baseData === 'string') {
+                        const edge = engine.state.edges.get(baseData);
                         if (edge) {
                             const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                             flagX = mid.x; flagY = mid.y;
@@ -376,7 +376,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
     if (!selectedUnit || selectedUnit.isFortified || selectedUnit.currentMove < 1) {
         return false;
     }
-    if (gameState.gameMode === 'singleplayer' && selectedUnit.player !== gameState.playerSide) {
+    if (engine.state.gameMode === 'singleplayer' && selectedUnit.player !== engine.state.playerSide) {
         return false;
     }
     if (selectedUnit.hasPerformedMajorAction && !selectedUnit.type.canMoveAfterAttack) {
@@ -387,7 +387,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
     const scaledClickRadius = HIGHLIGHT_CLICK_RADIUS * gameState.renderScale;
 
     for (const [targetEdgeKey, moveData] of gameState.currentReachableMoves) {
-        const finalTargetEdgeData = gameState.edges.get(targetEdgeKey); if (!finalTargetEdgeData) continue;
+        const finalTargetEdgeData = engine.state.edges.get(targetEdgeKey); if (!finalTargetEdgeData) continue;
         const mid = getEdgeMidpoint(finalTargetEdgeData.q1, finalTargetEdgeData.r1, finalTargetEdgeData.q2, finalTargetEdgeData.r2);
         
         if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < scaledClickRadius) {
@@ -396,7 +396,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             // Bypass enemy block if they are hidden in fog
             let isTargetKnownEnemy = false;
             if (finalTargetEdgeData.units.some(u => u.player !== selectedUnit.player)) {
-                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                     if (gameState.visionCache.edges.has(targetEdgeKey)) isTargetKnownEnemy = true;
                 } else {
                     isTargetKnownEnemy = true;
@@ -436,7 +436,7 @@ function handleActionTargetSelectionClick(x, y) {
             const scaledUnfortifyRadius = HIGHLIGHT_CLICK_RADIUS * gameState.renderScale;
             
             for (const edgeKey of gameState.validUnfortifyTargetEdgeKeys) {
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 if (edge) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     if (Math.sqrt((x - mid.x)**2 + (y - mid.y)**2) < scaledUnfortifyRadius) {
@@ -450,7 +450,7 @@ function handleActionTargetSelectionClick(x, y) {
 
         case ACTION_STATES.SELECTING_BRIDGE_EDGE:
             for (const edgeKey of gameState.validBridgeTargetEdgeKeys) {
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 if (edge) {
                     const p = { x, y };
                     const p1_center = axialToPixel(edge.q1, edge.r1);
@@ -489,7 +489,7 @@ function handleActionTargetSelectionClick(x, y) {
 
             for (const targetInfo of currentAttackTargets) {
                 if (targetInfo.isBridgeTarget && targetInfo.edgeKey) {
-                    const edge = gameState.edges.get(targetInfo.edgeKey);
+                    const edge = engine.state.edges.get(targetInfo.edgeKey);
                     if (edge && edge.bridge) {
                         const p = { x, y };
                         const p1_center = axialToPixel(edge.q1, edge.r1); const p2_center = axialToPixel(edge.q2, edge.r2);
@@ -514,11 +514,11 @@ function handleActionTargetSelectionClick(x, y) {
                 } else if (targetInfo.unit) {
                     const targetUnit = targetInfo.unit; let unitX_val, unitY_val, clickRadius = UNIT_CLICK_RADIUS * gameState.renderScale;
                     if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
-                        const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
+                        const tile = engine.state.tiles.get(targetInfo.tileKeyForTarget);
                         if (tile) { const centerPixel = axialToPixel(tile.q, tile.r); unitX_val = centerPixel.x; unitY_val = centerPixel.y; clickRadius = (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5; }
                         else continue;
                     } else if (targetInfo.edgeKey) {
-                        const edgeOfTarget = gameState.edges.get(targetInfo.edgeKey); if (!edgeOfTarget) continue;
+                        const edgeOfTarget = engine.state.edges.get(targetInfo.edgeKey); if (!edgeOfTarget) continue;
                         const mid = getEdgeMidpoint(edgeOfTarget.q1, edgeOfTarget.r1, edgeOfTarget.q2, edgeOfTarget.r2); unitX_val = mid.x; unitY_val = mid.y;
                         const edgeUnitsOnly = edgeOfTarget.units.filter(u => u.positionType === 'edge');
                         const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === targetUnit.id);
@@ -554,14 +554,14 @@ function handleActionTargetSelectionClick(x, y) {
 function handleUnitSelectionClick(x, y) {
             let clickedOnUnit = null;
             
-            for (const unit of gameState.units) {
+            for (const unit of engine.state.units) {
                 if (unit.isFortified && unit.positionType === 'center') {
-                    const tile = gameState.tiles.get(unit.position);
+                    const tile = engine.state.tiles.get(unit.position);
                     if (tile) {
                         const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
                         if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5) {
-                            if (unit.player === gameState.currentPlayer) {
-                                if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
+                            if (unit.player === engine.state.currentPlayer) {
+                                if (engine.state.gameMode === 'singleplayer' && unit.player !== engine.state.playerSide) {
                                     showInstruction(`That is an AI unit.`);
                                     return true;
                                 }
@@ -569,7 +569,7 @@ function handleUnitSelectionClick(x, y) {
                                 break;
                             } else { 
                                 // --- FOG CHECK ---
-                                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                                     if (!gameState.visionCache.tiles.has(unit.position)) continue; // Treat as empty space
                                 }
                                 showInstruction(`Enemy ${unit.type.name} fortified.`); 
@@ -582,7 +582,7 @@ function handleUnitSelectionClick(x, y) {
             
             if (!clickedOnUnit) {
                  const unitEdgePairs = [];
-                 gameState.edges.forEach((edge, edgeKey) => { edge.units.forEach(u => { if (u.positionType === 'edge') unitEdgePairs.push({ unit: u, edge: edge }); }); });
+                 engine.state.edges.forEach((edge, edgeKey) => { edge.units.forEach(u => { if (u.positionType === 'edge') unitEdgePairs.push({ unit: u, edge: edge }); }); });
                 
                 for (let i = unitEdgePairs.length - 1; i >= 0; i--) {
                     const {unit, edge} = unitEdgePairs[i]; 
@@ -603,8 +603,8 @@ function handleUnitSelectionClick(x, y) {
                     }
                     
                     if (Math.sqrt((x - unitX)**2 + (y - unitY)**2) < (UNIT_CLICK_RADIUS * gameState.renderScale)) {
-                       if (unit.player === gameState.currentPlayer) {
-                            if (gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
+                       if (unit.player === engine.state.currentPlayer) {
+                            if (engine.state.gameMode === 'singleplayer' && unit.player !== engine.state.playerSide) {
                                 showInstruction(`That is an AI unit.`);
                                 return true;
                             }
@@ -612,7 +612,7 @@ function handleUnitSelectionClick(x, y) {
                             break;
                         } else { 
                             // --- FOG CHECK ---
-                            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                                 if (!gameState.visionCache.edges.has(unit.position)) continue; // Treat as empty space
                             }
                             showInstruction(`Enemy ${unit.type.name} on edge.`); 
@@ -660,7 +660,7 @@ function handleUnitSelectionClick(x, y) {
             }
 
             const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
-            const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+            const enemyBaseData = engine.state.baseCampPositions[`player${enemyPlayer}`];
             const enemyBaseTileKeys = new Set();
             
             if (Array.isArray(enemyBaseData)) {
@@ -676,8 +676,8 @@ function handleUnitSelectionClick(x, y) {
 
             const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); 
             const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
-            const tile1 = gameState.tiles.get(tile1Key); 
-            const tile2 = gameState.tiles.get(tile2Key);
+            const tile1 = engine.state.tiles.get(tile1Key); 
+            const tile2 = engine.state.tiles.get(tile2Key);
             
             gameState.validFortifyTargetTileKeys = [];
 
@@ -714,7 +714,7 @@ function handleUnitSelectionClick(x, y) {
         }
 
         function handleFortifyUnfortifyButtonClick() {
-            if (gameState.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== gameState.playerSide) return;
+            if (engine.state.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== engine.state.playerSide) return;
             if (gameState.isDragging) return; 
             const { selectedUnit } = gameState; 
             if (!selectedUnit) return;
@@ -732,7 +732,7 @@ function handleUnitSelectionClick(x, y) {
         }
 
         function handleBuildBridgeAction() {
-            if (gameState.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== gameState.playerSide) return;
+            if (engine.state.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== engine.state.playerSide) return;
             if (gameState.isDragging) return; 
             const { selectedUnit } = gameState;
 
@@ -757,7 +757,7 @@ function handleUnitSelectionClick(x, y) {
         }
 
         function handleAttackAction() {
-            if (gameState.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== gameState.playerSide) return;
+            if (engine.state.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== engine.state.playerSide) return;
             if (gameState.isDragging) return; 
             const { selectedUnit } = gameState;
             

@@ -40,7 +40,7 @@ function HandleActionEvent(event) {
             break;
         }
         case 'SHIELD_GAINED': {
-            const tile = gameState.tiles.get(event.unit.position);
+            const tile = engine.state.tiles.get(event.unit.position);
             if (tile) {
                 const center = axialToPixel(tile.q, tile.r);
                 gameState.visualEffects.push({
@@ -66,7 +66,7 @@ function destroyUnit(unitToDestroy, reason = "destroyed") {
     const result = DestroyUnit(unitToDestroy, reason);
     HandleActionEvents(result.events);
 
-    if (gameState.gameMode !== 'arcade') {
+    if (engine.state.gameMode !== 'arcade') {
         updateRespawnQueueDisplay();
     }
     updateSupplyPointsDisplay();
@@ -96,7 +96,7 @@ function destroyUnit(unitToDestroy, reason = "destroyed") {
 }
 
 function handleUnitDeath(unitToDie, reason = "destroyed") {
-    const unitExists = gameState.units.some(u => u.id === unitToDie.id);
+    const unitExists = engine.state.units.some(u => u.id === unitToDie.id);
     if (!unitExists) return;
     destroyUnit(unitToDie, reason);
 }
@@ -133,7 +133,7 @@ function performSwap(unit, newType) {
 }
 
 function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
-    gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
+    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
     const result = ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path);
     if (!result.unitFound) {
@@ -149,7 +149,7 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
 
     if (result.unitStillAlive) {
         if (result.shouldRecalcReachableMoves) {
-            if (gameState.gameMode !== 'singleplayer' || result.unit.player === gameState.playerSide) {
+            if (engine.state.gameMode !== 'singleplayer' || result.unit.player === engine.state.playerSide) {
                 gameState.currentReachableMoves = getPossibleMoves(result.unit);
             }
         } else {
@@ -171,7 +171,7 @@ async function completeBuildBridge(targetEdgeKey) {
         updateSelectedUnitInfoPanel();
         return;
     }
-    const edgeToBridge = gameState.edges.get(targetEdgeKey);
+    const edgeToBridge = engine.state.edges.get(targetEdgeKey);
     if (!edgeToBridge || edgeToBridge.bridge) {
         showInstruction("Cannot build bridge here.", 2000);
         resetActionSelectionStates();
@@ -198,7 +198,7 @@ async function completeBuildBridge(targetEdgeKey) {
     updateSelectedUnitInfoPanel();
 
     const result = await ApplyBuildBridge(selectedUnit, targetEdgeKey, duration);
-    gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
+    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
     HandleActionEvents(result.events);
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
@@ -209,7 +209,7 @@ async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
         showInstruction("Cannot unfortify now.", 2000);
         return;
     }
-    const targetEdge = gameState.edges.get(targetEdgeKey);
+    const targetEdge = engine.state.edges.get(targetEdgeKey);
     if (!targetEdge) {
         showInstruction("Invalid target edge.", 2000);
         return;
@@ -238,7 +238,7 @@ async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
 
     const result = await ApplyUnfortify(unitToUnfortify, targetEdgeKey, duration);
 
-    gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
+    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
     gameState.mustUnfortify = false;
     ui.endTurnButton.disabled = false;
 
@@ -252,7 +252,7 @@ async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
 
 async function completeFortify(unitToFortify, targetTileKeyToFortify) {
     if (!unitToFortify || unitToFortify.hasPerformedMajorAction || unitToFortify.isFortified) { showInstruction("Cannot fortify now.", 2000); return; }
-    const targetTileObject = gameState.tiles.get(targetTileKeyToFortify);
+    const targetTileObject = engine.state.tiles.get(targetTileKeyToFortify);
     if (!targetTileObject || !canUnitFortifyOnTile(unitToFortify, targetTileObject)) { showInstruction("Invalid tile to fortify.", 2000); return; }
     if (targetTileObject.fortifiedByPlayer !== null) {
         showInstruction(`Tile ${targetTileKeyToFortify.substring(0,5)}... already fortified.`, 2500);
@@ -296,14 +296,14 @@ async function completeFortify(unitToFortify, targetTileKeyToFortify) {
 
     const result = await ApplyFortify(unitToFortify, targetTileKeyToFortify, duration);
 
-    gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
+    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
     HandleActionEvents(result.events);
 
     gameState.visionDirty = true;
     gameState.currentReachableMoves.clear();
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
-    if (!gameState.gameOver) checkVictoryCondition();
+    if (!engine.state.gameOver) checkVictoryCondition();
 }
 
 async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
@@ -316,7 +316,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     }
 
     // 2. Refresh Attacker Reference (Safety)
-    const liveAttacker = gameState.units.find(u => u.id === attackingUnit.id);
+    const liveAttacker = engine.state.units.find(u => u.id === attackingUnit.id);
     if (!liveAttacker) { console.error("Attacker missing from master list"); return; }
     attackingUnit = liveAttacker;
 
@@ -328,7 +328,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     let duration = 0;
     if (gameSettings.animationsEnabled) {
         if (targetUnitInfo.isBridgeTarget) {
-            const bridgeEdge = gameState.edges.get(targetUnitInfo.edgeKey);
+            const bridgeEdge = engine.state.edges.get(targetUnitInfo.edgeKey);
             if (bridgeEdge) {
                 const targetPos = getEdgeMidpoint(bridgeEdge.q1, bridgeEdge.r1, bridgeEdge.q2, bridgeEdge.r2);
                 const dummyTarget = { isFortified: false, position: targetUnitInfo.edgeKey, getScreenPosition: () => targetPos };
@@ -363,7 +363,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
             });
         } else if (attackingUnit.type.attackType === 'ranged') {
             let targets = []; let maxDistance = 0;
-            const edgeOfTarget = targetUnitInfo.edgeKey ? gameState.edges.get(targetUnitInfo.edgeKey) : null;
+            const edgeOfTarget = targetUnitInfo.edgeKey ? engine.state.edges.get(targetUnitInfo.edgeKey) : null;
             const enemyUnitsOnEdge = edgeOfTarget ? edgeOfTarget.units.filter(u => u.player !== attackingUnit.player) : [];
             if (edgeOfTarget && enemyUnitsOnEdge.length === 2 && !targetUnitInfo.unit.isFortified) { targets = enemyUnitsOnEdge; } else { targets.push(targetUnitInfo.unit); }
             const startPos = getUnitScreenPosition(attackingUnit);
@@ -397,7 +397,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         if (result.spearWalled) {
             gameState.currentReachableMoves.clear();
         } else if (attackingUnit.currentMove > 0) {
-            if (gameState.gameMode !== 'singleplayer' || attackingUnit.player === gameState.playerSide) {
+            if (engine.state.gameMode !== 'singleplayer' || attackingUnit.player === engine.state.playerSide) {
                 gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
             }
         } else {
@@ -407,7 +407,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         gameState.currentReachableMoves.clear();
     }
     if (result.bridgeDestroyed && attackingUnit.type.name === 'Horseman') {
-        if (gameState.gameMode !== 'singleplayer' || attackingUnit.player === gameState.playerSide) {
+        if (engine.state.gameMode !== 'singleplayer' || attackingUnit.player === engine.state.playerSide) {
             gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
         }
     }
@@ -415,5 +415,5 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     updateSupplyPointsDisplay();
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
-    if (!gameState.gameOver) checkVictoryCondition();
+    if (!engine.state.gameOver) checkVictoryCondition();
 }

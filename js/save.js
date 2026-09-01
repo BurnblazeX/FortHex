@@ -21,7 +21,7 @@ function loadSettings() {
 
 function saveColorPreferences() {
     try {
-        const prefsString = JSON.stringify(gameState.playerColorSelections);
+        const prefsString = JSON.stringify(engine.state.playerColorSelections);
         localStorage.setItem(COLOR_PREF_STORAGE_KEY, prefsString);
     } catch (error) {
         console.error("Could not save color preferences:", error);
@@ -33,10 +33,10 @@ function loadColorPreferences() {
         const savedPrefsString = localStorage.getItem(COLOR_PREF_STORAGE_KEY);
         if (savedPrefsString) {
             const loadedPrefs = JSON.parse(savedPrefsString);
-            gameState.playerColorSelections = Object.assign({}, gameState.playerColorSelections, loadedPrefs);
+            engine.state.playerColorSelections = Object.assign({}, engine.state.playerColorSelections, loadedPrefs);
 
-            TEAM_COLORS.player1 = { ...COLOR_THEMES[gameState.playerColorSelections.player1].player1 };
-            TEAM_COLORS.player2 = { ...COLOR_THEMES[gameState.playerColorSelections.player2].player2 };
+            TEAM_COLORS.player1 = { ...COLOR_THEMES[engine.state.playerColorSelections.player1].player1 };
+            TEAM_COLORS.player2 = { ...COLOR_THEMES[engine.state.playerColorSelections.player2].player2 };
         }
     } catch (error) {
         console.error("Could not load color preferences:", error);
@@ -56,11 +56,11 @@ function autoSaveGame(isSilent = false) {
 
     try {
         console.groupCollapsed("[Autosave] Saving Game State...");
-        console.log("Current Mode:", gameState.gameMode);
-        console.log("Current Radius:", gameState.gridRadius);
-        console.log("Turn:", gameState.globalTurnNumber);
+        console.log("Current Mode:", engine.state.gameMode);
+        console.log("Current Radius:", engine.state.gridRadius);
+        console.log("Turn:", engine.state.globalTurnNumber);
         
-        if (gameState.gameMode === 'arcade') {
+        if (engine.state.gameMode === 'arcade') {
             console.log("Arcade Timer:", gameState.arcadeTurnTimer);
             console.log("Swap State:", gameState.swapState);
         }
@@ -69,14 +69,14 @@ function autoSaveGame(isSilent = false) {
         const serializableState = { ...gameState };
         
         // Manually convert Map objects to arrays for JSON compatibility
-        serializableState.tiles = Array.from(gameState.tiles.entries());
-        serializableState.edges = Array.from(gameState.edges.entries());
+        serializableState.tiles = Array.from(engine.state.tiles.entries());
+        serializableState.edges = Array.from(engine.state.edges.entries());
         serializableState.currentReachableMoves = Array.from(gameState.currentReachableMoves.entries());
 
         serializableState.saveVersion = BUILD_VERSION; 
 
         const gameStateString = JSON.stringify(serializableState);
-        const saveKey = gameState.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame';
+        const saveKey = engine.state.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame';
         
         console.log(`Saving to key: ${saveKey}`);
         console.log("Serialized Length:", gameStateString.length);
@@ -108,14 +108,14 @@ function saveGameToFile() {
     const hours = padZero(now.getHours());
     const minutes = padZero(now.getMinutes());
     const seconds = padZero(now.getSeconds());
-    const modePrefix = gameState.gameMode === 'singleplayer' ? 'SP-' : '';
+    const modePrefix = engine.state.gameMode === 'singleplayer' ? 'SP-' : '';
     const fileName = `FortHex-${BUILD_VERSION}-${modePrefix}SaveGame-${day}.${month}.${year}-${hours}:${minutes}:${seconds}.fhsave`;
 
     try {
         // --- Serialize the game state (same as autosave) ---
         const serializableState = { ...gameState };
-        serializableState.tiles = Array.from(gameState.tiles.entries());
-        serializableState.edges = Array.from(gameState.edges.entries());
+        serializableState.tiles = Array.from(engine.state.tiles.entries());
+        serializableState.edges = Array.from(engine.state.edges.entries());
         serializableState.currentReachableMoves = Array.from(gameState.currentReachableMoves.entries());
         serializableState.saveVersion = BUILD_VERSION;
         const gameStateString = JSON.stringify(serializableState, null, 2); // Using indentation for readability
@@ -248,15 +248,15 @@ function attemptLegacyConversion(data) {
 function createMapDataObject() {
     const mapData = {
         saveVersion: BUILD_VERSION,
-        radius: gameState.gridRadius,
-        tiles: Array.from(gameState.tiles.entries()),
-        units: gameState.units.map(u => ({
+        radius: engine.state.gridRadius,
+        tiles: Array.from(engine.state.tiles.entries()),
+        units: engine.state.units.map(u => ({
             id: u.id,
             player: u.player,
             typeName: (u.type && u.type.name) ? u.type.name.toUpperCase() : (u.typeId || 'MELEE'),
             position: u.position
         })),
-        baseCampPositions: gameState.baseCampPositions
+        baseCampPositions: engine.state.baseCampPositions
     };
     return mapData;
 }
@@ -279,7 +279,7 @@ function loadAutoSave() {
             showInstruction("Map Load Error.", 3000);
         }
     } else {
-        const saveKey = gameState.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame';
+        const saveKey = engine.state.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame';
         console.log("Loading key:", saveKey);
         
         const savedStateString = localStorage.getItem(saveKey);
@@ -317,7 +317,7 @@ function loadAutoSave() {
             rehydrateGameState();
             
             // 5. Restore UI
-            if (gameState.gameMode === 'arcade') {
+            if (engine.state.gameMode === 'arcade') {
                 ui.endTurnButton.classList.add('arcade-timer-active');
                 const timerVal = gameState.arcadeTurnTimer || 0;
                 const pct = Math.max(0, (timerVal / ARCADE_TURN_TIME_SEC) * 100);
@@ -349,17 +349,17 @@ function rehydrateGameState() {
     
     try {
         // 1. Restore Tiles
-        if (Array.isArray(gameState.tiles)) {
-            gameState.tiles = new Map(gameState.tiles);
+        if (Array.isArray(engine.state.tiles)) {
+            engine.state.tiles = new Map(engine.state.tiles);
         } else {
-            gameState.tiles = new Map(Object.entries(gameState.tiles || {}));
+            engine.state.tiles = new Map(Object.entries(engine.state.tiles || {}));
         }
 
         // 2. Restore Edges
-        if (Array.isArray(gameState.edges)) {
-            gameState.edges = new Map(gameState.edges);
+        if (Array.isArray(engine.state.edges)) {
+            engine.state.edges = new Map(engine.state.edges);
         } else {
-            gameState.edges = new Map(Object.entries(gameState.edges || {}));
+            engine.state.edges = new Map(Object.entries(engine.state.edges || {}));
         }
 
         // 3. Restore Reachable Moves
@@ -375,9 +375,9 @@ function rehydrateGameState() {
         buildFineGridIndex();
 
         // 4. Restore Global Color State
-        if (gameState.playerColorSelections) {
-            const p1Theme = COLOR_THEMES[gameState.playerColorSelections.player1];
-            const p2Theme = COLOR_THEMES[gameState.playerColorSelections.player2];
+        if (engine.state.playerColorSelections) {
+            const p1Theme = COLOR_THEMES[engine.state.playerColorSelections.player1];
+            const p2Theme = COLOR_THEMES[engine.state.playerColorSelections.player2];
             if (p1Theme && p2Theme) {
                 TEAM_COLORS.player1 = { ...p1Theme.player1 };
                 TEAM_COLORS.player2 = { ...p2Theme.player2 };
@@ -397,7 +397,7 @@ function rehydrateGameState() {
         gameState.isPassDeviceTransition = false;
 
         // 5. Restore Unit Logic (Getters & Stats)
-        gameState.units.forEach(unit => {
+        engine.state.units.forEach(unit => {
             // Re-attach 'type' getter
             Object.defineProperty(unit, 'type', {
                 get: function() { return UNIT_TYPES[this.typeId]; },
@@ -427,17 +427,17 @@ function rehydrateGameState() {
         // while tile state mutates the real board, desyncing the game.
         const relinkUnitRef = (ref) => {
             if (!ref || !ref.id) return null;
-            return gameState.units.find(u => u.id === ref.id) || null;
+            return engine.state.units.find(u => u.id === ref.id) || null;
         };
         gameState.selectedUnit = relinkUnitRef(gameState.selectedUnit);
         gameState.draggingUnit = relinkUnitRef(gameState.draggingUnit);
         gameState.unitToSwap = relinkUnitRef(gameState.unitToSwap);
 
         // 6. Re-link Units to Edges (Re-attach Getters)
-        gameState.edges.forEach((edge, edgeKey) => {
+        engine.state.edges.forEach((edge, edgeKey) => {
             Object.defineProperty(edge, 'units', {
                 get: function() { 
-                    return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && u.id !== gameState.draggingUnit?.id); 
+                    return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && u.id !== gameState.draggingUnit?.id); 
                 },
                 configurable: true,
                 enumerable: false
@@ -448,8 +448,8 @@ function rehydrateGameState() {
         console.log("Running post-load sanity checks...");
         
         // A. Fix illegally fortified units (Defense <= 0)
-        // We clone the array because handleUnitDeath modifies gameState.units
-        const unitsToCheck = [...gameState.units]; 
+        // We clone the array because handleUnitDeath modifies engine.state.units
+        const unitsToCheck = [...engine.state.units]; 
         for (const unit of unitsToCheck) {
             if (unit.isFortified && unit.stats.defense <= 0) {
                 console.warn(`[Clean Sweep] Unit ${unit.id} illegally fortified. Evicting...`);
@@ -466,10 +466,10 @@ function rehydrateGameState() {
         }
 
         // B. Check for stuck Reinforcement Modals
-        if (gameState.gameMode !== 'arcade') {
-            const activePlayer = gameState.currentPlayer;
+        if (engine.state.gameMode !== 'arcade') {
+            const activePlayer = engine.state.currentPlayer;
             const queueKey = `player${activePlayer}`;
-            const queue = gameState.respawnQueue[queueKey];
+            const queue = engine.state.respawnQueue[queueKey];
             
             if (queue && queue.length > 0 && queue[0].turnsRemaining <= 0) {
                 console.warn(`[Clean Sweep] P${activePlayer} has pending reinforcements. Opening modal...`);
@@ -518,14 +518,14 @@ function loadMapFromDataObject(mapData) {
     let loadedRadius = mapData.radius || 3;
     resizeMapGrid(loadedRadius);
 
-    gameState.units = [];
-    gameState.tiles.clear();
+    engine.state.units = [];
+    engine.state.tiles.clear();
 
     mapData.tiles.forEach(([key, tile]) => {
         const rehydratedTile = { ...tile,
             type: TILE_TYPES[tile.type.name.toUpperCase()]
         };
-        gameState.tiles.set(key, rehydratedTile);
+        engine.state.tiles.set(key, rehydratedTile);
     });
 
     mapData.units.forEach(unitInfo => {
@@ -536,8 +536,8 @@ function loadMapFromDataObject(mapData) {
         
         if (unitType) {
             const newUnit = createUnit(unitInfo.player, unitType, unitInfo.position, unitInfo.id);
-            gameState.units.push(newUnit);
-            const edge = gameState.edges.get(unitInfo.position);
+            engine.state.units.push(newUnit);
+            const edge = engine.state.edges.get(unitInfo.position);
             if (edge) {
                 edge.units.push(newUnit);
             }
@@ -546,20 +546,20 @@ function loadMapFromDataObject(mapData) {
         }
     });
 
-    gameState.baseCampPositions = mapData.baseCampPositions || { player1: null, player2: null };
+    engine.state.baseCampPositions = mapData.baseCampPositions || { player1: null, player2: null };
 
-    // resizeMapGrid(2) nulls gameState.flags for arcade, so this must be guarded the same
+    // resizeMapGrid(2) nulls engine.state.flags for arcade, so this must be guarded the same
     // way startMapTest does it — otherwise loading any Compact (radius 2) map throws.
-    if (gameState.flags) {
-        gameState.flags.p1_flag.homePosition = gameState.baseCampPositions.player1;
-        gameState.flags.p2_flag.homePosition = gameState.baseCampPositions.player2;
+    if (engine.state.flags) {
+        engine.state.flags.p1_flag.homePosition = engine.state.baseCampPositions.player1;
+        engine.state.flags.p2_flag.homePosition = engine.state.baseCampPositions.player2;
     }
 
     const setBaseFlags = (baseData) => {
         if (!baseData) return;
         if (Array.isArray(baseData)) {
             baseData.forEach(k => {
-                const tile = gameState.tiles.get(k);
+                const tile = engine.state.tiles.get(k);
                 if (tile) { 
                     tile.type = TILE_TYPES.PLAINS; 
                     tile.isBaseCampTile = true; 
@@ -568,7 +568,7 @@ function loadMapFromDataObject(mapData) {
         } else if (typeof baseData === 'string') {
             const [h1, h2] = parseEdgeKey(baseData);
             [getTileKey(h1.q, h1.r), getTileKey(h2.q, h2.r)].forEach(k => {
-                const tile = gameState.tiles.get(k);
+                const tile = engine.state.tiles.get(k);
                 if (tile) { 
                     tile.type = TILE_TYPES.PLAINS; 
                     tile.isBaseCampTile = true; 
@@ -576,8 +576,8 @@ function loadMapFromDataObject(mapData) {
             });
         }
     };
-    setBaseFlags(gameState.baseCampPositions.player1);
-    setBaseFlags(gameState.baseCampPositions.player2);
+    setBaseFlags(engine.state.baseCampPositions.player1);
+    setBaseFlags(engine.state.baseCampPositions.player2);
 
     const sliderToRotations = [3, 2, 1, 0, -1, -2];
     let matchingSliderValue = '3'; 
@@ -600,7 +600,7 @@ function loadMapFromDataObject(mapData) {
     const bcSlider = document.getElementById('baseCampSlider');
     if (bcSlider) bcSlider.value = matchingSliderValue;
 
-    // gameState.tiles was cleared and repopulated from mapData above, so the index
+    // engine.state.tiles was cleared and repopulated from mapData above, so the index
     // resizeMapGrid built no longer necessarily matches the board.
     buildFineGridIndex();
 

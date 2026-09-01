@@ -1,19 +1,16 @@
-// === FortHexEngine — the authoritative, DOM-free engine shell (A1 step 4) ===
+// === FortHexEngine — the authoritative, DOM-free engine shell ===
 //
-// This is a SHAPE ONLY right now — no rules logic lives here yet (that starts
-// in A1 step 5+). Its job at this point is just to prove state can be
-// instance-owned instead of a global singleton. See
-// FortHex_A1_Server_Core_Guide.md §5.
+// Field list mirrors §5.1 plus gameOver (reclassified engine-owned in step 8,
+// once real victory-check logic needed to set it authoritatively).
+// mustUnfortify/playerActionTaken/selectedUnit/currentActionState/the
+// valid*TargetKeys/currentReachableMoves highlight caches stayed client-owned
+// per the guide's fallback rule — they never got forced onto the engine side
+// the way gameOver did.
 //
-// Field list mirrors §5.1 exactly. Several fields in today's global `gameState`
-// (gameOver, mustUnfortify, playerActionTaken, selectedUnit, currentActionState,
-// the valid*TargetKeys/currentReachableMoves highlight caches) aren't in the
-// guide's explicit engine-owned list, so per its own fallback rule ("everything
-// not in this list stays client-side") they're left client-owned for now. Some
-// of those look arguably authoritative (gameOver, mustUnfortify,
-// playerActionTaken gate what actions are legal) — worth a second look once the
-// turn-lifecycle MIXED-function migration (step 8) forces the question, but not
-// decided here.
+// This is genuinely live now (see js/state.js) — as of the engine.state
+// cutover, every js/server/ pure function reads/writes this instance's state
+// directly, not a bare gameState global. gameState (js/state.js) now holds
+// only client-owned fields.
 //
 // NOTE: this file must stay zero-DOM/window/canvas — it needs to load cleanly
 // in a bare Web Worker (§9's "Worker smoke test").
@@ -39,6 +36,7 @@ class FortHexEngine {
             supplyPoints: { player1: 10, player2: 10 },
             fineGrid: new Map(),
             baseCampPositions: JSON.parse(JSON.stringify(DEFAULT_FLAG_HOME_POSITIONS)),
+            gameOver: false,
         };
 
         // Everything else in today's gameSettings is presentation-only and
@@ -49,7 +47,7 @@ class FortHexEngine {
             fogOfWarEnabled: false,
         };
 
-        this.actionManager = new EngineActionManager(this);
+        this.actionManager = new ActionManager(this);
 
         this.pendingEvents = [];
     }
@@ -65,12 +63,10 @@ class FortHexEngine {
     }
 }
 
-// Named EngineActionManager, not ActionManager, to avoid colliding with the
-// still-active global `ActionManager` object in state.js (core.js/main.js call
-// it directly today). Once the legacy global is retired — when the actions it
-// guards actually get migrated into js/server/actions.js — this should be
-// renamed back to ActionManager and become the only one.
-class EngineActionManager {
+// The legacy global `ActionManager` object (state.js) is retired now that the
+// actions it guarded live in js/server/actions.js/turn-lifecycle.js — this is
+// the only ActionManager, instance-owned per §5.2.
+class ActionManager {
     constructor(engineInstance) {
         this.engine = engineInstance;
     }

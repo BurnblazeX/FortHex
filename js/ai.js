@@ -207,7 +207,7 @@ function getBaseCenter(baseData) {
     if (Array.isArray(baseData)) {
         return calculateBaseCentroid(baseData);
     } else if (typeof baseData === 'string') {
-        const edge = gameState.edges.get(baseData);
+        const edge = engine.state.edges.get(baseData);
         if (edge) return getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
     }
     return null;
@@ -234,7 +234,7 @@ function buildInfluenceMap(allAllies, allEnemies) {
         else if (u.type.name === 'Archer') { baseStrength = 8; reach = 2; }
         else if (u.type.name === 'Horseman') { baseStrength = 9; reach = 1; }
 
-        gameState.tiles.forEach((tile, tileKey) => {
+        engine.state.tiles.forEach((tile, tileKey) => {
             const [tq, tr] = tileKey.split(',').map(Number);
             let minDist = Infinity;
             for (const stKey of sourceTiles) {
@@ -265,17 +265,17 @@ function getEdgeInfluence(influenceMap, edgeKey) {
 }
 
 async function handleAIReinforcements() {
-    const player = gameState.currentPlayer;
+    const player = engine.state.currentPlayer;
     const queueKey = `player${player}`;
-    let queue = gameState.respawnQueue[queueKey];
+    let queue = engine.state.respawnQueue[queueKey];
     
     while (queue && queue.length > 0 && queue[0].turnsRemaining <= 0) {
         console.log(`[AI] Processing Reinforcements for Player ${player}...`);
-        const armySize = gameState.units.filter(u => u.player === player).length;
+        const armySize = engine.state.units.filter(u => u.player === player).length;
         const maxUnits = getMaxUnitsForCurrentMap();
         let actionTaken = false;
 
-        const promotableUnits = gameState.units.filter(u => u.player === player && u.level < 3);
+        const promotableUnits = engine.state.units.filter(u => u.player === player && u.level < 3);
         const shouldPromote = (armySize >= maxUnits) || (promotableUnits.length > 0 && Math.random() < aiBrain.weights.promote_tendency);
 
         if (shouldPromote && promotableUnits.length > 0) {
@@ -294,7 +294,7 @@ async function handleAIReinforcements() {
 
         } else if (armySize < maxUnits) {
             const counts = { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
-            gameState.units.forEach(u => {
+            engine.state.units.forEach(u => {
                 if (u.player === player && u.type && u.type.name) {
                     counts[u.type.name] = (counts[u.type.name] || 0) + 1;
                 }
@@ -324,7 +324,7 @@ async function handleAIReinforcements() {
             console.log("[AI] Base blocked or unable to use reinforcement charge. Holding.");
             break; 
         }
-        queue = gameState.respawnQueue[queueKey]; 
+        queue = engine.state.respawnQueue[queueKey]; 
     }
 }
 
@@ -335,7 +335,7 @@ const AI_TRAINING_DATA_MAX_BUFFERED = 20000;
 function logTrainingSample(action) {
     if (!gameState.currentMatchSamples) gameState.currentMatchSamples = [];
     gameState.currentMatchSamples.push({
-        player: gameState.currentPlayer,
+        player: engine.state.currentPlayer,
         actionType: action.type,
         score: action.score,
         features: action.features || {}
@@ -505,8 +505,8 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     let possibleActions = [];
 
     const enemyPlayer = unit.player === 1 ? 2 : 1;
-    const enemyBasePos = getBaseCenter(gameState.baseCampPositions[`player${enemyPlayer}`]);
-    const myBasePos = getBaseCenter(gameState.baseCampPositions[`player${unit.player}`]);
+    const enemyBasePos = getBaseCenter(engine.state.baseCampPositions[`player${enemyPlayer}`]);
+    const myBasePos = getBaseCenter(engine.state.baseCampPositions[`player${unit.player}`]);
     const influenceMap = buildInfluenceMap(allAllies, allEnemies);
 
     const myTotalHP = allAllies.reduce((sum, u) => sum + u.hp, 0);
@@ -516,7 +516,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
     const absoluteAdvantage = Math.max(-1, Math.min(1, (hpAdvantage + countAdvantage) / 2));
 
     const stateFeatures = {
-        turn: gameState.globalTurnNumber,
+        turn: engine.state.globalTurnNumber,
         myTotalHP, enemyTotalHP,
         myUnitCount: allAllies.length, enemyUnitCount: allEnemies.length,
         absoluteAdvantage,
@@ -589,17 +589,17 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         let threatPenalty = 0;
         
         const [h1, h2] = parseEdgeKey(edgeKey);
-        const tile1 = gameState.tiles.get(getTileKey(h1.q, h1.r));
-        const tile2 = gameState.tiles.get(getTileKey(h2.q, h2.r));
+        const tile1 = engine.state.tiles.get(getTileKey(h1.q, h1.r));
+        const tile2 = engine.state.tiles.get(getTileKey(h2.q, h2.r));
         
-        const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+        const enemyBaseData = engine.state.baseCampPositions[`player${enemyPlayer}`];
         let enemyBaseTiles = Array.isArray(enemyBaseData) ? enemyBaseData : (typeof enemyBaseData === 'string' ? enemyBaseData.split('_') : []);
 
         const checkZoC = (tile, tileKey) => {
             if (!tile) return false;
             if (enemyBaseTiles.includes(tileKey)) return true;
             if (tile.fortifiedByPlayer === enemyPlayer) {
-                const fortUnit = gameState.units.find(u => u.isFortified && u.position === tileKey && u.player === enemyPlayer);
+                const fortUnit = engine.state.units.find(u => u.isFortified && u.position === tileKey && u.player === enemyPlayer);
                 if (fortUnit && !isZoCSuppressed(fortUnit)) return true;
             }
             return false;
@@ -690,7 +690,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
                 const myBaseTileKeys = new Set(GetBaseCamp(unit.player));
 
                 [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)].forEach(tileKey => {
-                    const tile = gameState.tiles.get(tileKey);
+                    const tile = engine.state.tiles.get(tileKey);
 
                     if(tile && tile.type.canFortify && tile.fortifiedByPlayer === null && tileKey !== myFlagTileKey && !myBaseTileKeys.has(tileKey) && (!enemyBaseTileKeys.has(tileKey) || tileKey === enemyFlagTileKey)) {
                          const destInfluence = influenceMap.get(tileKey) || 0;
@@ -753,7 +753,7 @@ async function executeAIAction(action) {
 
     const animateAndMove = async (unit, moveData) => {
         if (!gameState.isTrainingMode) {
-            if (gameSettings.fogOfWarEnabled && gameState.gameMode === 'singleplayer' && unit.player !== gameState.playerSide) {
+            if (engine.settings.fogOfWarEnabled && engine.state.gameMode === 'singleplayer' && unit.player !== engine.state.playerSide) {
                 gameState.potentialDebugPathToDraw = null;
             } else {
                 gameState.potentialDebugPathToDraw = moveData.path;
@@ -798,21 +798,21 @@ async function executeAIAction(action) {
 }
 
 async function executeAITurn() {
-    if (gameState.gameOver) return;
+    if (engine.state.gameOver) return;
 
     if (gameState.isTrainingMode && gameState.matchBrains) {
-        aiBrain = gameState.matchBrains[`player${gameState.currentPlayer}`] || getChampionBrain();
+        aiBrain = gameState.matchBrains[`player${engine.state.currentPlayer}`] || getChampionBrain();
     } else {
         aiBrain = getChampionBrain();
     }
 
-    console.log(`--- AI Turn ${gameState.globalTurnNumber} (Player ${gameState.currentPlayer}) using brain #${aiPopulation.indexOf(aiBrain)} ---`);
+    console.log(`--- AI Turn ${engine.state.globalTurnNumber} (Player ${engine.state.currentPlayer}) using brain #${aiPopulation.indexOf(aiBrain)} ---`);
 
     await handleAIReinforcements();
 
     const aiStrategy = 'STANDARD';
-    const allEnemies = gameState.units.filter(u => u.player !== gameState.currentPlayer);
-    const allAllies = gameState.units.filter(u => u.player === gameState.currentPlayer);
+    const allEnemies = engine.state.units.filter(u => u.player !== engine.state.currentPlayer);
+    const allAllies = engine.state.units.filter(u => u.player === engine.state.currentPlayer);
     
     let unitsToProcess = allAllies.filter(u => !u.hasPerformedMajorAction);
 
@@ -845,7 +845,7 @@ async function executeAITurn() {
     }
 
     console.log("--- AI Turn Finished ---");
-    if (!gameState.gameOver) {
+    if (!engine.state.gameOver) {
         ui.endTurnButton.disabled = false;
         ui.endTurnButton.click();
     }
@@ -856,7 +856,7 @@ function evolveBrain(brain, aiVictory, victoryReason, aiPlayerNum, matchHistory)
 
     let efficiencyMultiplier = 1.0;
     if (aiVictory) {
-        efficiencyMultiplier = Math.max(0.1, 1.0 - (gameState.globalTurnNumber / 50));
+        efficiencyMultiplier = Math.max(0.1, 1.0 - (engine.state.globalTurnNumber / 50));
     }
 
     const clampWeight = (v) => Math.min(500, Math.max(0.5, v));
@@ -984,7 +984,7 @@ async function runHeadlessBenchmark(brainA, brainB, numMatches) {
     window.abortBenchmark = false;
     let winsA = 0, winsB = 0, draws = 0, totalTurns = 0;
     
-    const origGameMode = gameState.gameMode;
+    const origGameMode = engine.state.gameMode;
     const origIsTraining = gameState.isTrainingMode;
     const origMatchBrains = gameState.matchBrains;
     const origEvolveBrain = window.evolveBrain;
@@ -1007,7 +1007,7 @@ async function runHeadlessBenchmark(brainA, brainB, numMatches) {
         return origSetTimeout(fn, delay);
     };
 
-    gameState.gameMode = 'local';
+    engine.state.gameMode = 'local';
     gameState.isTrainingMode = true;
     
     console.log(`[Benchmark] Starting ${numMatches} matches... Run stopBenchmark() to abort.`);
@@ -1036,16 +1036,16 @@ async function runHeadlessBenchmark(brainA, brainB, numMatches) {
         
         initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
         
-        while (!matchFinished && gameState.globalTurnNumber < 150) { 
+        while (!matchFinished && engine.state.globalTurnNumber < 150) { 
             await executeAITurn();
-            if (gameState.gameOver) break; 
+            if (engine.state.gameOver) break; 
         }
         
         if (testBrainA.wins > (brainA.wins || 0)) winsA++;
         else if (testBrainB.wins > (brainB.wins || 0)) winsB++;
         else draws++;
         
-        totalTurns += gameState.globalTurnNumber;
+        totalTurns += engine.state.globalTurnNumber;
         
         if ((i + 1) % 5 === 0 || i === numMatches - 1) {
             console.log(`[Benchmark] Progress: ${i + 1}/${numMatches} matches. (A:${winsA}, B:${winsB}, D:${draws})`);
@@ -1060,7 +1060,7 @@ async function runHeadlessBenchmark(brainA, brainB, numMatches) {
     window.startNewTrainingMatch = origStartNewMatch;
     window.setTimeout = origSetTimeout;
     
-    gameState.gameMode = origGameMode;
+    engine.state.gameMode = origGameMode;
     gameState.isTrainingMode = origIsTraining;
     gameState.matchBrains = origMatchBrains;
     

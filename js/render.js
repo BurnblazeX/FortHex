@@ -1,10 +1,10 @@
 function getPerspectivePlayer() {
     // In Singleplayer, always view from the human player's side
-    if (gameState.gameMode === 'singleplayer' && gameState.playerSide) {
-        return gameState.playerSide;
+    if (engine.state.gameMode === 'singleplayer' && engine.state.playerSide) {
+        return engine.state.playerSide;
     }
     // In Local Multiplayer, view from whoever's turn it currently is
-    return gameState.currentPlayer;
+    return engine.state.currentPlayer;
 }
         
         function drawHexFill(q, r, tileType) {
@@ -155,9 +155,9 @@ function getPerspectivePlayer() {
             // This allows them to show up during "Test Map" (since mapMakerMode is false then), but not during editing.
             const useFancyVisuals = gameSettings.fancyVisualsEnabled && !gameState.mapMakerMode;
 
-            gameState.edges.forEach(edge => {
-                const tileA = gameState.tiles.get(getTileKey(edge.q1, edge.r1));
-                const tileB = gameState.tiles.get(getTileKey(edge.q2, edge.r2));
+            engine.state.edges.forEach(edge => {
+                const tileA = engine.state.tiles.get(getTileKey(edge.q1, edge.r1));
+                const tileB = engine.state.tiles.get(getTileKey(edge.q2, edge.r2));
                 if (!tileA || !tileB) return;
                 const typeA = tileA.type; const typeB = tileB.type; let edgeStrokeColor;
                 
@@ -206,12 +206,12 @@ function getPerspectivePlayer() {
             });
 
              const boundaryEdgeColor = '#000000';
-             gameState.tiles.forEach(tile => {
+             engine.state.tiles.forEach(tile => {
                  const {q, r} = tile; const {x: centerX, y: centerY} = axialToPixel(q,r);
                  for (let directionIndex = 0; directionIndex < 6; directionIndex++) {
                      const neighborDir = AXIAL_DIRECTIONS[directionIndex];
                      const neighborQ = q + neighborDir.q; const neighborR = r + neighborDir.r;
-                     if (!gameState.tiles.has(getTileKey(neighborQ, neighborR))) {
+                     if (!engine.state.tiles.has(getTileKey(neighborQ, neighborR))) {
                          const edgeIndexOfCurrentHex = MAP_DIRECTION_TO_EDGE_INDEX[directionIndex];
                          const v1_idx = edgeIndexOfCurrentHex; const v2_idx = (edgeIndexOfCurrentHex + 1) % 6;
                          const vert1_angle = Math.PI / 180 * (60 * v1_idx - 30);
@@ -246,7 +246,7 @@ function getPerspectivePlayer() {
             let isAnimating = false;
 
             // Determine if the system is globally active
-            const isSystemActive = gameState.isPassDeviceTransition || (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode);
+            const isSystemActive = gameState.isPassDeviceTransition || (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode);
 
             // If system is disabled, check if there's lingering fog left to animate out
             let hasLingeringFog = false;
@@ -283,7 +283,7 @@ function getPerspectivePlayer() {
                 return current;
             };
 
-            gameState.tiles.forEach(tile => {
+            engine.state.tiles.forEach(tile => {
                 const { q, r } = tile;
                 const tileKey = getTileKey(q, r);
                 const { x, y } = axialToPixel(q, r);
@@ -300,7 +300,7 @@ function getPerspectivePlayer() {
                         const neighborDir = AXIAL_DIRECTIONS[dirIdx];
                         const edgeKey = getEdgeKey(q, r, q + neighborDir.q, r + neighborDir.r);
                         
-                        if (!gameState.edges.has(edgeKey)) {
+                        if (!engine.state.edges.has(edgeKey)) {
                             // If the edge doesn't exist on the map (it's an outer boundary), 
                             if (gameState.visionCache.tiles.has(tileKey)) {
                                 targetEdges[k] = 0.0;
@@ -440,7 +440,7 @@ function drawFortificationOutlines() {
     const fortifiedTilesP1 = new Set();
     const fortifiedTilesP2 = new Set();
 
-    gameState.tiles.forEach((tile, key) => {
+    engine.state.tiles.forEach((tile, key) => {
         if (tile.fortifiedByPlayer === 1) fortifiedTilesP1.add(key);
         else if (tile.fortifiedByPlayer === 2) fortifiedTilesP2.add(key);
     });
@@ -454,17 +454,17 @@ function drawFortificationOutlines() {
             if (!isNaN(h2.q)) set.add(getTileKey(h2.q, h2.r));
         }
     };
-    addBaseTiles(gameState.baseCampPositions.player1, fortifiedTilesP1);
-    addBaseTiles(gameState.baseCampPositions.player2, fortifiedTilesP2);
+    addBaseTiles(engine.state.baseCampPositions.player1, fortifiedTilesP1);
+    addBaseTiles(engine.state.baseCampPositions.player2, fortifiedTilesP2);
 
     const drawBordersForPlayer = (tileSet, color, playerOwner) => {
         tileSet.forEach(tileKey => {
-            const tile = gameState.tiles.get(tileKey);
+            const tile = engine.state.tiles.get(tileKey);
             if (!tile) return;
 
             const { x: centerX, y: centerY } = axialToPixel(tile.q, tile.r);
             const isCenterVisible = gameState.visionCache ? gameState.visionCache.tiles.has(tileKey) : true;
-            const applyFog = gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache;
+            const applyFog = engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache;
 
             for (let i = 0; i < 6; i++) {
                 const neighborDir = AXIAL_DIRECTIONS[i];
@@ -518,7 +518,7 @@ function drawFortificationOutlines() {
             const CONTESTED_EDGE_COLOR = '#C440C4';
             const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
 
-            gameState.edges.forEach((edge, edgeKey) => {
+            engine.state.edges.forEach((edge, edgeKey) => {
                 if (edge.units.length < 2) return;
 
                 const playerOnEdge = edge.units[0].player;
@@ -531,13 +531,13 @@ function drawFortificationOutlines() {
                 if (!hasArcher || !hasMelee) return;
 
                 const opponentPlayer = playerOnEdge === 1 ? 2 : 1;
-                const tile1 = gameState.tiles.get(getTileKey(edge.q1, edge.r1));
-                const tile2 = gameState.tiles.get(getTileKey(edge.q2, edge.r2));
+                const tile1 = engine.state.tiles.get(getTileKey(edge.q1, edge.r1));
+                const tile2 = engine.state.tiles.get(getTileKey(edge.q2, edge.r2));
                 const isContested = (tile1 && tile1.fortifiedByPlayer === opponentPlayer) || 
                                   (tile2 && tile2.fortifiedByPlayer === opponentPlayer);
 
                 if (isContested) {
-                    if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                    if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                         if (!gameState.visionCache.edges.has(edgeKey)) return;
                     }
                     const p1_center = axialToPixel(edge.q1, edge.r1);
@@ -588,7 +588,7 @@ function drawFortificationOutlines() {
             ctx.globalAlpha = opacity; // Apply the translucency to the entire drawing operation
 
             gameState.validBridgeTargetEdgeKeys.forEach(edgeKey => {
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 if (edge) {
                     // Call with simpleRender = true to hide the planks
                     drawBridge(edge, undefined, undefined, undefined, true);
@@ -606,7 +606,7 @@ function drawFortificationOutlines() {
                 case 'fortify':
                     fillColor = 'rgba(255, 255, 0, 0.3)'; strokeColor = '#FFD700';
                     targetKeys.forEach(tileKey => {
-                        const tile = gameState.tiles.get(tileKey);
+                        const tile = engine.state.tiles.get(tileKey);
                         if (tile) {
                            const { x, y } = axialToPixel(tile.q, tile.r); ctx.beginPath();
                            for (let i = 0; i < 6; i++) {
@@ -623,7 +623,7 @@ function drawFortificationOutlines() {
                     fillColor = 'rgba(0, 150, 255, 0.4)';
                     strokeColor = '#007ACC';
                     targetKeys.forEach(edgeKey => {
-                        const edge = gameState.edges.get(edgeKey);
+                        const edge = engine.state.edges.get(edgeKey);
                         if (edge) {
                             const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                             ctx.beginPath(); ctx.arc(mid.x, mid.y, currentHexSize * 0.25, 0, 2 * Math.PI);
@@ -685,14 +685,14 @@ function drawFortificationOutlines() {
             if (!targetsToHighlight || targetsToHighlight.length === 0) return;
             targetsToHighlight.forEach(targetInfo => {
                 if (targetInfo.isBridgeTarget && targetInfo.edgeKey) {
-                    const edge = gameState.edges.get(targetInfo.edgeKey);
+                    const edge = engine.state.edges.get(targetInfo.edgeKey);
                     if (edge && edge.bridge) drawBridge(edge, 'rgba(139, 69, 19, 0.5)', 'rgba(255, 0, 0, 0.9)', 3);
                 }
             });
         }
 
         function drawFlags() {
-            if (gameState.gameMode === 'arcade') return;
+            if (engine.state.gameMode === 'arcade') return;
     
             const FLAG_SCALE_FACTOR = 0.21; 
 
@@ -730,9 +730,9 @@ function drawFortificationOutlines() {
         ctx.restore();
     };
 
-    // 1. GAMEPLAY MODE (Uses gameState.flags)
-    if (!gameState.mapMakerMode && gameState.flags) {
-        Object.values(gameState.flags).forEach(flag => {
+    // 1. GAMEPLAY MODE (Uses engine.state.flags)
+    if (!gameState.mapMakerMode && engine.state.flags) {
+        Object.values(engine.state.flags).forEach(flag => {
             if (flag.status === 'at_base' && flag.homePosition) {
                 if (Array.isArray(flag.homePosition)) {
                     // Expansive Mode (Tile Array)
@@ -740,7 +740,7 @@ function drawFortificationOutlines() {
                     if (pos) renderFlagAt(flag.player, pos.x, pos.y);
                 } else {
                     // Standard Mode (Edge String)
-                    const edge = gameState.edges.get(flag.homePosition);
+                    const edge = engine.state.edges.get(flag.homePosition);
                     if (edge) {
                         const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                         renderFlagAt(flag.player, mid.x, mid.y);
@@ -750,9 +750,9 @@ function drawFortificationOutlines() {
         });
     }
     // 2. MAP MAKER MODE (Expansive Preview)
-    else if (gameState.mapMakerMode && gameState.gridRadius === 4) {
+    else if (gameState.mapMakerMode && engine.state.gridRadius === 4) {
         for(let p = 1; p <= 2; p++) {
-            const base = gameState.baseCampPositions[`player${p}`];
+            const base = engine.state.baseCampPositions[`player${p}`];
             if (Array.isArray(base) && base.length === 3) {
                 const pos = calculateBaseCentroid(base);
                 if (pos) renderFlagAt(p, pos.x, pos.y);
@@ -760,10 +760,10 @@ function drawFortificationOutlines() {
         }
     }
             // 3. MAP MAKER MODE (Standard Preview)
-            else if (gameState.mapMakerMode && gameState.gridRadius === 3) {
-                if (gameState.flags) {
-                    Object.values(gameState.flags).forEach(flag => {
-                        const edge = gameState.edges.get(flag.homePosition);
+            else if (gameState.mapMakerMode && engine.state.gridRadius === 3) {
+                if (engine.state.flags) {
+                    Object.values(engine.state.flags).forEach(flag => {
+                        const edge = engine.state.edges.get(flag.homePosition);
                         if (edge) {
                             const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                             renderFlagAt(flag.player, mid.x, mid.y);
@@ -796,14 +796,14 @@ function drawFortificationOutlines() {
                     let unitX, unitY;
             
                     if (targetUnit.isFortified && targetUnit.positionType === 'center' && targetInfo.tileKeyForTarget) {
-                        const tile = gameState.tiles.get(targetInfo.tileKeyForTarget);
+                        const tile = engine.state.tiles.get(targetInfo.tileKeyForTarget);
                         if (tile) { 
                             const centerPixel = axialToPixel(tile.q, tile.r); 
                             unitX = centerPixel.x; 
                             unitY = centerPixel.y; 
                         } else return;
                     } else if (targetInfo.edgeKey) {
-                        const edge = gameState.edges.get(targetInfo.edgeKey); 
+                        const edge = engine.state.edges.get(targetInfo.edgeKey); 
                         if (!edge) return;
                         
                         const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2); 
@@ -958,7 +958,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     mainBorderColor = currentDrawingColors[`player${enemyPlayer}`].primary;
                 } else if (gameState.selectedUnit && gameState.selectedUnit.id === unit.id) {
                     mainBorderColor = '#FFD700';
-                } else if (gameState.hoveredUnitId === unit.id && unit.player === gameState.currentPlayer) {
+                } else if (gameState.hoveredUnitId === unit.id && unit.player === engine.state.currentPlayer) {
                     mainBorderColor = '#ADD8E6'; 
                     mainBorderWidth = 2.5;
                 } else {
@@ -992,7 +992,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             const animatedUnitIds = new Set(gameState.activeAnimations.map(a => (a.unit || a.attacker).id));
             const offsetDistance = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
 
-            gameState.edges.forEach((edge) => {
+            engine.state.edges.forEach((edge) => {
                 const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge' && (!isEffectivelyDragging || u.id !== gameState.draggingUnit.id));
                 if (edgeUnitsOnly.length > 0) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
@@ -1003,7 +1003,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     
                     edgeUnitsOnly.forEach((unit, index) => {
                         if (animatedUnitIds.has(unit.id)) return;
-                        if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                        if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                             if (unit.player !== getPerspectivePlayer() && !gameState.visionCache.edges.has(unit.position)) return;
                         }
                         let unitX = mid.x, unitY = mid.y;
@@ -1017,20 +1017,20 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 }
             });
 
-            gameState.units.forEach(unit => {
+            engine.state.units.forEach(unit => {
                 if (animatedUnitIds.has(unit.id)) return;
                 if (unit.isFortified && unit.positionType === 'center' && (!isEffectivelyDragging || unit.id !== gameState.draggingUnit.id)) {
-                    if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                    if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                         if (unit.player !== getPerspectivePlayer() && !gameState.visionCache.tiles.has(unit.position)) return;
                     }
-                    const tile = gameState.tiles.get(unit.position);
+                    const tile = engine.state.tiles.get(unit.position);
                     if (tile) {
                         const {x, y} = axialToPixel(tile.q, tile.r);
                         
                         // --- VISUAL FIX: Alternate Opacity if covering Flag ---
                         let alpha = 1.0;
-                        if (gameState.flags && gameState.gridRadius === 4) {
-                            const myFlag = gameState.flags[`p${unit.player}_flag`];
+                        if (engine.state.flags && engine.state.gridRadius === 4) {
+                            const myFlag = engine.state.flags[`p${unit.player}_flag`];
                             // Check if flag is at base and base is defined as an array (Expansive)
                             if (myFlag && myFlag.status === 'at_base' && Array.isArray(myFlag.homePosition)) {
                                 const flagPos = calculateBaseCentroid(myFlag.homePosition);
@@ -1084,7 +1084,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 return;
             }
     
-            if (gameState.gameMode === 'singleplayer' && unitForHighlights.player !== gameState.playerSide) {
+            if (engine.state.gameMode === 'singleplayer' && unitForHighlights.player !== engine.state.playerSide) {
                 return;
             }
             
@@ -1099,14 +1099,14 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
 
             gameState.currentReachableMoves.forEach((data, edgeKey) => {
                 if (!gameState.isDragging && edgeKey === unitForHighlights.position) return;
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 if (edge) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     ctx.beginPath(); 
                     ctx.arc(mid.x, mid.y, highlightRadius, 0, 2 * Math.PI);
                     
                     let isObscured = false;
-                    if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                    if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                         if (!gameState.visionCache.edges.has(edgeKey)) {
                             isObscured = true;
                         }
@@ -1184,7 +1184,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             ctx.lineJoin = 'round';
 
             const points = pathEdgeKeysArray.map(edgeKey => {
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 if (!edge) return null;
                 return getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
             }).filter(p => p !== null);
@@ -1281,7 +1281,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             // Get the unit's screen position and size for the effect
             let targetX, targetY, targetRadius;
             if (targetUnit.isFortified) {
-                const tile = gameState.tiles.get(targetUnit.position);
+                const tile = engine.state.tiles.get(targetUnit.position);
                 if (tile) {
                     const center = axialToPixel(tile.q, tile.r);
                     targetX = center.x;
@@ -1289,7 +1289,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
                 }
             } else {
-                const edge = gameState.edges.get(targetUnit.position);
+                const edge = engine.state.edges.get(targetUnit.position);
                 if (edge) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     targetX = mid.x;
@@ -1411,7 +1411,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             ctx.lineWidth = 4 + (3 * (1 - progress));
             ctx.stroke();
         } else if (effect.type === 'unit_flash') {
-            const unit = gameState.units.find(u => u.id === effect.targetUnitId);
+            const unit = engine.state.units.find(u => u.id === effect.targetUnitId);
             if (!unit) return;
 
             let isVisible = false;
@@ -1424,7 +1424,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             if (isVisible) {
                 let unitX, unitY, unitRadius;
                 if (unit.isFortified) {
-                    const tile = gameState.tiles.get(unit.position);
+                    const tile = engine.state.tiles.get(unit.position);
                     if (tile) {
                         const center = axialToPixel(tile.q, tile.r);
                         unitX = center.x;
@@ -1432,7 +1432,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                         unitRadius = FORTIFIED_UNIT_DRAW_SIZE;
                     }
                 } else {
-                    const edge = gameState.edges.get(unit.position);
+                    const edge = engine.state.edges.get(unit.position);
                     if (edge) {
                         const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                         unitX = mid.x;
@@ -1684,7 +1684,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
         } else if (anim.type === 'build_bridge') {
             const builder = anim.unit;
             const startPos = getUnitScreenPosition(builder);
-            const targetEdge = gameState.edges.get(anim.targetEdgeKey);
+            const targetEdge = engine.state.edges.get(anim.targetEdgeKey);
 
             if (!startPos || !targetEdge) { stillAnimating.push(anim); return; }
 
@@ -1742,19 +1742,19 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
 
         function hasIdleAnimations() {
             // No supply lines or flags in arcade/map maker mode
-            if (gameState.gameMode === 'arcade' || gameState.mapMakerMode) return false;
+            if (engine.state.gameMode === 'arcade' || gameState.mapMakerMode) return false;
             
-            return gameState.units.some(u => {
+            return engine.state.units.some(u => {
                 if (!u.isFortified) return false;
                 
                 // 1. Check for Active Supply Lines
                 if (u.supplyLine && u.supplyLine.path && u.supplyLine.path.length > 0) return true;
                 
                 // 2. Check for Unit Covering the Flag (Expansive Map Pulse Effect)
-                if (gameState.flags && gameState.gridRadius === 4) {
-                    const myFlag = gameState.flags[`p${u.player}_flag`];
+                if (engine.state.flags && engine.state.gridRadius === 4) {
+                    const myFlag = engine.state.flags[`p${u.player}_flag`];
                     if (myFlag && myFlag.status === 'at_base' && Array.isArray(myFlag.homePosition)) {
-                        const tile = gameState.tiles.get(u.position);
+                        const tile = engine.state.tiles.get(u.position);
                         if (tile) {
                             const {x, y} = axialToPixel(tile.q, tile.r);
                             const flagPos = calculateBaseCentroid(myFlag.homePosition);
@@ -1775,15 +1775,15 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             lastFrameTime = currentTime;
 
             // 2. ARCADE LOGIC 
-            if (gameState.gameMode === 'arcade' && !gameState.gameOver && !gameState.mapMakerMode) {
-                const waitingForStart = gameState.globalTurnNumber === 1 && gameState.currentPlayer === 1 && !gameState.arcadeGameStartedInteraction;
+            if (engine.state.gameMode === 'arcade' && !engine.state.gameOver && !gameState.mapMakerMode) {
+                const waitingForStart = engine.state.globalTurnNumber === 1 && engine.state.currentPlayer === 1 && !gameState.arcadeGameStartedInteraction;
 
                 if (gameState.activeAnimations.length === 0 && !waitingForStart) { 
                     gameState.arcadeTurnTimer -= deltaTime; 
             
                     if (gameState.arcadeTurnTimer <= 0) {
                         gameState.arcadeTurnTimer = 0;
-                        if (gameState.globalTurnNumber >= 2 && gameState.swapState !== 'complete') {
+                        if (engine.state.globalTurnNumber >= 2 && gameState.swapState !== 'complete') {
                             handleForcedSwap();
                         } else {
                             proceedToEndTurn();
@@ -1802,7 +1802,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 }
             }
 
-            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode) {
+            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode) {
                 const perspectivePlayer = getPerspectivePlayer();
                 if (gameState.visionDirty || !gameState.visionCache || gameState.visionCache.player !== perspectivePlayer) {
                     const newVision = computePlayerVision(perspectivePlayer);
@@ -1872,21 +1872,21 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             if (gameState.mapMakerMode) {
                 canvas.style.transition = 'outline-color 0.4s ease-in-out';
                 canvas.style.outlineColor = '#F0F0F0';
-            } else if (gameState.gameOver) {
+            } else if (engine.state.gameOver) {
                 canvas.style.transition = 'outline-color 0.4s ease-in-out';
                 canvas.style.outlineColor = 'transparent';
-            } else if (gameState.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
+            } else if (engine.state.gameMode === 'arcade' && gameState.swapState === 'selecting_unit') {
                 canvas.style.transition = 'none'; 
-                const playerColor = TEAM_COLORS[`player${gameState.currentPlayer}`].secondary;
+                const playerColor = TEAM_COLORS[`player${engine.state.currentPlayer}`].secondary;
                 const alertColor = '#FFC020'; 
                 const pulse = (Math.sin(currentTime / 200) + 1) / 2; 
                 canvas.style.outlineColor = lerpColor(playerColor, alertColor, pulse);
             } else {
                 canvas.style.transition = 'outline-color 0.4s ease-in-out';
-                canvas.style.outlineColor = gameState.currentPlayer === 1 ? TEAM_COLORS.player1.secondary : TEAM_COLORS.player2.secondary;
+                canvas.style.outlineColor = engine.state.currentPlayer === 1 ? TEAM_COLORS.player1.secondary : TEAM_COLORS.player2.secondary;
             }
 
-            gameState.tiles.forEach(tile => drawHexFill(tile.q, tile.r, tile.type));
+            engine.state.tiles.forEach(tile => drawHexFill(tile.q, tile.r, tile.type));
             drawHexEdgesAndBoundaries();
             drawFortificationOutlines();
             drawContestedEdgeIndicator();
@@ -1956,7 +1956,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             updateActionLogDisplay();
             updateSelectedUnitInfoPanel();
 
-            if (gameState.gameOver) {
+            if (engine.state.gameOver) {
                 ui.endTurnButton.disabled = true;
                 ui.actionsPanel.style.display = 'none';
                 ui.victoryMessage.textContent = "Game Over (Loaded)";
@@ -1976,9 +1976,9 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
 
 function drawBridges() { 
     if (gameState.isPassDeviceTransition) return;
-    gameState.edges.forEach((edge, edgeKey) => { 
+    engine.state.edges.forEach((edge, edgeKey) => { 
         if (edge.bridge) {
-            if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+            if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                 if (!gameState.visionCache.edges.has(edgeKey)) return; // Skip drawing
             }
             drawBridge(edge); 
@@ -1988,17 +1988,17 @@ function drawBridges() {
 
 function drawSupplyLines() {
     if (gameState.isPassDeviceTransition) return;
-    if (gameState.gameMode === 'arcade') return;
+    if (engine.state.gameMode === 'arcade') return;
     const currentTime = Date.now();
     const currentHexSize = HEX_SIZE * gameState.renderScale;
     
-    gameState.units.forEach(unit => {
+    engine.state.units.forEach(unit => {
         if (unit.isFortified && unit.supplyLine && unit.supplyLine.path) {
             const path = unit.supplyLine.path;
             if (path.length === 0) return;
 
             const isIntercepted = path.some(edgeKey => {
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 if (!edge) return false;
                 return edge.units.some(u => u.player !== unit.player && (!gameState.isDragging || u.id !== gameState.draggingUnit.id));
             });
@@ -2024,13 +2024,13 @@ function drawSupplyLines() {
             }
 
             path.forEach(edgeKey => {
-                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                     if (unit.player !== getPerspectivePlayer() && !gameState.visionCache.edges.has(edgeKey)) {
                         return; // Skip drawing this specific unseen segment
                     }
                 }
 
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 if(edge) {
                     const p1_center = axialToPixel(edge.q1, edge.r1);
                     const p2_center = axialToPixel(edge.q2, edge.r2);
@@ -2063,9 +2063,9 @@ function drawMapMakerHighlights() {
     if (!gameState.mapMakerMode) return;
     
     const brush = gameState.mapMakerBrush;
-    if (brush.type === 'base_camp' && gameState.gridRadius === 4) {
+    if (brush.type === 'base_camp' && engine.state.gridRadius === 4) {
         const player = brush.player;
-        const currentBase = gameState.baseCampPositions[`player${player}`];
+        const currentBase = engine.state.baseCampPositions[`player${player}`];
         
         console.trace(`[Map Maker] Base highlight check. Player: ${player}, Base Size: ${Array.isArray(currentBase) ? currentBase.length : 0}`);
 
@@ -2078,7 +2078,7 @@ function drawMapMakerHighlights() {
                 const [q,r] = key.split(',').map(Number);
                 getNeighbors(q,r).forEach(n => {
                     const nKey = getTileKey(n.q, n.r);
-                    if (gameState.tiles.has(nKey) && !currentBase.includes(nKey) && !enemyBaseSet.has(nKey)) {
+                    if (engine.state.tiles.has(nKey) && !currentBase.includes(nKey) && !enemyBaseSet.has(nKey)) {
                         const testSet = [...currentBase, nKey];
                         if (isSetContiguous(testSet)) {
                             validNeighbors.add(nKey);

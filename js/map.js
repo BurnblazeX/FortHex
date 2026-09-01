@@ -198,7 +198,7 @@ function isCoordInRadius(key, radius) {
 
 function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
             const landEdges = [];
-            gameState.edges.forEach((edgeData, edgeKey) => {
+            engine.state.edges.forEach((edgeData, edgeKey) => {
                 // Use the new, more accurate isRoad() definition
                 if (isRoad(edgeKey)) {
                     landEdges.push(edgeKey);
@@ -234,7 +234,7 @@ function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
                         
                         for (const edgeKey of landEdges) {
                             if (!usedEdgesFallback.has(edgeKey)) {
-                                gameState.units.push(createUnit(player, typeToPlace, edgeKey));
+                                engine.state.units.push(createUnit(player, typeToPlace, edgeKey));
                                 usedEdgesFallback.add(edgeKey);
                                 placed = true;
                                 break;
@@ -275,7 +275,7 @@ function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
                         if (!usedEdges.has(cand.key)) {
                             // Cycle types based on placement index
                             const typeToPlace = allUnitTypes[placedCount % allUnitTypes.length];
-                            gameState.units.push(createUnit(playerNum, typeToPlace, cand.key));
+                            engine.state.units.push(createUnit(playerNum, typeToPlace, cand.key));
                             usedEdges.add(cand.key);
                             placedCount++;
                         }
@@ -284,7 +284,7 @@ function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
                         const fallbackEdge = landEdges.find(e => !usedEdges.has(e));
                         if(fallbackEdge) {
                              const typeToPlace = allUnitTypes[placedCount % allUnitTypes.length];
-                             gameState.units.push(createUnit(playerNum, typeToPlace, fallbackEdge));
+                             engine.state.units.push(createUnit(playerNum, typeToPlace, fallbackEdge));
                              usedEdges.add(fallbackEdge);
                              placedCount++;
                         } else {
@@ -301,8 +301,8 @@ function placeUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
 
 function startMapTest() {
     // 1. Unit Validation (Applies to ALL map sizes)
-    const p1Units = gameState.units.filter(u => u.player === 1).length;
-    const p2Units = gameState.units.filter(u => u.player === 2).length;
+    const p1Units = engine.state.units.filter(u => u.player === 1).length;
+    const p2Units = engine.state.units.filter(u => u.player === 2).length;
 
     if (p1Units === 0 || p2Units === 0) {
         showInstruction("Map must contain at least one unit for each player to start a test.", 3000);
@@ -310,9 +310,9 @@ function startMapTest() {
     }
 
     // 2. Base Camp Validation (Applies ONLY to Expansive R=4 maps)
-    if (gameState.gridRadius === 4) {
-        const p1Base = gameState.baseCampPositions.player1;
-        const p2Base = gameState.baseCampPositions.player2;
+    if (engine.state.gridRadius === 4) {
+        const p1Base = engine.state.baseCampPositions.player1;
+        const p2Base = engine.state.baseCampPositions.player2;
 
         // Check if bases are arrays (Expansive format) and have exactly 3 tiles
         const p1Complete = Array.isArray(p1Base) && p1Base.length === 3;
@@ -344,12 +344,12 @@ function startMapTest() {
     const tileMap = new Map(mapMakerStateBackup.tiles);
     const units = mapMakerStateBackup.units.map(u => ({ ...u, typeName: u.typeName.toUpperCase() }));
     initializeGrid(tileMap, units);
-    gameState.baseCampPositions = mapMakerStateBackup.baseCampPositions;
+    engine.state.baseCampPositions = mapMakerStateBackup.baseCampPositions;
     
     // Ensure flags are linked to the positions (handling both Edge strings and Tile Arrays implicitly via game logic)
-    if (gameState.flags) {
-        gameState.flags.p1_flag.homePosition = mapMakerStateBackup.baseCampPositions.player1;
-        gameState.flags.p2_flag.homePosition = mapMakerStateBackup.baseCampPositions.player2;
+    if (engine.state.flags) {
+        engine.state.flags.p1_flag.homePosition = mapMakerStateBackup.baseCampPositions.player1;
+        engine.state.flags.p2_flag.homePosition = mapMakerStateBackup.baseCampPositions.player2;
     }
 
     // 4. Configure the UI for test mode
@@ -392,8 +392,8 @@ function stopMapTest() {
 
 function getMapMakerBaseCampTileKeys() {
     const baseCampTileKeys = new Set();
-    const p1Coords = parseEdgeKey(gameState.baseCampPositions.player1);
-    const p2Coords = parseEdgeKey(gameState.baseCampPositions.player2);
+    const p1Coords = parseEdgeKey(engine.state.baseCampPositions.player1);
+    const p2Coords = parseEdgeKey(engine.state.baseCampPositions.player2);
 
     if (p1Coords[0] && !isNaN(p1Coords[0].q)) baseCampTileKeys.add(getTileKey(p1Coords[0].q, p1Coords[0].r));
     if (p1Coords[1] && !isNaN(p1Coords[1].q)) baseCampTileKeys.add(getTileKey(p1Coords[1].q, p1Coords[1].r));
@@ -405,7 +405,7 @@ function getMapMakerBaseCampTileKeys() {
 
 function performFloodFill(startQ, startR) {
     const startKey = getTileKey(startQ, startR);
-    const startTile = gameState.tiles.get(startKey);
+    const startTile = engine.state.tiles.get(startKey);
     if (!startTile) return;
 
     // Prevent starting a fill ON a base camp tile 
@@ -426,7 +426,7 @@ function performFloodFill(startQ, startR) {
 
     while (queue.length > 0) {
         const currentKey = queue.shift();
-        const currentTile = gameState.tiles.get(currentKey);
+        const currentTile = engine.state.tiles.get(currentKey);
 
         // Prevent the fill from SPREADING to a base camp tile
         if (currentTile.isBaseCampTile) {
@@ -441,7 +441,7 @@ function performFloodFill(startQ, startR) {
 
         for (const neighborCoord of neighbors) {
             const neighborKey = getTileKey(neighborCoord.q, neighborCoord.r);
-            const neighborTile = gameState.tiles.get(neighborKey);
+            const neighborTile = engine.state.tiles.get(neighborKey);
 
             if (neighborTile && !visited.has(neighborKey) && neighborTile.type === targetType) {
                 visited.add(neighborKey);
@@ -482,7 +482,7 @@ function enterMapMakerMode() {
     buildMapMakerPalette();
     buildMapMakerControls();
     
-    resizeMapGrid(gameState.gridRadius); 
+    resizeMapGrid(engine.state.gridRadius); 
     // --- END OF NEW ORDER ---
 
     // Configure the Test Map button for the editor
@@ -654,7 +654,7 @@ function buildMapMakerPalette() {
             // Validate Base Camp Completion
             if (gameState.mapMakerBrush.type === 'base_camp') {
                 const p = gameState.mapMakerBrush.player;
-                const base = gameState.baseCampPositions[`player${p}`];
+                const base = engine.state.baseCampPositions[`player${p}`];
                 if (Array.isArray(base) && base.length > 0 && base.length < 3) {
                     showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
                     return;
@@ -736,7 +736,7 @@ function buildMapMakerPalette() {
                 // Validate Base Camp Completion
                 if (gameState.mapMakerBrush.type === 'base_camp') {
                     const p = gameState.mapMakerBrush.player;
-                    const base = gameState.baseCampPositions[`player${p}`];
+                    const base = engine.state.baseCampPositions[`player${p}`];
                     if (Array.isArray(base) && base.length > 0 && base.length < 3) {
                         showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
                         return;
@@ -877,7 +877,7 @@ function buildMapMakerControls() {
         border: 1px solid #4a6075;
         border-radius: 5px;
     `;
-    sliderContainer.style.display = (gameState.gridRadius === 3) ? 'flex' : 'none';
+    sliderContainer.style.display = (engine.state.gridRadius === 3) ? 'flex' : 'none';
     
     const sliderLabel = document.createElement('label');
     sliderLabel.htmlFor = 'baseCampSlider';
@@ -903,7 +903,7 @@ function buildMapMakerControls() {
     controlsContainer.appendChild(sliderContainer);
 
     // --- Expansive Map Base Camp Buttons (R=4) ---
-    if (gameState.gridRadius === 4) {
+    if (engine.state.gridRadius === 4) {
         const baseToolsContainer = document.createElement('div');
         baseToolsContainer.style.cssText = "display: flex; gap: 10px; justify-content: center; margin-top: 10px; margin-bottom: 10px;";
 
@@ -911,7 +911,7 @@ function buildMapMakerControls() {
         const canSwitchFromBaseCamp = () => {
             if (gameState.mapMakerBrush.type === 'base_camp') {
                 const p = gameState.mapMakerBrush.player;
-                const base = gameState.baseCampPositions[`player${p}`];
+                const base = engine.state.baseCampPositions[`player${p}`];
                 if (Array.isArray(base) && base.length > 0 && base.length < 3) {
                     showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
                     return false;
@@ -1023,7 +1023,7 @@ function buildMapMakerControls() {
     sizeSlider.min = '2'; 
     sizeSlider.max = '4'; 
     sizeSlider.step = '1';
-    sizeSlider.value = gameState.gridRadius.toString();
+    sizeSlider.value = engine.state.gridRadius.toString();
     sizeSlider.style.width = '100%';
 
     const sizeValueLabel = document.createElement('span');
@@ -1036,14 +1036,14 @@ function buildMapMakerControls() {
 
     sizeSlider.addEventListener('change', (event) => { 
         const newRadius = parseInt(event.target.value, 10);
-        if (newRadius !== gameState.gridRadius) {
+        if (newRadius !== engine.state.gridRadius) {
             document.getElementById('customConfirmMessage').textContent = 'Resizing the map will clear all units and terrain. Are you sure?';
             currentConfirmAction = () => { 
                 resizeMapGrid(newRadius); 
                 autoSaveMap(); 
                 currentCancelAction = null; 
             };
-            currentCancelAction = () => { sizeSlider.value = gameState.gridRadius; updateSizeLabel(gameState.gridRadius); };
+            currentCancelAction = () => { sizeSlider.value = engine.state.gridRadius; updateSizeLabel(engine.state.gridRadius); };
             const confirmModal = document.getElementById('customConfirmModal');
             if (confirmModal) {
                 confirmModal.style.display = 'flex';
@@ -1072,7 +1072,7 @@ function buildMapMakerControls() {
         // Check if we can switch tool (Base Camp validation)
         if (gameState.mapMakerBrush.type === 'base_camp') {
             const p = gameState.mapMakerBrush.player;
-            const base = gameState.baseCampPositions[`player${p}`];
+            const base = engine.state.baseCampPositions[`player${p}`];
             if (Array.isArray(base) && base.length > 0 && base.length < 3) {
                 showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
                 return;
@@ -1111,20 +1111,20 @@ function buildMapMakerControls() {
 
 function resizeMapGrid(newRadius) {
     console.log(`Resizing grid to radius ${newRadius}`);
-    gameState.gridRadius = newRadius;
+    engine.state.gridRadius = newRadius;
     
     const slider = document.getElementById('mapSizeSlider');
     if (slider) slider.value = newRadius;
 
     // We update mode BEFORE rebuilding controls, so buildMapMakerControls sees the new radius
     if (newRadius === 2) { 
-        gameState.gameMode = 'arcade';
+        engine.state.gameMode = 'arcade';
         gameState.renderScale = 1.3; 
         gameState.renderOffset = { x: 0, y: 0 }; 
-        gameState.baseCampPositions = { player1: null, player2: null };
-        gameState.flags = null; // Explicitly clear flags for Arcade
+        engine.state.baseCampPositions = { player1: null, player2: null };
+        engine.state.flags = null; // Explicitly clear flags for Arcade
     } else { 
-        gameState.gameMode = 'local'; 
+        engine.state.gameMode = 'local'; 
         if (newRadius === 4) {
             const expansiveMapWidth = (2 * 4 + 1.5) * (HEX_SIZE * Math.sqrt(3));
             gameState.renderScale = CANVAS_WIDTH_NORMAL / expansiveMapWidth;
@@ -1134,8 +1134,8 @@ function resizeMapGrid(newRadius) {
         gameState.renderOffset = { x: 0, y: 0 };
 
         // --- FIX: Re-initialize flags object if missing (e.g. coming from Arcade) ---
-        if (!gameState.flags) {
-            gameState.flags = {
+        if (!engine.state.flags) {
+            engine.state.flags = {
                 'p1_flag': { id: 'p1_flag', player: 1, homePosition: null, status: 'at_base', carrierId: null },
                 'p2_flag': { id: 'p2_flag', player: 2, homePosition: null, status: 'at_base', carrierId: null }
             };
@@ -1154,27 +1154,27 @@ function resizeMapGrid(newRadius) {
         panel.style.minHeight = canvas.height + 'px';
     });
     
-    gameState.units = [];
-    gameState.tiles.clear();
-    gameState.edges.clear();
+    engine.state.units = [];
+    engine.state.tiles.clear();
+    engine.state.edges.clear();
 
     for (let q = -newRadius; q <= newRadius; q++) {
         for (let r = -newRadius; r <= newRadius; r++) {
             if (Math.abs(q + r) <= newRadius) {
                 const key = getTileKey(q, r);
-                gameState.tiles.set(key, { q, r, type: TILE_TYPES.PLAINS, fortifiedByPlayer: null });
+                engine.state.tiles.set(key, { q, r, type: TILE_TYPES.PLAINS, fortifiedByPlayer: null });
             }
         }
     }
-    gameState.tiles.forEach(tile => {
+    engine.state.tiles.forEach(tile => {
         getNeighbors(tile.q, tile.r).forEach(n_coord => {
-            if (gameState.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
+            if (engine.state.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
                 const edgeKey = getEdgeKey(tile.q, tile.r, n_coord.q, n_coord.r);
-                if (!gameState.edges.has(edgeKey)) {
-                    gameState.edges.set(edgeKey, {
+                if (!engine.state.edges.has(edgeKey)) {
+                    engine.state.edges.set(edgeKey, {
                         q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r,
                         get units() { 
-                            return gameState.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!gameState.draggingUnit || u.id !== gameState.draggingUnit.id)); 
+                            return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!gameState.draggingUnit || u.id !== gameState.draggingUnit.id)); 
                         },
                         bridge: false, bridgeHp: null, isPathway: true
                     });
@@ -1189,10 +1189,10 @@ function resizeMapGrid(newRadius) {
         const currentRotation = sliderEl ? sliderEl.value : '3';
         updateBaseCampLocations(currentRotation);
     } else {
-        gameState.baseCampPositions = { player1: null, player2: null };
-        if (gameState.flags) {
-             gameState.flags.p1_flag.homePosition = null;
-             gameState.flags.p2_flag.homePosition = null;
+        engine.state.baseCampPositions = { player1: null, player2: null };
+        if (engine.state.flags) {
+             engine.state.flags.p1_flag.homePosition = null;
+             engine.state.flags.p2_flag.homePosition = null;
         }
     }
     
@@ -1207,15 +1207,15 @@ function eraseAt(x, y) {
     const hexKey = getTileKey(hexCoords.q, hexCoords.r);
     
     const { key: closestEdgeKey, distance } = findClosestEdgeToPoint(x, y);
-    const edge = gameState.edges.get(closestEdgeKey);
+    const edge = engine.state.edges.get(closestEdgeKey);
     
     // Prioritize erasing units if clicking near an edge with units on it
     if (edge && edge.units.length > 0 && distance < (HEX_SIZE * 0.4)) {
         const unitToRemove = edge.units[edge.units.length - 1]; 
-        gameState.units = gameState.units.filter(u => u.id !== unitToRemove.id);
+        engine.state.units = engine.state.units.filter(u => u.id !== unitToRemove.id);
     } else {
         // Otherwise, erase the tile by setting it to plains
-        const tile = gameState.tiles.get(hexKey);
+        const tile = engine.state.tiles.get(hexKey);
         if (tile) {
             if (tile.isBaseCampTile) {
                 showInstruction("Cannot erase a base camp tile.", 1500);
@@ -1230,13 +1230,13 @@ function eraseAt(x, y) {
 
 function clearMapForMaker() {
     // Clear tiles back to plains and unlock them
-    gameState.tiles.forEach(tile => {
+    engine.state.tiles.forEach(tile => {
         tile.type = TILE_TYPES.PLAINS;
         tile.isBaseCampTile = false; // Reset the lock flag
     });
 
     // Clear all units
-    gameState.units = [];   
+    engine.state.units = [];   
 
     //Fog of War Reset 
     gameState.visionCache = null;
@@ -1244,7 +1244,7 @@ function clearMapForMaker() {
     gameState.visionDirty = true;
 
     // Reset Base Camp Data
-    if (gameState.gridRadius === 3) {
+    if (engine.state.gridRadius === 3) {
         // For Standard maps (R=3), re-apply the slider position to restore the fixed base camps
         const sliderEl = document.getElementById('baseCampSlider');
         if (sliderEl) {
@@ -1252,10 +1252,10 @@ function clearMapForMaker() {
         }
     } else {
         // For Expansive (R=4) and Compact (R=2), fully clear the base camp data
-        gameState.baseCampPositions = { player1: null, player2: null };
-        if (gameState.flags) {
-             gameState.flags.p1_flag.homePosition = null;
-             gameState.flags.p2_flag.homePosition = null;
+        engine.state.baseCampPositions = { player1: null, player2: null };
+        if (engine.state.flags) {
+             engine.state.flags.p1_flag.homePosition = null;
+             engine.state.flags.p2_flag.homePosition = null;
         }
     }
 
@@ -1267,7 +1267,7 @@ function clearMapForMaker() {
 function updateBaseCampLocations(sliderValue) {
     const sliderToRotations = [3, 2, 1, 0, -1, -2];
     const rotations = sliderToRotations[parseInt(sliderValue, 10)];
-    const currentRadius = gameState.gridRadius;
+    const currentRadius = engine.state.gridRadius;
     
     // Safety check
     if (!BASE_CAMP_DEFAULTS[currentRadius]) return;
@@ -1278,7 +1278,7 @@ function updateBaseCampLocations(sliderValue) {
     const oldP1Tiles = GetBaseCamp(1);
     const oldP2Tiles = GetBaseCamp(2);
     [...oldP1Tiles, ...oldP2Tiles].forEach(key => {
-        const tile = gameState.tiles.get(key);
+        const tile = engine.state.tiles.get(key);
         if (tile) {
             tile.type = TILE_TYPES.PLAINS;
             tile.isBaseCampTile = false; // Clear the property
@@ -1321,17 +1321,17 @@ function updateBaseCampLocations(sliderValue) {
     }
 
     // 4. Update Game State
-    gameState.baseCampPositions.player1 = newP1EdgeKey;
-    gameState.baseCampPositions.player2 = newP2EdgeKey;
+    engine.state.baseCampPositions.player1 = newP1EdgeKey;
+    engine.state.baseCampPositions.player2 = newP2EdgeKey;
     
-    if (gameState.flags) {
-        if (gameState.flags.p1_flag) gameState.flags.p1_flag.homePosition = newP1EdgeKey;
-        if (gameState.flags.p2_flag) gameState.flags.p2_flag.homePosition = newP2EdgeKey;
+    if (engine.state.flags) {
+        if (engine.state.flags.p1_flag) engine.state.flags.p1_flag.homePosition = newP1EdgeKey;
+        if (engine.state.flags.p2_flag) engine.state.flags.p2_flag.homePosition = newP2EdgeKey;
     }
 
     // 5. Set new base camp tiles to Plains and apply the Lock Flag
     [...p1_rotated_tiles, ...p2_rotated_tiles].forEach(key => {
-        const tile = gameState.tiles.get(key);
+        const tile = engine.state.tiles.get(key);
         if (tile) {
             tile.type = TILE_TYPES.PLAINS;
             tile.isBaseCampTile = true; // Set the property
@@ -1352,20 +1352,20 @@ function applyMapMakerBrush(x, y) {
 
     // --- BASE CAMP BRUSH LOGIC ---
     if (brush.type === 'base_camp') {
-        if (gameState.gridRadius !== 4) return; 
+        if (engine.state.gridRadius !== 4) return; 
 
-        if (!gameState.tiles.has(hexKey)) return;
+        if (!engine.state.tiles.has(hexKey)) return;
 
         const player = brush.player;
         const playerKey = `player${player}`;
         const enemyPlayerKey = `player${player === 1 ? 2 : 1}`;
         
-        const currentBase = Array.isArray(gameState.baseCampPositions[playerKey]) 
-                            ? gameState.baseCampPositions[playerKey] 
+        const currentBase = Array.isArray(engine.state.baseCampPositions[playerKey]) 
+                            ? engine.state.baseCampPositions[playerKey] 
                             : [];
         
-        const enemyBase = Array.isArray(gameState.baseCampPositions[enemyPlayerKey])
-                          ? new Set(gameState.baseCampPositions[enemyPlayerKey])
+        const enemyBase = Array.isArray(engine.state.baseCampPositions[enemyPlayerKey])
+                          ? new Set(engine.state.baseCampPositions[enemyPlayerKey])
                           : new Set();
 
         // Validation
@@ -1382,7 +1382,7 @@ function applyMapMakerBrush(x, y) {
         if (newBase.includes(hexKey)) {
             // --- REMOVE FROM BASE ---
             newBase = newBase.filter(k => k !== hexKey);
-            const tile = gameState.tiles.get(hexKey);
+            const tile = engine.state.tiles.get(hexKey);
             if (tile) {
                 tile.isBaseCampTile = false; // Unlock the tile
             }
@@ -1399,7 +1399,7 @@ function applyMapMakerBrush(x, y) {
                 return;
             }
             
-            const tile = gameState.tiles.get(hexKey);
+            const tile = engine.state.tiles.get(hexKey);
             if (tile) {
                 tile.type = TILE_TYPES.PLAINS; // Force Plains
                 tile.isBaseCampTile = true;    // Lock the tile
@@ -1407,11 +1407,11 @@ function applyMapMakerBrush(x, y) {
         }
 
         // Apply
-        gameState.baseCampPositions[playerKey] = newBase;
+        engine.state.baseCampPositions[playerKey] = newBase;
 
     // --- TILE BRUSH LOGIC ---
     } else if (brush.type === 'tile') {
-        const tile = gameState.tiles.get(hexKey);
+        const tile = engine.state.tiles.get(hexKey);
         if (tile) {
             // --- PROPERTY CHECK ---
             if (tile.isBaseCampTile) {
@@ -1423,16 +1423,16 @@ function applyMapMakerBrush(x, y) {
             // Remove invalid units on water
             if (brush.value === TILE_TYPES.WATER) {
                 getEdgesOfTile(tile.q, tile.r).forEach(edgeKey => {
-                    const edge = gameState.edges.get(edgeKey);
+                    const edge = engine.state.edges.get(edgeKey);
                     if (edge && edge.units.length > 0) {
                         const otherTileQ = (edge.q1 === tile.q && edge.r1 === tile.r) ? edge.q2 : edge.q1;
                         const otherTileR = (edge.r1 === tile.r && edge.q1 === tile.q) ? edge.r2 : edge.r1;
-                        const otherTile = gameState.tiles.get(getTileKey(otherTileQ, otherTileR));
+                        const otherTile = engine.state.tiles.get(getTileKey(otherTileQ, otherTileR));
                         
                         if (otherTile && otherTile.type === TILE_TYPES.WATER) {
                             // Filter via master array, don't try to clear the getter array!
                             const unitsToRemove = edge.units;
-                            gameState.units = gameState.units.filter(u => !unitsToRemove.some(rem => rem.id === u.id));
+                            engine.state.units = engine.state.units.filter(u => !unitsToRemove.some(rem => rem.id === u.id));
                         }
                     }
                 });
@@ -1454,7 +1454,7 @@ function applyMapMakerBrush(x, y) {
             return;
         }
 
-        const edge = gameState.edges.get(closestEdgeKey);
+        const edge = engine.state.edges.get(closestEdgeKey);
         if (edge.units.length > 0 && edge.units[0].player !== brush.player) {
             showInstruction("Cannot place on an edge occupied by the enemy.", 2000);
             return;
@@ -1464,7 +1464,7 @@ function applyMapMakerBrush(x, y) {
             return;
         }
         
-        const totalPlayerUnits = gameState.units.filter(u => u.player === brush.player).length;
+        const totalPlayerUnits = engine.state.units.filter(u => u.player === brush.player).length;
         const maxUnits = getMaxUnitsForCurrentMap(); 
         if (totalPlayerUnits >= maxUnits) {
             showInstruction(`P${brush.player} has reached the maximum of ${maxUnits} units.`, 2000);
@@ -1478,7 +1478,7 @@ function applyMapMakerBrush(x, y) {
         }
 
         const newUnit = createUnit(brush.player, brush.value, closestEdgeKey);
-        gameState.units.push(newUnit);
+        engine.state.units.push(newUnit);
     }
     
     autoSaveMap();

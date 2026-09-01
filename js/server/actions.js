@@ -56,10 +56,10 @@ async function ApplyBuildBridge(unit, targetEdgeKey, duration = 500) {
     await WaitForAnimation(duration);
 
     const events = [];
-    const edgeToBridge = gameState.edges.get(targetEdgeKey);
+    const edgeToBridge = engine.state.edges.get(targetEdgeKey);
     edgeToBridge.bridge = true;
     edgeToBridge.bridgeHp = BRIDGE_MAX_HP;
-    events.push({ type: 'LOG', text: `${unit.type.name} built bridge on ${targetEdgeKey.substring(0,7)}... HP: ${edgeToBridge.bridgeHp}`, player: gameState.currentPlayer, duration: 3000 });
+    events.push({ type: 'LOG', text: `${unit.type.name} built bridge on ${targetEdgeKey.substring(0,7)}... HP: ${edgeToBridge.bridgeHp}`, player: engine.state.currentPlayer, duration: 3000 });
 
     return { events };
 }
@@ -67,7 +67,7 @@ async function ApplyBuildBridge(unit, targetEdgeKey, duration = 500) {
 async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
     // Immediate (synchronous prefix) — matches original timing.
     const startTileKey = unit.position;
-    const oldFortifiedTile = gameState.tiles.get(startTileKey);
+    const oldFortifiedTile = engine.state.tiles.get(startTileKey);
     if (oldFortifiedTile) {
         oldFortifiedTile.fortifiedByPlayer = null;
     }
@@ -95,10 +95,10 @@ async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
     unit.currentMove -= FORTIFY_UNFORTIFY_COST;
     unit.hasPerformedMajorAction = true;
 
-    if (typeof ActionManager !== 'undefined') {
-        ActionManager.submitAction({
+    if (typeof engine !== 'undefined') {
+        engine.actionManager.SubmitAction({
             type: "UNFORTIFY",
-            turn: gameState.globalTurnNumber,
+            turn: engine.state.globalTurnNumber,
             player: unfortifyingPlayer,
             actorId: unit.id,
             payload: {
@@ -124,7 +124,7 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
 
     const events = [];
     const fortifyingPlayer = unit.player;
-    const targetTileObject = gameState.tiles.get(targetTileKey);
+    const targetTileObject = engine.state.tiles.get(targetTileKey);
 
     unit.isFortified = true;
     unit.fortifiedTileKey = targetTileKey;
@@ -138,10 +138,10 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
     unit.hasPerformedMajorAction = true;
     targetTileObject.fortifiedByPlayer = fortifyingPlayer;
 
-    if (typeof ActionManager !== 'undefined') {
-        ActionManager.submitAction({
+    if (typeof engine !== 'undefined') {
+        engine.actionManager.SubmitAction({
             type: "FORTIFY",
-            turn: gameState.globalTurnNumber,
+            turn: engine.state.globalTurnNumber,
             player: fortifyingPlayer,
             actorId: unit.id,
             payload: {
@@ -154,19 +154,19 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
     events.push({ type: 'LOG', text: `${unit.type.name} fortified on tile ${targetTileKey.substring(0,5)}...`, player: fortifyingPlayer, duration: 2500 });
 
     let flagCapturedForPlayer = null;
-    if (gameState.gameMode !== 'arcade' && gameState.flags) {
+    if (engine.state.gameMode !== 'arcade' && engine.state.flags) {
         const enemyPlayer = unit.player === 1 ? 2 : 1;
         const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
 
         if (targetTileKey === enemyFlagTileKey) {
-            const enemyFlagObj = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+            const enemyFlagObj = unit.player === 1 ? engine.state.flags.p2_flag : engine.state.flags.p1_flag;
 
             if (enemyFlagObj && enemyFlagObj.status === 'at_base') {
                 enemyFlagObj.status = 'carried';
                 enemyFlagObj.carrierId = unit.id;
                 unit.isCarryingFlag = true;
 
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} has captured the flag from the fort!`, player: gameState.currentPlayer });
+                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} has captured the flag from the fort!`, player: engine.state.currentPlayer });
 
                 const healingResult = RecalculateHealingEligibility();
                 events.push(...healingResult.events);
@@ -174,7 +174,7 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
                 const severResult = SeverSupplyLinesForPlayer(enemyPlayer);
                 events.push(...severResult.events);
 
-                const victimPlayerQueue = gameState.respawnQueue[`player${enemyPlayer}`];
+                const victimPlayerQueue = engine.state.respawnQueue[`player${enemyPlayer}`];
                 victimPlayerQueue.forEach(item => {
                     if (!item.timerHalved) {
                         item.turnsRemaining = Math.ceil(item.turnsRemaining / 2);
@@ -190,8 +190,8 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
         }
     }
 
-    if (gameState.gameMode !== 'arcade') {
-        const playerFlag = gameState.flags[`p${fortifyingPlayer}_flag`];
+    if (engine.state.gameMode !== 'arcade') {
+        const playerFlag = engine.state.flags[`p${fortifyingPlayer}_flag`];
         if (playerFlag && playerFlag.status !== 'carried') {
             recalculatePlayerSupplyNetwork(fortifyingPlayer);
         } else {
@@ -204,7 +204,7 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
 
     getNeighbors(targetTileObject.q, targetTileObject.r).forEach(neighborCoords => {
         const edgeKey = getEdgeKey(targetTileObject.q, targetTileObject.r, neighborCoords.q, neighborCoords.r);
-        const adjacentEdge = gameState.edges.get(edgeKey);
+        const adjacentEdge = engine.state.edges.get(edgeKey);
         if (adjacentEdge) {
             adjacentEdge.units.forEach(enemyUnit => {
                 if (enemyUnit.player !== fortifyingPlayer && enemyUnit.positionType === 'edge') {
@@ -223,10 +223,10 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
         }
     });
 
-    if (zocHits.length > 0 && typeof ActionManager !== 'undefined') {
-        ActionManager.submitAction({
+    if (zocHits.length > 0 && typeof engine !== 'undefined') {
+        engine.actionManager.SubmitAction({
             type: "FORTIFY_ZOC_BLAST",
-            turn: gameState.globalTurnNumber,
+            turn: engine.state.globalTurnNumber,
             player: fortifyingPlayer,
             actorId: unit.id,
             payload: { hits: zocHits }
@@ -253,7 +253,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
     await WaitForAnimation(duration);
 
     const events = [];
-    gameState.playerActionTaken[`player${gameState.currentPlayer}`] = true;
+    gameState.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
     let baseDamage = 0;
     if (attackingUnit.stats && typeof attackingUnit.stats.damage === 'number') {
@@ -324,7 +324,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
         ledgerPayload.targetEdge = targetUnitInfo.edgeKey;
         ledgerPayload.damageDealt = baseDamage;
 
-        const bridgeEdge = gameState.edges.get(targetUnitInfo.edgeKey);
+        const bridgeEdge = engine.state.edges.get(targetUnitInfo.edgeKey);
         if (bridgeEdge && bridgeEdge.bridge) {
             bridgeEdge.bridgeHp -= baseDamage;
             events.push({ type: 'UNIT_DAMAGED', unit: { position: targetUnitInfo.edgeKey, isFortified: false }, attackStatus: 'normal' });
@@ -340,8 +340,8 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                 recalculatePlayerSupplyNetwork(2);
 
                 const [h1, h2] = parseEdgeKey(targetUnitInfo.edgeKey);
-                const tile1 = gameState.tiles.get(getTileKey(h1.q, h1.r));
-                const tile2 = gameState.tiles.get(getTileKey(h2.q, h2.r));
+                const tile1 = engine.state.tiles.get(getTileKey(h1.q, h1.r));
+                const tile2 = engine.state.tiles.get(getTileKey(h2.q, h2.r));
                 const isBeach = (tile1 && tile1.type !== TILE_TYPES.WATER) || (tile2 && tile2.type !== TILE_TYPES.WATER);
                 [...bridgeEdge.units].forEach(unitOnCollapse => {
                     if (isBeach) {
@@ -361,13 +361,13 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
         } else logParts.push("Target bridge missing.");
 
     } else if (targetUnitInfo.unit) {
-        const targetUnit = gameState.units.find(u => u.id === targetUnitInfo.unit.id);
+        const targetUnit = engine.state.units.find(u => u.id === targetUnitInfo.unit.id);
 
         if (targetUnit) {
             ledgerPayload.targetId = targetUnit.id;
 
             if (attackingUnit.player !== targetUnit.player) {
-                targetUnit.lastAttackedByHostileOnTurn = gameState.globalTurnNumber;
+                targetUnit.lastAttackedByHostileOnTurn = engine.state.globalTurnNumber;
             }
 
             let actualDamage = baseDamage;
@@ -377,14 +377,14 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
             if (targetUnit.stats && typeof targetUnit.stats.defense === 'number') targetDefense = targetUnit.stats.defense;
             else targetDefense = targetUnit.type.defense || 0;
 
-            const fortTile = gameState.tiles.get(targetUnit.position);
+            const fortTile = engine.state.tiles.get(targetUnit.position);
             if (targetUnit.isFortified && fortTile && (fortTile.type.name === 'Forest' || fortTile.type.name === 'Mountain')) {
                 targetDefense -= 1;
             }
 
             if (targetUnit.isFortified) {
                 let hasCombinedArmsPartner = false;
-                const edge = gameState.edges.get(attackingUnit.position);
+                const edge = engine.state.edges.get(attackingUnit.position);
                 if (edge) {
                     if (attackingUnit.type.attackType === 'ranged') hasCombinedArmsPartner = edge.units.some(u => u.id !== attackingUnit.id && u.player === attackingUnit.player && u.type.attackType === 'melee');
                     else if (attackingUnit.type.attackType === 'melee') hasCombinedArmsPartner = edge.units.some(u => u.id !== attackingUnit.id && u.player === attackingUnit.player && u.type.attackType === 'ranged');
@@ -414,7 +414,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
             events.push({ type: 'UNIT_DAMAGED', unit: targetUnit, attackStatus });
 
             if (attackType === 'Archer' && targetUnitInfo.edgeKey && !targetUnit.isFortified) {
-                const edgeOfTarget = gameState.edges.get(targetUnitInfo.edgeKey);
+                const edgeOfTarget = engine.state.edges.get(targetUnitInfo.edgeKey);
                 const allEnemyUnitsOnEdge = edgeOfTarget ? edgeOfTarget.units.filter(u => u.player === targetUnit.player) : [];
 
                 if (allEnemyUnitsOnEdge.length === 2) {
@@ -426,12 +426,12 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
 
                     logParts.push(`Damage split between 2 units!`);
                     allEnemyUnitsOnEdge.forEach(unitToHit => {
-                        const liveSplitTarget = gameState.units.find(u => u.id === unitToHit.id);
+                        const liveSplitTarget = engine.state.units.find(u => u.id === unitToHit.id);
                         if (liveSplitTarget) {
                             liveSplitTarget.hp -= splitDamage;
                             events.push({ type: 'UNIT_DAMAGED', unit: liveSplitTarget, attackStatus });
                             logParts.push(`P${liveSplitTarget.player} ${liveSplitTarget.type.name} takes ${splitDamage} damage. HP: ${liveSplitTarget.hp}`);
-                            if (attackingUnit.player !== liveSplitTarget.player) liveSplitTarget.lastAttackedByHostileOnTurn = gameState.globalTurnNumber;
+                            if (attackingUnit.player !== liveSplitTarget.player) liveSplitTarget.lastAttackedByHostileOnTurn = engine.state.globalTurnNumber;
                             if (liveSplitTarget.hp <= 0) {
                                 const deathResult = DestroyUnitIfExists(liveSplitTarget, "destroyed");
                                 events.push(...deathResult.events);
@@ -462,7 +462,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
             }
 
             if (targetUnit.type.name === 'Horseman' && attackingUnit.type.attackType === 'melee' && targetUnitInfo.edgeKey) {
-                const edgeOfHorseman = gameState.edges.get(targetUnitInfo.edgeKey);
+                const edgeOfHorseman = engine.state.edges.get(targetUnitInfo.edgeKey);
                 const retaliatingArcher = edgeOfHorseman ? edgeOfHorseman.units.find(u => u.player === targetUnit.player && u.type.name === 'Archer') : null;
                 if (retaliatingArcher) {
                     let retDmg = retaliatingArcher.stats ? retaliatingArcher.stats.damage : retaliatingArcher.type.damage;
@@ -483,10 +483,10 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
     }
     if (hitAndRunMessage) logParts.push(hitAndRunMessage);
 
-    if (typeof ActionManager !== 'undefined') {
-        ActionManager.submitAction({
+    if (typeof engine !== 'undefined') {
+        engine.actionManager.SubmitAction({
             type: "ATTACK",
-            turn: gameState.globalTurnNumber,
+            turn: engine.state.globalTurnNumber,
             player: attackingUnit.player,
             actorId: attackingUnit.id,
             payload: {
@@ -498,25 +498,25 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
         });
     }
 
-    events.push({ type: 'LOG', text: logParts.join('<br>'), player: gameState.currentPlayer, duration: 4500 });
+    events.push({ type: 'LOG', text: logParts.join('<br>'), player: engine.state.currentPlayer, duration: 4500 });
 
     return { events, spearWalled, bridgeDestroyed };
 }
 
 function SetSupplyPointsForFlagStatus(playerNum) {
-    const playerFlag = gameState.flags[`p${playerNum}_flag`];
+    const playerFlag = engine.state.flags[`p${playerNum}_flag`];
     const playerSupplyKey = `player${playerNum}`;
-    gameState.supplyPoints[playerSupplyKey] = (playerFlag && playerFlag.status === 'carried') ? 0 : 10;
+    engine.state.supplyPoints[playerSupplyKey] = (playerFlag && playerFlag.status === 'carried') ? 0 : 10;
 }
 
 function RecalculateHealingEligibility() {
     const events = [];
-    if (gameState.gameMode === 'arcade') return { events };
+    if (engine.state.gameMode === 'arcade') return { events };
 
-    const p1FlagStolen = gameState.flags.p1_flag.status === 'carried';
-    const p2FlagStolen = gameState.flags.p2_flag.status === 'carried';
+    const p1FlagStolen = engine.state.flags.p1_flag.status === 'carried';
+    const p2FlagStolen = engine.state.flags.p2_flag.status === 'carried';
 
-    gameState.units.forEach(unit => {
+    engine.state.units.forEach(unit => {
         if (unit.isFortified) {
             unit.canHeal = unit.player === 1 ? !p1FlagStolen : !p2FlagStolen;
         } else {
@@ -532,12 +532,12 @@ function RecalculateHealingEligibility() {
 
 function DestroyUnit(unitToDestroy, reason = "destroyed") {
     const events = [];
-    const activePlayer = gameState.currentPlayer;
+    const activePlayer = engine.state.currentPlayer;
     const destroyedPlayer = unitToDestroy.player;
     const wasFortified = unitToDestroy.isFortified;
 
     if (unitToDestroy.isCarryingFlag) {
-        const flag = Object.values(gameState.flags).find(f => f.carrierId === unitToDestroy.id);
+        const flag = Object.values(engine.state.flags).find(f => f.carrierId === unitToDestroy.id);
         if (flag) {
             flag.status = 'at_base';
             flag.carrierId = null;
@@ -549,9 +549,9 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
         }
     }
 
-    if (gameState.gameMode !== 'arcade') {
+    if (engine.state.gameMode !== 'arcade') {
         const queueKey = `player${destroyedPlayer}`;
-        gameState.respawnQueue[queueKey].push({
+        engine.state.respawnQueue[queueKey].push({
             unitType: unitToDestroy.type,
             turnsRemaining: RESPAWN_TURN_TIMER,
             timerHalved: false
@@ -573,25 +573,25 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
 
     // --- Nuclear Tile Clearing ---
     if (unitToDestroy.positionType === 'edge') {
-        const edgeOfUnit = gameState.edges.get(unitToDestroy.position);
+        const edgeOfUnit = engine.state.edges.get(unitToDestroy.position);
         if (edgeOfUnit) edgeOfUnit.units = edgeOfUnit.units.filter(u => u.id !== unitToDestroy.id);
     } else if (unitToDestroy.positionType === 'center' || wasFortified) {
         const tileKey = unitToDestroy.positionType === 'center' ? unitToDestroy.position : unitToDestroy.fortifiedTileKey;
-        const fortifiedTile = gameState.tiles.get(tileKey);
+        const fortifiedTile = engine.state.tiles.get(tileKey);
         if (fortifiedTile) {
             fortifiedTile.fortifiedByPlayer = null;
         }
     }
 
-    gameState.units = gameState.units.filter(u => u.id !== unitToDestroy.id);
+    engine.state.units = engine.state.units.filter(u => u.id !== unitToDestroy.id);
 
     if (wasFortified) {
-        const playerFlag = gameState.flags[`p${destroyedPlayer}_flag`];
+        const playerFlag = engine.state.flags[`p${destroyedPlayer}_flag`];
         if (playerFlag && playerFlag.status !== 'carried') {
             recalculatePlayerSupplyNetwork(destroyedPlayer);
         } else {
             if (unitToDestroy.supplyLine && unitToDestroy.supplyLine.cost > 0) {
-                gameState.supplyPoints[`player${destroyedPlayer}`] += Math.round(unitToDestroy.supplyLine.cost);
+                engine.state.supplyPoints[`player${destroyedPlayer}`] += Math.round(unitToDestroy.supplyLine.cost);
             }
         }
     }
@@ -601,14 +601,14 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
 
 // Pure counterpart of handleUnitDeath: the existence check + delegate to DestroyUnit.
 function DestroyUnitIfExists(unitToDie, reason = "destroyed") {
-    const unitExists = gameState.units.some(u => u.id === unitToDie.id);
+    const unitExists = engine.state.units.some(u => u.id === unitToDie.id);
     if (!unitExists) return { events: [], destroyedUnitId: null };
     return DestroyUnit(unitToDie, reason);
 }
 
 function SeverSupplyLinesForPlayer(playerNum) {
     const events = [{ type: 'LOG', text: `P${playerNum}'s flag was stolen! Supply lines have been broken.`, player: playerNum === 1 ? 2 : 1 }];
-    gameState.units.forEach(unit => {
+    engine.state.units.forEach(unit => {
         if (unit.player === playerNum && unit.isFortified) {
             unit.supplyLine = null;
         }
@@ -630,16 +630,16 @@ function SeverSupplyLinesForPlayer(playerNum) {
 // recompute, or a routine per-turn resupply attempt.
 function AttemptToResupplyForts(playerNum) {
     const events = [];
-    if (gameState.gameMode === 'arcade' || !gameState.flags) return { events };
+    if (engine.state.gameMode === 'arcade' || !engine.state.flags) return { events };
 
     const wasSupplied = new Map();
-    gameState.units.forEach(u => {
+    engine.state.units.forEach(u => {
         if (u.player === playerNum && u.isFortified) wasSupplied.set(u.id, !!u.supplyLine);
     });
 
     recalculatePlayerSupplyNetwork(playerNum);
 
-    gameState.units.forEach(u => {
+    engine.state.units.forEach(u => {
         if (u.player === playerNum && u.isFortified && u.supplyLine && !wasSupplied.get(u.id)) {
             events.push({ type: 'LOG', text: `P${playerNum} ${u.type.name} is now in supply! (Cost: ${Math.round(u.supplyLine.cost)})`, player: playerNum });
         }
@@ -658,17 +658,17 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
 
     const checkAndApply = (tile, tileKey) => {
         if (tile && tile.fortifiedByPlayer === enemyPlayer && !unitDestroyed) {
-            const fortUnit = gameState.units.find(u => u.isFortified && u.position === tileKey && u.player === enemyPlayer);
+            const fortUnit = engine.state.units.find(u => u.isFortified && u.position === tileKey && u.player === enemyPlayer);
             if (fortUnit && isZoCSuppressed(fortUnit)) {
                 return false;
             }
 
             unitMoving.hp -= FORTIFICATION_DAMAGE;
 
-            if (typeof ActionManager !== 'undefined') {
-                ActionManager.submitAction({
+            if (typeof engine !== 'undefined') {
+                engine.actionManager.SubmitAction({
                     type: "MOVEMENT_ZOC_HIT",
-                    turn: gameState.globalTurnNumber,
+                    turn: engine.state.globalTurnNumber,
                     player: unitMoving.player,
                     actorId: unitMoving.id,
                     payload: {
@@ -679,7 +679,7 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
                 });
             }
 
-            events.push({ type: 'LOG', text: `P${unitMoving.player} ${unitMoving.type.name} takes ZoC. HP: ${unitMoving.hp}`, player: gameState.currentPlayer, duration: 3500 });
+            events.push({ type: 'LOG', text: `P${unitMoving.player} ${unitMoving.type.name} takes ZoC. HP: ${unitMoving.hp}`, player: engine.state.currentPlayer, duration: 3500 });
             if (unitMoving.hp <= 0) {
                 const deathResult = DestroyUnit(unitMoving, "zoc_move");
                 events.push(...deathResult.events);
@@ -692,8 +692,8 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
 
     const tile1Key = getTileKey(tileCoords[0].q, tileCoords[0].r);
     const tile2Key = getTileKey(tileCoords[1].q, tileCoords[1].r);
-    const tile1 = gameState.tiles.get(tile1Key);
-    const tile2 = gameState.tiles.get(tile2Key);
+    const tile1 = engine.state.tiles.get(tile1Key);
+    const tile2 = engine.state.tiles.get(tile2Key);
 
     if (!checkAndApply(tile1, tile1Key)) {
         checkAndApply(tile2, tile2Key);
@@ -757,10 +757,10 @@ function ApplyUnitUpgrade(unit, statType) {
     }
     events.push({ type: 'LOG', text: logMsg, player: unit.player });
 
-    if (typeof ActionManager !== 'undefined') {
-        ActionManager.submitAction({
+    if (typeof engine !== 'undefined') {
+        engine.actionManager.SubmitAction({
             type: "UNIT_UPGRADE",
-            turn: gameState.globalTurnNumber,
+            turn: engine.state.globalTurnNumber,
             player: unit.player,
             actorId: unit.id,
             payload: {
@@ -810,7 +810,7 @@ function ApplyClassSwap(unit, newType) {
 
 function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
     const events = [];
-    const masterUnit = gameState.units.find(u => u.id === unitToMove.id);
+    const masterUnit = engine.state.units.find(u => u.id === unitToMove.id);
     if (!masterUnit) return { events, unitFound: false };
     const unit = masterUnit;
     const originPos = unit.position;
@@ -826,7 +826,7 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
 
         for (let i = 1; i < path.length; i++) {
             const stepEdgeKey = path[i];
-            const stepEdgeObj = gameState.edges.get(stepEdgeKey);
+            const stepEdgeObj = engine.state.edges.get(stepEdgeKey);
             const stepCost = getEdgeCost(unit, stepEdgeKey);
 
             const hasEnemy = stepEdgeObj && stepEdgeObj.units.some(u => u.player !== unit.player);
@@ -848,9 +848,9 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
             actualCost = accumulatedCost;
             unit.ambushed = true;
             if (actualTarget === originPos) {
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} was ambushed and halted immediately!`, player: gameState.currentPlayer, duration: 3000 });
+                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} was ambushed and halted immediately!`, player: engine.state.currentPlayer, duration: 3000 });
             } else {
-                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} was ambushed and halted at ${actualTarget.substring(0,5)}...`, player: gameState.currentPlayer, duration: 3000 });
+                events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} was ambushed and halted at ${actualTarget.substring(0,5)}...`, player: engine.state.currentPlayer, duration: 3000 });
             }
         }
     }
@@ -861,33 +861,33 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
 
     // FLAG CAPTURE LOGIC
     let flagCapturedForPlayer = null;
-    if (gameState.gameMode !== 'arcade' && gameState.flags) {
+    if (engine.state.gameMode !== 'arcade' && engine.state.flags) {
         const enemyPlayer = unit.player === 1 ? 2 : 1;
         let enemyFlagHome = null;
-        if (gameState.gridRadius === 4) {
+        if (engine.state.gridRadius === 4) {
             if (isInternalBaseEdge(actualTarget)) {
                 const [h1, h2] = parseEdgeKey(actualTarget);
                 const t1 = getTileKey(h1.q, h1.r);
-                const enemyBase = gameState.baseCampPositions[`player${enemyPlayer}`];
+                const enemyBase = engine.state.baseCampPositions[`player${enemyPlayer}`];
                 if (Array.isArray(enemyBase) && enemyBase.includes(t1)) enemyFlagHome = true;
             }
         } else {
-            const flagObj = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+            const flagObj = unit.player === 1 ? engine.state.flags.p2_flag : engine.state.flags.p1_flag;
             if (flagObj && flagObj.homePosition === actualTarget) enemyFlagHome = true;
         }
 
-        const enemyFlagObj = unit.player === 1 ? gameState.flags.p2_flag : gameState.flags.p1_flag;
+        const enemyFlagObj = unit.player === 1 ? engine.state.flags.p2_flag : engine.state.flags.p1_flag;
         if (enemyFlagHome && enemyFlagObj.status === 'at_base') {
             enemyFlagObj.status = 'carried';
             enemyFlagObj.carrierId = unit.id;
             unit.isCarryingFlag = true;
             unit.currentMove = 0;
-            events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} has picked up the flag!`, player: gameState.currentPlayer });
+            events.push({ type: 'LOG', text: `P${unit.player} ${unit.type.name} has picked up the flag!`, player: engine.state.currentPlayer });
 
             const severResult = SeverSupplyLinesForPlayer(enemyPlayer);
             events.push(...severResult.events);
 
-            const victimPlayerQueue = gameState.respawnQueue[`player${enemyPlayer}`];
+            const victimPlayerQueue = engine.state.respawnQueue[`player${enemyPlayer}`];
             victimPlayerQueue.forEach(item => {
                 if (!item.timerHalved) {
                     item.turnsRemaining = Math.ceil(item.turnsRemaining / 2);
@@ -909,9 +909,9 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
     events.push(...fortDamageResult.events);
     const unitDestroyedByZoC = fortDamageResult.destroyed;
 
-    if (typeof ActionManager !== 'undefined') {
-        ActionManager.submitAction({
-            type: "MOVE", turn: gameState.globalTurnNumber, player: gameState.currentPlayer,
+    if (typeof engine !== 'undefined') {
+        engine.actionManager.SubmitAction({
+            type: "MOVE", turn: engine.state.globalTurnNumber, player: engine.state.currentPlayer,
             actorId: unit.id, payload: { from: originPos, to: actualTarget, cost: actualCost, unitState: getUnitSnapshot(unit) }
         });
     }
@@ -919,7 +919,7 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
     let shouldRecalcReachableMoves = false;
     let unitStillAlive = !unitDestroyedByZoC && unit.hp > 0;
     if (unitStillAlive) {
-        if (!ambushed) events.push({ type: 'LOG', text: `${unit.type.name} moved. MP: ${Math.floor(unit.currentMove)}`, player: gameState.currentPlayer });
+        if (!ambushed) events.push({ type: 'LOG', text: `${unit.type.name} moved. MP: ${Math.floor(unit.currentMove)}`, player: engine.state.currentPlayer });
         if (unit.currentMove >= 1 && (!unit.hasPerformedMajorAction || unit.type.canMoveAfterAttack) && !unit.ambushed) {
             shouldRecalcReachableMoves = true;
         }

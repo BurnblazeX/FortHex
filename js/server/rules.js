@@ -27,21 +27,21 @@
  // === Fine Grid System ===
 
 function buildFineGridIndex() {
-    gameState.fineGrid = new Map();
+    engine.state.fineGrid = new Map();
     
     // Tiles map to (2q, 2r)
-    gameState.tiles.forEach(tile => {
+    engine.state.tiles.forEach(tile => {
         const fq = 2 * tile.q;
         const fr = 2 * tile.r;
         const tileKey = getTileKey(tile.q, tile.r);
-        gameState.fineGrid.set(`${fq},${fr}`, { type: 'tile', key: tileKey });
+        engine.state.fineGrid.set(`${fq},${fr}`, { type: 'tile', key: tileKey });
     });
 
     // Edges map to (q1+q2, r1+r2)
-    gameState.edges.forEach((edge, edgeKey) => {
+    engine.state.edges.forEach((edge, edgeKey) => {
         const fq = edge.q1 + edge.q2;
         const fr = edge.r1 + edge.r2;
-        gameState.fineGrid.set(`${fq},${fr}`, { type: 'edge', key: edgeKey });
+        engine.state.fineGrid.set(`${fq},${fr}`, { type: 'edge', key: edgeKey });
     });
 }
 
@@ -72,7 +72,7 @@ function getFineNeighbors(fq, fr) {
 }
 
 function resolveFineCoord(fq, fr) {
-    return gameState.fineGrid.get(`${fq},${fr}`) || null;
+    return engine.state.fineGrid.get(`${fq},${fr}`) || null;
 }
 
 function fineRangeQuery(startFine, maxRange, options = {}) {
@@ -151,13 +151,13 @@ function getVisibleKeysFromUnit(unit) {
     const isForestTile = (tileKey) => {
         if (onMountainPeak) return false; // too high up for forests to matter
         if (tileKey === occupiedTileKey) return false;
-        const tile = gameState.tiles.get(tileKey);
+        const tile = engine.state.tiles.get(tileKey);
         return !!(tile && tile.type.name === 'Forest');
     };
 
     const isMountainTile = (tileKey) => {
         if (tileKey === occupiedTileKey) return false;
-        const tile = gameState.tiles.get(tileKey);
+        const tile = engine.state.tiles.get(tileKey);
         return !!(tile && tile.type.name === 'Mountain');
     };
 
@@ -190,7 +190,7 @@ function getVisibleKeysFromUnit(unit) {
     // MOUNTAIN RULE 1: a mountain's peak (its centre subHex) is always visible so long
     // as it is within visibility range — it stands above whatever else is in the way,
     // so blockers along the path don't hide it.
-    gameState.tiles.forEach((tile, tileKey) => {
+    engine.state.tiles.forEach((tile, tileKey) => {
         if (tile.type.name !== 'Mountain') return;
         if (fineDistance(startCoord, getFineCoordForTile(tileKey)) <= VISIBILITY_RANGE) {
             visibleTiles.add(tileKey);
@@ -235,7 +235,7 @@ function getSideTileKeys(unit) {
 // Does this unit share its edge with a friendly melee unit? (combined arms spotter)
 function hasCombinedArmsSupport(unit) {
     if (!unit || unit.positionType !== 'edge') return false;
-    const myEdge = gameState.edges.get(unit.position);
+    const myEdge = engine.state.edges.get(unit.position);
     if (!myEdge) return false;
     return myEdge.units.some(u => u.id !== unit.id && u.player === unit.player && u.type.attackType === 'melee');
 }
@@ -270,7 +270,7 @@ function getAttackRangeCells(unit) {
     if (onMountainPeak) {
         maxRange = 3;
     } else if (isArcher && unit.positionType === 'center' && unit.isFortified) {
-        const sourceTile = gameState.tiles.get(unit.position);
+        const sourceTile = engine.state.tiles.get(unit.position);
         if (sourceTile && getTileVisibility(sourceTile) <= 1) {
             maxRange = 1;
             isLowVisFortifiedArcher = true;
@@ -283,7 +283,7 @@ function getAttackRangeCells(unit) {
     const blocksBeyond = !isArcher ? null : (entity, distance) => {
         if (distance === 0 || entity.type !== 'tile') return false;
         if (entity.key === unit.position) return false;
-        const tile = gameState.tiles.get(entity.key);
+        const tile = engine.state.tiles.get(entity.key);
         return !!(tile && getTileVisibility(tile) === 0);
     };
 
@@ -309,7 +309,7 @@ function getAttackRangeCells(unit) {
         } else {
             if (!vis.tiles.has(data.key)) return;
 
-            const tile = gameState.tiles.get(data.key);
+            const tile = engine.state.tiles.get(data.key);
             if (!tile) return;
 
             const isMountainPeak = tile.type.name === 'Mountain';
@@ -347,7 +347,7 @@ function getAttackRangeCells(unit) {
 
         getNeighbors(q, r).forEach(n => {
             const tileKey = getTileKey(n.q, n.r);
-            const tile = gameState.tiles.get(tileKey);
+            const tile = engine.state.tiles.get(tileKey);
             if (!tile || tile.type.name !== 'Plains') return;
             if (!vis.tiles.has(tileKey)) return;
 
@@ -372,7 +372,7 @@ function getAttackRangeFineCells(unit) {
 }
 
         function getFlagTileKey(playerNum) {
-            const baseData = gameState.baseCampPositions[`player${playerNum}`];
+            const baseData = engine.state.baseCampPositions[`player${playerNum}`];
             if (!Array.isArray(baseData) || baseData.length !== 3) return null; // Only applies to 3-tile bases
 
             const tiles = baseData.map(k => {
@@ -416,9 +416,9 @@ function getAttackRangeFineCells(unit) {
             tilesThatFormTheEdge.add(getTileKey(h2.q, h2.r));
 
             for (const tileKey of tilesThatFormTheEdge) {
-                const tile = gameState.tiles.get(tileKey);
+                const tile = engine.state.tiles.get(tileKey);
                 if (tile && tile.fortifiedByPlayer === enemyPlayer) {
-                    const fortifiedUnit = gameState.units.find(u => u.position === tileKey && u.isFortified);
+                    const fortifiedUnit = engine.state.units.find(u => u.position === tileKey && u.isFortified);
                 if (fortifiedUnit && fortifiedUnit.type.name === 'Pikeman') {
                         return true; 
                     }
@@ -428,15 +428,15 @@ function getAttackRangeFineCells(unit) {
         }
 
         function isRoad(edgeKey) {
-            const edge = gameState.edges.get(edgeKey);
+            const edge = engine.state.edges.get(edgeKey);
             if (!edge) return false;
 
             if (edge.bridge) {
                 return true;
             }
 
-            const tile1 = gameState.tiles.get(getTileKey(edge.q1, edge.r1));
-            const tile2 = gameState.tiles.get(getTileKey(edge.q2, edge.r2));
+            const tile1 = engine.state.tiles.get(getTileKey(edge.q1, edge.r1));
+            const tile2 = engine.state.tiles.get(getTileKey(edge.q2, edge.r2));
 
             if (!tile1 || !tile2) return false;
 
@@ -444,17 +444,17 @@ function getAttackRangeFineCells(unit) {
         }
 
         function isEdgePlaceable(edgeKey) {
-            const edge = gameState.edges.get(edgeKey);
+            const edge = engine.state.edges.get(edgeKey);
             if (!edge) return false;
 
             // Cannot place on a player's home base/flag edge
-            if (edgeKey === gameState.baseCampPositions.player1 || edgeKey === gameState.baseCampPositions.player2) {
+            if (edgeKey === engine.state.baseCampPositions.player1 || edgeKey === engine.state.baseCampPositions.player2) {
                 return false;
             }
 
             // cannot place on a water-water edge 
-            const tile1 = gameState.tiles.get(getTileKey(edge.q1, edge.r1));
-            const tile2 = gameState.tiles.get(getTileKey(edge.q2, edge.r2));
+            const tile1 = engine.state.tiles.get(getTileKey(edge.q1, edge.r1));
+            const tile2 = engine.state.tiles.get(getTileKey(edge.q2, edge.r2));
             if (!tile1 || !tile2) return false; // Should not happen on a valid map
 
             if (tile1.type === TILE_TYPES.WATER && tile2.type === TILE_TYPES.WATER) {
@@ -489,7 +489,7 @@ function getAttackRangeFineCells(unit) {
                 // Arcade has no supply network at all, so a peak archer could never be
                 // supplied and would just bleed escalating attrition with no counterplay.
                 // Peaks are a non-arcade mechanic.
-                if (gameState.gameMode === 'arcade') return false;
+                if (engine.state.gameMode === 'arcade') return false;
                 return unit.type.name === 'Archer';
             }
             return !!tile.type.canFortify;
@@ -499,7 +499,7 @@ function getAttackRangeFineCells(unit) {
         // string depending on map radius. Normalise to an array of tile keys — hand-rolled
         // copies of this that forgot the string case have already caused one live bug.
         function GetBaseCamp(player) {
-            const rawBaseData = gameState.baseCampPositions ? gameState.baseCampPositions[`player${player}`] : null;
+            const rawBaseData = engine.state.baseCampPositions ? engine.state.baseCampPositions[`player${player}`] : null;
 
             if (Array.isArray(rawBaseData)) return [...rawBaseData];
 
@@ -520,7 +520,7 @@ function getAttackRangeFineCells(unit) {
         // archer into another class would keep granting it archer-tier vision.
         function isUnitOnMountainPeak(unit) {
             if (!unit || !unit.type || unit.type.name !== 'Archer' || unit.positionType !== 'center' || !unit.isFortified) return false;
-            const tile = gameState.tiles.get(unit.position);
+            const tile = engine.state.tiles.get(unit.position);
             return !!(tile && tile.type.name === 'Mountain');
         }
 
@@ -534,7 +534,7 @@ function getAttackRangeFineCells(unit) {
 
             if (unit.supplyLine && unit.supplyLine.path) {
                 const isIntercepted = unit.supplyLine.path.some(edgeKey => {
-                    const edge = gameState.edges.get(edgeKey);
+                    const edge = engine.state.edges.get(edgeKey);
                     return edge && edge.units.some(u => u.player !== unit.player);
                 });
                 if (!isIntercepted) return true;
@@ -548,7 +548,7 @@ function getAttackRangeFineCells(unit) {
             const visibleTiles = new Set();
             
             // 1. Identify Base Tiles
-            const baseData = gameState.baseCampPositions[`player${player}`];
+            const baseData = engine.state.baseCampPositions[`player${player}`];
             const baseTileKeys = new Set();
             
             if (Array.isArray(baseData)) {
@@ -568,7 +568,7 @@ function getAttackRangeFineCells(unit) {
                     if (!baseTileKeys.has(nKey)) {
                         // This neighbor is NOT part of the base, so the edge between them is an "Outer Edge"
                         const edgeKey = getEdgeKey(q, r, n.q, n.r);
-                        if (gameState.edges.has(edgeKey)) {
+                        if (engine.state.edges.has(edgeKey)) {
                             outerEdges.add(edgeKey);
                         }
                     }
@@ -600,7 +600,7 @@ function getAttackRangeFineCells(unit) {
             const t2 = getTileKey(h2.q, h2.r);
 
             for (let i = 1; i <= 2; i++) {
-                const base = gameState.baseCampPositions[`player${i}`];
+                const base = engine.state.baseCampPositions[`player${i}`];
                 if (Array.isArray(base)) {
                     if (base.includes(t1) && base.includes(t2)) return true;
                 }
@@ -610,7 +610,7 @@ function getAttackRangeFineCells(unit) {
 
         function getUnitCountsForPlayer(player) {
             const counts = { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
-            gameState.units.forEach(unit => {
+            engine.state.units.forEach(unit => {
                 if (unit.player === player) {
                     counts[unit.type.name]++;
                 }
@@ -645,10 +645,10 @@ function getAttackRangeFineCells(unit) {
             if (existingId) {
                 unitId = existingId;
             } else {
-                gameState.unitIdCounter++;
+                engine.state.unitIdCounter++;
                 // Format: u_p{PLAYER}_{TYPE}_{TURN}_{COUNTER}
                 // Example: u_p1_MELEE_t1_1
-                unitId = `u_p${player}_${typeKey}_t${gameState.globalTurnNumber}_${gameState.unitIdCounter}`;
+                unitId = `u_p${player}_${typeKey}_t${engine.state.globalTurnNumber}_${engine.state.unitIdCounter}`;
             }
             // ----------------------------------------
             
@@ -702,12 +702,12 @@ function getAttackRangeFineCells(unit) {
         }
 
         function spawnUnit(player, unitType) {
-            const baseData = gameState.baseCampPositions[`player${player}`];
+            const baseData = engine.state.baseCampPositions[`player${player}`];
             let potentialSpawnEdges = [];
 
             // Helper to check validity
             const isEdgeValidForSpawn = (edgeKey) => {
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 // A valid edge must exist, have less than 2 units, and have NO enemy units.
                 if (!edge || edge.units.length >= 2 || edge.units.some(u => u.player !== player)) return false;
                 
@@ -752,7 +752,7 @@ function getAttackRangeFineCells(unit) {
 
             if (spawnEdgeKey) {
                 const newUnit = createUnit(player, unitType, spawnEdgeKey);
-                gameState.units.push(newUnit);
+                engine.state.units.push(newUnit);
                 
                 logAction(`P${player} ${unitType.name} has returned to the fight!`, player);
                 gameState.visionDirty = true;
@@ -765,16 +765,16 @@ function getAttackRangeFineCells(unit) {
         }
 
         function getMaxUnitsForCurrentMap() {
-            return MAP_SIZE_UNIT_LIMITS[gameState.gridRadius] || 4;
+            return MAP_SIZE_UNIT_LIMITS[engine.state.gridRadius] || 4;
         }
 
         function getEdgeCost(unit, edgeKey) {
-            const edge = gameState.edges.get(edgeKey);
+            const edge = engine.state.edges.get(edgeKey);
             if (!edge) return Infinity;
 
             const tileCoords = parseEdgeKey(edgeKey);
-            const tile1 = gameState.tiles.get(getTileKey(tileCoords[0].q, tileCoords[0].r));
-            const tile2 = gameState.tiles.get(getTileKey(tileCoords[1].q, tileCoords[1].r));
+            const tile1 = engine.state.tiles.get(getTileKey(tileCoords[0].q, tileCoords[0].r));
+            const tile2 = engine.state.tiles.get(getTileKey(tileCoords[1].q, tileCoords[1].r));
             if (!tile1 || !tile2) return Infinity;
 
             let baseCost;
@@ -805,7 +805,7 @@ function getAttackRangeFineCells(unit) {
             const enemyPlayer = unit.player === 1 ? 2 : 1;
     
             // --- FIX: Handle Polymorphic Base Camp Data (String or Array) ---
-            const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+            const enemyBaseData = engine.state.baseCampPositions[`player${enemyPlayer}`];
             let enemyBaseTiles = [];
     
             if (Array.isArray(enemyBaseData)) {
@@ -837,8 +837,8 @@ function getAttackRangeFineCells(unit) {
                 const ccwDirIndex = (initialDirIndex + 1) % 6; const cwDirIndex = (initialDirIndex + 5) % 6;
                 const ccwNeighborCoords = { q: pivotHex.q + AXIAL_DIRECTIONS[ccwDirIndex].q, r: pivotHex.r + AXIAL_DIRECTIONS[ccwDirIndex].r };
                 const cwNeighborCoords = { q: pivotHex.q + AXIAL_DIRECTIONS[cwDirIndex].q, r: pivotHex.r + AXIAL_DIRECTIONS[cwDirIndex].r };
-                if (gameState.tiles.has(getTileKey(ccwNeighborCoords.q, ccwNeighborCoords.r))) adjacentEdges.add(getEdgeKey(pivotHex.q, pivotHex.r, ccwNeighborCoords.q, ccwNeighborCoords.r));
-                if (gameState.tiles.has(getTileKey(cwNeighborCoords.q, cwNeighborCoords.r))) adjacentEdges.add(getEdgeKey(pivotHex.q, pivotHex.r, cwNeighborCoords.q, cwNeighborCoords.r));
+                if (engine.state.tiles.has(getTileKey(ccwNeighborCoords.q, ccwNeighborCoords.r))) adjacentEdges.add(getEdgeKey(pivotHex.q, pivotHex.r, ccwNeighborCoords.q, ccwNeighborCoords.r));
+                if (engine.state.tiles.has(getTileKey(cwNeighborCoords.q, cwNeighborCoords.r))) adjacentEdges.add(getEdgeKey(pivotHex.q, pivotHex.r, cwNeighborCoords.q, cwNeighborCoords.r));
             };
             findEdgesAroundPivot(h1, h2); findEdgesAroundPivot(h2, h1);
             return Array.from(adjacentEdges);
@@ -861,7 +861,7 @@ function getAttackRangeFineCells(unit) {
                 }
             }
 
-    const playerBaseData = gameState.baseCampPositions[`player${unit.player}`];
+    const playerBaseData = engine.state.baseCampPositions[`player${unit.player}`];
     
     let reachable = new Map();
     let frontier = [{ edgeKey: unit.position, pathCost: 0, pathTaken: [unit.position] }];
@@ -902,12 +902,12 @@ function getAttackRangeFineCells(unit) {
             // -------------------------------------------------------
 
             if (nextAdjacentEdgeKey === unit.position && current.pathTaken.length === 1) continue;
-            const nextAdjacentEdgeObject = gameState.edges.get(nextAdjacentEdgeKey); 
+            const nextAdjacentEdgeObject = engine.state.edges.get(nextAdjacentEdgeKey); 
             if (!nextAdjacentEdgeObject) continue;
             
             let enemyBlocks = false;
             if (nextAdjacentEdgeObject.units.some(u => u.player !== unit.player)) {
-                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
+                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode && gameState.visionCache) {
                     if (gameState.visionCache.edges.has(nextAdjacentEdgeKey)) {
                         enemyBlocks = true;
                     }
@@ -936,13 +936,13 @@ function getAttackRangeFineCells(unit) {
 
         function findSupplyPath(startFortTileKey, player) {
             // If the player's flag is stolen, they cannot have a supply line.
-            const playerFlag = gameState.flags[`p${player}_flag`]; 
+            const playerFlag = engine.state.flags[`p${player}_flag`]; 
             if (playerFlag && playerFlag.status === 'carried') {
                 return null;
             }
 
             // --- FIX: Normalized Base Camp Tiles retrieval ---
-            const rawBaseData = gameState.baseCampPositions[`player${player}`];
+            const rawBaseData = engine.state.baseCampPositions[`player${player}`];
             let baseTiles = [];
             if (Array.isArray(rawBaseData)) {
                 baseTiles = rawBaseData;
@@ -953,7 +953,7 @@ function getAttackRangeFineCells(unit) {
             }
 
             // The "start" for our pathfinding are all edges adjacent to the fort
-            const startTile = gameState.tiles.get(startFortTileKey);
+            const startTile = engine.state.tiles.get(startFortTileKey);
             if (!startTile) return null;
             const startEdges = getEdgesOfTile(startTile.q, startTile.r);
             
@@ -1014,15 +1014,15 @@ function getAttackRangeFineCells(unit) {
         }
 
         function recalculatePlayerSupplyNetwork(playerNum) {
-            if (gameState.gameMode === 'arcade') return;
+            if (engine.state.gameMode === 'arcade') return;
 
             const playerSupplyKey = `player${playerNum}`;
             const maxSupply = 10;
 
             // Guard clause to prevent supply calculation if flag is stolen
-            const playerFlag = gameState.flags[`p${playerNum}_flag`];
+            const playerFlag = engine.state.flags[`p${playerNum}_flag`];
             if (playerFlag && playerFlag.status === 'carried') {
-                gameState.units.forEach(unit => {
+                engine.state.units.forEach(unit => {
                     if (unit.player === playerNum) {
                         unit.supplyLine = null;
                     }
@@ -1031,7 +1031,7 @@ function getAttackRangeFineCells(unit) {
             }
 
             // --- FIX: Get Normalized Base Tiles ---
-            const rawBaseData = gameState.baseCampPositions[playerSupplyKey];
+            const rawBaseData = engine.state.baseCampPositions[playerSupplyKey];
             let baseTiles = [];
             if (Array.isArray(rawBaseData)) {
                 baseTiles = rawBaseData;
@@ -1042,7 +1042,7 @@ function getAttackRangeFineCells(unit) {
             }
 
             // Reset all non-base supply lines for the player to start fresh
-            gameState.units.forEach(unit => {
+            engine.state.units.forEach(unit => {
                 if (unit.player === playerNum && unit.isFortified) {
                     if (!baseTiles.includes(unit.fortifiedTileKey)) {
                          unit.supplyLine = null;
@@ -1052,7 +1052,7 @@ function getAttackRangeFineCells(unit) {
 
             // Find all fortified units and their potential individual paths
             const potentialSupplies = [];
-            const fortifiedUnits = gameState.units.filter(u => u.player === playerNum && u.isFortified);
+            const fortifiedUnits = engine.state.units.filter(u => u.player === playerNum && u.isFortified);
 
             fortifiedUnits.forEach(unit => {
                 // Check if not in base tiles using the normalized array
@@ -1091,16 +1091,16 @@ function getAttackRangeFineCells(unit) {
                 }
             });
 
-            gameState.supplyPoints[playerSupplyKey] = maxSupply - Math.round(networkSupplyCost);
+            engine.state.supplyPoints[playerSupplyKey] = maxSupply - Math.round(networkSupplyCost);
             updateSupplyPointsDisplay();
         }
 
         function getPotentialUnfortifyTargets(unit) {
             if (!unit || !unit.isFortified || unit.positionType !== 'center') return [];
-            const fortifiedTile = gameState.tiles.get(unit.position); if (!fortifiedTile) return [];
+            const fortifiedTile = engine.state.tiles.get(unit.position); if (!fortifiedTile) return [];
     
             // Use the generic name as it can be a String or Array
-            const playerBaseData = gameState.baseCampPositions[`player${unit.player}`];
+            const playerBaseData = engine.state.baseCampPositions[`player${unit.player}`];
             const validTargets = [];
 
             getNeighbors(fortifiedTile.q, fortifiedTile.r).forEach(neighborCoords => {
@@ -1130,7 +1130,7 @@ function getAttackRangeFineCells(unit) {
                     return; // Skip this edge, it's not a valid target.
                 }
 
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
                 if (edge && getEdgeCost(unit, edgeKey) !== Infinity) {
                     const enemyOnEdge = edge.units.some(u => u.player !== unit.player);
                     const friendliesOnEdge = edge.units.filter(u => u.player === unit.player).length;
@@ -1148,11 +1148,11 @@ function getAttackRangeFineCells(unit) {
             const validTargets = new Set();
             
             // 1. Check if the unit's CURRENT edge is a valid target
-            const currentEdge = gameState.edges.get(unit.position);
+            const currentEdge = engine.state.edges.get(unit.position);
             if (currentEdge && !currentEdge.bridge) {
                 const [h1, h2] = parseEdgeKey(unit.position);
-                const tile1 = gameState.tiles.get(getTileKey(h1.q, h1.r));
-                const tile2 = gameState.tiles.get(getTileKey(h2.q, h2.r));
+                const tile1 = engine.state.tiles.get(getTileKey(h1.q, h1.r));
+                const tile2 = engine.state.tiles.get(getTileKey(h2.q, h2.r));
                 if (tile1 && tile2) {
                     const isBeachEdge = (tile1.type === TILE_TYPES.WATER && tile2.type !== TILE_TYPES.WATER) || 
                                       (tile2.type === TILE_TYPES.WATER && tile1.type !== TILE_TYPES.WATER);
@@ -1166,13 +1166,13 @@ function getAttackRangeFineCells(unit) {
             const rotationallyAdjacentEdges = getRotationallyAdjacentEdges(unit.position);
             rotationallyAdjacentEdges.forEach(adjEdgeKey => {
                 if (adjEdgeKey === unit.position) return;
-                const edgeData = gameState.edges.get(adjEdgeKey);
+                const edgeData = engine.state.edges.get(adjEdgeKey);
                 if (edgeData && !edgeData.bridge) {
                     const adjEdgeTileCoords = parseEdgeKey(adjEdgeKey);
                     if (adjEdgeTileCoords.some(coord => isNaN(coord.q))) return;
 
-                    const t1 = gameState.tiles.get(getTileKey(adjEdgeTileCoords[0].q, adjEdgeTileCoords[0].r));
-                    const t2 = gameState.tiles.get(getTileKey(adjEdgeTileCoords[1].q, adjEdgeTileCoords[1].r));
+                    const t1 = engine.state.tiles.get(getTileKey(adjEdgeTileCoords[0].q, adjEdgeTileCoords[0].r));
+                    const t2 = engine.state.tiles.get(getTileKey(adjEdgeTileCoords[1].q, adjEdgeTileCoords[1].r));
 
                     // An adjacent edge is a target if it's next to water (either beach or full water edge)
                     if ((t1 && t1.type === TILE_TYPES.WATER) || (t2 && t2.type === TILE_TYPES.WATER)) {
@@ -1199,7 +1199,7 @@ function getAttackRangeFineCells(unit) {
 
             rangeCells.forEach((data) => {
                 if (data.type === 'edge') {
-                    const edge = gameState.edges.get(data.key);
+                    const edge = engine.state.edges.get(data.key);
                     if (!edge) return;
 
                     edge.units.forEach(unitOnEdge => {
@@ -1210,10 +1210,10 @@ function getAttackRangeFineCells(unit) {
 
                     if (edge.bridge && edge.bridgeHp > 0) addBridgeTarget(data.key);
                 } else if (data.type === 'tile') {
-                    const tile = gameState.tiles.get(data.key);
+                    const tile = engine.state.tiles.get(data.key);
                     if (!tile || !tile.fortifiedByPlayer || tile.fortifiedByPlayer === attackingUnit.player) return;
 
-                    const fortifiedUnit = gameState.units.find(u => u.isFortified && u.position === data.key && u.player === tile.fortifiedByPlayer);
+                    const fortifiedUnit = engine.state.units.find(u => u.isFortified && u.position === data.key && u.player === tile.fortifiedByPlayer);
                     if (fortifiedUnit) addUnitTarget(fortifiedUnit, null, data.key);
                 }
             });
@@ -1243,7 +1243,7 @@ function getAttackRangeFineCells(unit) {
             if (!fortifiedUnit || !fortifiedUnit.isFortified) return false;
     
             const tileKey = fortifiedUnit.position;
-            const tile = gameState.tiles.get(tileKey);
+            const tile = engine.state.tiles.get(tileKey);
             if (!tile) return false;
 
             const fortPlayer = fortifiedUnit.player;
@@ -1253,7 +1253,7 @@ function getAttackRangeFineCells(unit) {
             const neighbors = getNeighbors(tile.q, tile.r);
             for (const n of neighbors) {
                 const edgeKey = getEdgeKey(tile.q, tile.r, n.q, n.r);
-                const edge = gameState.edges.get(edgeKey);
+                const edge = engine.state.edges.get(edgeKey);
         
                 if (edge && edge.units.length > 0) {
                     // Count enemies on this specific edge
@@ -1277,7 +1277,7 @@ function computePlayerVision(player) {
     const visibleEdges = new Set();
 
     // 1. Add Base Camp Visibility (Force fully visible)
-    const baseData = gameState.baseCampPositions[`player${player}`];
+    const baseData = engine.state.baseCampPositions[`player${player}`];
     let baseTiles = [];
     if (Array.isArray(baseData)) {
         baseTiles = baseData;
@@ -1301,7 +1301,7 @@ function computePlayerVision(player) {
     baseVis.edges.forEach(e => visibleEdges.add(e));
 
     // 2. Add Unit Visibility
-    gameState.units.forEach(unit => {
+    engine.state.units.forEach(unit => {
         if (unit.player === player) {
             if (unit.positionType === 'center') {
                 visibleTiles.add(unit.position);

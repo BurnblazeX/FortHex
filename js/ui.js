@@ -98,14 +98,14 @@
             }
 
             if (ui.turnDisplay) {
-                ui.turnDisplay.textContent = `Player ${gameState.currentPlayer}'s Turn`;
+                ui.turnDisplay.textContent = `Player ${engine.state.currentPlayer}'s Turn`;
             }
         }
 
         function updateGlobalTurnDisplay() {
             gameState.needsRedraw = true;   
             if (ui.globalTurnCounterDisplay) {
-                ui.globalTurnCounterDisplay.textContent = `Turn: ${gameState.globalTurnNumber}`;
+                ui.globalTurnCounterDisplay.textContent = `Turn: ${engine.state.globalTurnNumber}`;
             }
         }
 
@@ -160,11 +160,11 @@
                     if (edgeCoords && edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
                         const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r);
                         const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
-                        const tile1 = gameState.tiles.get(tile1Key);
-                        const tile2 = gameState.tiles.get(tile2Key);
+                        const tile1 = engine.state.tiles.get(tile1Key);
+                        const tile2 = engine.state.tiles.get(tile2Key);
 
                         const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
-                        const enemyBaseData = gameState.baseCampPositions[`player${enemyPlayer}`];
+                        const enemyBaseData = engine.state.baseCampPositions[`player${enemyPlayer}`];
                         const enemyBaseTileKeys = new Set();
                         if (Array.isArray(enemyBaseData)) {
                             enemyBaseData.forEach(k => enemyBaseTileKeys.add(k));
@@ -333,12 +333,12 @@
             if (promoteStatSel) promoteStatSel.style.display = 'none';
             content.className = `modal-content modal-p${player}`;
 
-            const armySize = gameState.units.filter(u => u.player === player).length;
+            const armySize = engine.state.units.filter(u => u.player === player).length;
             const maxUnits = getMaxUnitsForCurrentMap();
             
             // --- BULLETPROOF UNIT COUNTER ---
             const counts = { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
-            gameState.units.forEach(u => {
+            engine.state.units.forEach(u => {
                 if (u.player === player && u.type && u.type.name) {
                     counts[u.type.name] = (counts[u.type.name] || 0) + 1;
                 }
@@ -375,7 +375,7 @@
             const promoteContainer = document.getElementById('promoteUnitList');
             promoteContainer.innerHTML = '';
             
-            const aliveUnits = gameState.units.filter(u => u.player === player);
+            const aliveUnits = engine.state.units.filter(u => u.player === player);
             const classOrder = ['Melee', 'Archer', 'Pikeman', 'Horseman'];
             
             classOrder.forEach(className => {
@@ -418,15 +418,15 @@
             if (!container || !listEl) return;
 
             // --- FIX: Hide completely in Arcade Mode ---
-            if (gameState.gameMode === 'arcade') {
+            if (engine.state.gameMode === 'arcade') {
                 container.style.display = 'none';
                 return;
             }
 
             listEl.innerHTML = ''; 
 
-            const p1Queue = gameState.respawnQueue.player1.map(item => ({ ...item, player: 1 }));
-            const p2Queue = gameState.respawnQueue.player2.map(item => ({ ...item, player: 2 }));
+            const p1Queue = engine.state.respawnQueue.player1.map(item => ({ ...item, player: 1 }));
+            const p2Queue = engine.state.respawnQueue.player2.map(item => ({ ...item, player: 2 }));
             const combinedQueue = [...p1Queue, ...p2Queue];
 
             if (combinedQueue.length > 0) {
@@ -460,9 +460,9 @@
         function logAction(message, player, duration = 3000) {
             if (gameState.isTrainingMode) return;
             showInstruction(message, duration);
-            gameState.actionLog.push({ message: message, player: player });
-            if (gameState.actionLog.length > 25) {
-                gameState.actionLog.shift();
+            engine.state.actionLog.push({ message: message, player: player });
+            if (engine.state.actionLog.length > 25) {
+                engine.state.actionLog.shift();
             }
             updateActionLogDisplay();
         }
@@ -494,15 +494,15 @@
 
             ui.actionLogContent.innerHTML = '';
             
-            for (let i = gameState.actionLog.length - 1; i >= 0; i--) {
-                const logObject = gameState.actionLog[i];
+            for (let i = engine.state.actionLog.length - 1; i >= 0; i--) {
+                const logObject = engine.state.actionLog[i];
 
                 const originalMessage = logObject.message;
                 const activePlayer = logObject.player;
 
                 // --- FOG OF WAR FILTER ---
-                if (gameSettings.fogOfWarEnabled && gameState.gameMode !== 'arcade' && !gameState.mapMakerMode) {
-                    const viewer = (gameState.gameMode === 'singleplayer' && gameState.playerSide) ? gameState.playerSide : gameState.currentPlayer;
+                if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !gameState.mapMakerMode) {
+                    const viewer = (engine.state.gameMode === 'singleplayer' && engine.state.playerSide) ? engine.state.playerSide : engine.state.currentPlayer;
                     let isRelevant = false;
                     
                     // 1. Did the current player do it?
@@ -541,10 +541,10 @@
 
             // Rebuild the inner HTML to switch between "Supply" and "Health" labels
             // while keeping the IDs (p1Supply, p2Supply) for the color system to target.
-            if (gameState.gameMode === 'arcade') {
+            if (engine.state.gameMode === 'arcade') {
         // Calculate Total HP for Arcade Mode
-                const p1HP = gameState.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
-                const p2HP = gameState.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
+                const p1HP = engine.state.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
+                const p2HP = engine.state.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
         
                 container.innerHTML = `
                     <span>P1 Health: <span id="p1Supply">${p1HP}</span></span> | 
@@ -553,13 +553,13 @@
             } else {
                 // Standard Mode uses Supply Points
                 container.innerHTML = `
-                    <span>P1 Supply: <span id="p1Supply">${gameState.supplyPoints.player1}</span></span> | 
-                    <span>P2 Supply: <span id="p2Supply">${gameState.supplyPoints.player2}</span></span>
+                    <span>P1 Supply: <span id="p1Supply">${engine.state.supplyPoints.player1}</span></span> | 
+                    <span>P2 Supply: <span id="p2Supply">${engine.state.supplyPoints.player2}</span></span>
                 `;
             }
         }
 
-        // Thin wrapper — the actual gameState.supplyPoints mutation lives in
+        // Thin wrapper — the actual engine.state.supplyPoints mutation lives in
         // js/server/actions.js's SetSupplyPointsForFlagStatus. Client-side files
         // must not mutate gameState directly.
         function updateSupplyPointsBasedOnFlagStatus(playerNum) {
@@ -816,9 +816,9 @@
 
                 initializeGrid(mapData.tiles, mapData.units, mapData.baseCampPositions);
         
-        if (gameState.flags && mapData.baseCampPositions.player1) {
-            gameState.flags.p1_flag.homePosition = gameState.baseCampPositions.player1;
-            gameState.flags.p2_flag.homePosition = gameState.baseCampPositions.player2;
+        if (engine.state.flags && mapData.baseCampPositions.player1) {
+            engine.state.flags.p1_flag.homePosition = engine.state.baseCampPositions.player1;
+            engine.state.flags.p2_flag.homePosition = engine.state.baseCampPositions.player2;
         }
 
         showInstruction(`Preset map '${mapData.name}' loaded. Player 1's turn.`, 4000); 
@@ -853,7 +853,7 @@
                 const container = document.getElementById('color-options');
                 if (!container) return;
                 const circles = container.querySelectorAll('.color-option-circle');
-                const activeThemeIndex = gameState.playerColorSelections[playerKey];
+                const activeThemeIndex = engine.state.playerColorSelections[playerKey];
 
                 circles.forEach((circle, index) => {
                     const theme = COLOR_THEMES[index];
@@ -905,7 +905,7 @@
 
                 // 1. Update the live TEAM_COLORS object for ONLY the selected player
                 TEAM_COLORS[playerKey] = { ...COLOR_THEMES[themeIndex][playerKey] };
-                gameState.playerColorSelections[playerKey] = themeIndex; // Remember this selection
+                engine.state.playerColorSelections[playerKey] = themeIndex; // Remember this selection
 
                 // 2. Update the active circle visuals
                 const container = circle.parentElement;
@@ -1064,14 +1064,14 @@
         
         function consumeRespawnCharge(player) {
             const queueKey = `player${player}`;
-            gameState.respawnQueue[queueKey].shift(); // Remove used charge
+            engine.state.respawnQueue[queueKey].shift(); // Remove used charge
             updateRespawnQueueDisplay(); 
             
         // Check if NEXT charge is also ready (Rare, but possible)
-        const queue = gameState.respawnQueue[queueKey];
+        const queue = engine.state.respawnQueue[queueKey];
         if (queue.length > 0 && queue[0].turnsRemaining <= 0) {
             // --- FIX: Prevent AI from opening the modal ---
-            if (gameState.isTrainingMode || (gameState.gameMode === 'singleplayer' && player !== gameState.playerSide)) {
+            if (gameState.isTrainingMode || (engine.state.gameMode === 'singleplayer' && player !== engine.state.playerSide)) {
                 return; // AI handles its own loop
             }
             // Re-open for next charge
@@ -1225,7 +1225,7 @@
                     if (gameState.isTrainingMode) {
                         console.log("--- TRAINING SIMULATION ABORTED BY USER ---");
                         gameState.isTrainingMode = false;
-                        gameState.gameOver = true; // Kills the execution loop
+                        engine.state.gameOver = true; // Kills the execution loop
                         document.getElementById('trainingBanner').style.display = 'none';
                         
                         const blocker = document.getElementById('trainingInteractionBlocker');
@@ -1245,9 +1245,9 @@
                         // --- FULL BOARD SANITIZATION ---
                         setTimeout(() => { 
                             // Reset game configuration strictly back to default Local Multiplayer
-                            gameState.gameMode = 'local';
-                            gameState.playerSide = null;
-                            gameState.gameOver = false;
+                            engine.state.gameMode = 'local';
+                            engine.state.playerSide = null;
+                            engine.state.gameOver = false;
                             
                             // This completely clears ghost interactions, dragging, and hover states
                             clearSelectionAndDebugState(); 
@@ -1465,7 +1465,7 @@ function createCardBackDOM() {
         }
 
         function handleCanvasMouseMove(event) {
-            if (gameState.gameOver) return;
+            if (engine.state.gameOver) return;
             const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
 
             if (gameState.isDragging) {
@@ -1473,11 +1473,11 @@ function createCardBackDOM() {
                 handleInteractionMove(x, y);
             } else {
                 let foundHoverable = false; let newHoveredUnitId = null; const edgeUnits = [];
-                gameState.edges.forEach(edge => { 
+                engine.state.edges.forEach(edge => { 
                     if (edge.units) edge.units.forEach(u => { if (u.positionType === 'edge') edgeUnits.push({unit:u, edge}); }); 
                 });
                 for(let i = edgeUnits.length -1; i >= 0; i--) {
-                    const {unit, edge} = edgeUnits[i]; if (unit.player !== gameState.currentPlayer) continue;
+                    const {unit, edge} = edgeUnits[i]; if (unit.player !== engine.state.currentPlayer) continue;
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     let unitCenterX = mid.x, unitCenterY = mid.y;
                     const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
@@ -1492,9 +1492,9 @@ function createCardBackDOM() {
                     if (Math.sqrt((x - unitCenterX)**2 + (y - unitCenterY)**2) < (UNIT_CLICK_RADIUS * gameState.renderScale)) { newHoveredUnitId = unit.id; foundHoverable = true; break; }
                 }
                  if (!foundHoverable) {
-                     for (const unit of gameState.units) {
-                         if (unit.isFortified && unit.positionType === 'center' && unit.player === gameState.currentPlayer) {
-                             const tile = gameState.tiles.get(unit.position);
+                     for (const unit of engine.state.units) {
+                         if (unit.isFortified && unit.positionType === 'center' && unit.player === engine.state.currentPlayer) {
+                             const tile = engine.state.tiles.get(unit.position);
                              if (tile) {
                                  const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
                                  if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5) { newHoveredUnitId = unit.id; foundHoverable = true; break; }
@@ -1511,7 +1511,7 @@ function createCardBackDOM() {
         }
 
         function handleCanvasMouseUp(event) {
-            if (gameState.gameOver || !gameState.isDragging) return;
+            if (engine.state.gameOver || !gameState.isDragging) return;
             if (isLikelySyntheticFromTouch()) return;
             const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
             handleInteractionEnd(x, y, false);
@@ -1524,7 +1524,7 @@ function createCardBackDOM() {
         }
 
         function handleCanvasTouchStart(event) {
-            if (gameState.gameOver || event.touches.length !== 1) return;
+            if (engine.state.gameOver || event.touches.length !== 1) return;
             event.preventDefault();  
             lastTouchInteractionTime = Date.now();
             const touch = event.touches[0]; 
@@ -1557,7 +1557,7 @@ function createCardBackDOM() {
         }
 
 function handleCanvasTouchEnd(event) {
-    if (gameState.gameOver) return;
+    if (engine.state.gameOver) return;
     const finalTouch = event.changedTouches[0]; 
     if (!finalTouch) return;
     lastTouchInteractionTime = Date.now();
@@ -1588,7 +1588,7 @@ function handleCanvasTouchCancel(event) {
 
         function handleCanvasClick(event) {
             if (gameState.mapMakerMode) return;
-            if (gameState.gameOver || event.button !== 0) return;
+            if (engine.state.gameOver || event.button !== 0) return;
             if (isLikelySyntheticFromTouch()) return;
             if (dragOperationJustConcluded) { 
                 dragOperationJustConcluded = false; 

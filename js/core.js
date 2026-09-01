@@ -83,7 +83,7 @@
             let closestEdgeKey = null;
             let minDistanceSq = Infinity;
 
-            for (const [edgeKey, edge] of gameState.edges.entries()) {
+            for (const [edgeKey, edge] of engine.state.edges.entries()) {
                 const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                 const dSq = distSq({x, y}, mid);
                 if (dSq < minDistanceSq) {
@@ -100,14 +100,14 @@
             let unitX, unitY;
 
             if (unit.isFortified) {
-                const tile = gameState.tiles.get(unit.position);
+                const tile = engine.state.tiles.get(unit.position);
                 if (tile) {
                     const center = axialToPixel(tile.q, tile.r);
                     unitX = center.x;
                     unitY = center.y;
                 }
             } else {
-                const edge = gameState.edges.get(unit.position);
+                const edge = engine.state.edges.get(unit.position);
                 if (edge) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     unitX = mid.x;
@@ -143,9 +143,9 @@
 
 
         function handleForcedSwap() {
-            if (gameState.gameMode !== 'arcade') return;
+            if (engine.state.gameMode !== 'arcade') return;
     
-            const myUnits = gameState.units.filter(u => u.player === gameState.currentPlayer);
+            const myUnits = engine.state.units.filter(u => u.player === engine.state.currentPlayer);
             if (myUnits.length === 0) { proceedToEndTurn(); return; }
     
             const victim = myUnits[Math.floor(Math.random() * myUnits.length)];

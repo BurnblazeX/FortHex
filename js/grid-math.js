@@ -5,7 +5,7 @@
 // for rules. See FortHex_A1_Server_Core_Guide.md §4.0.
 //
 // getEdgesOfTile is the one function here that isn't actually zero-dependency
-// (it reads gameState.tiles) despite the guide listing it alongside the pure
+// (it reads engine.state.tiles) despite the guide listing it alongside the pure
 // ones — flagging rather than silently "fixing" it, see chat.
 
 function roundAxial({ q, r }) {
@@ -57,7 +57,7 @@ function rotateAxial(q, r, rotations) {
 function getEdgesOfTile(q, r) {
     const edges = new Set();
     getNeighbors(q, r).forEach(neighborCoords => {
-        if (gameState.tiles.has(getTileKey(neighborCoords.q, neighborCoords.r))) {
+        if (engine.state.tiles.has(getTileKey(neighborCoords.q, neighborCoords.r))) {
             edges.add(getEdgeKey(q, r, neighborCoords.q, neighborCoords.r));
         }
     });
