@@ -107,8 +107,14 @@ const FH = {
     // actually drops — so the server-side flow is exercised for real, only the
     // trigger is by hand.
 
-    disconnect(player, reason) {
-        const ack = transport.Send(MakeDisconnectMessage(reason || 'console', { player }));
+    // profileId defaults to this device's real profile when it has one, so the
+    // reconnect round-trip below is tested against a genuine durable id rather
+    // than against null. Pass an explicit null to stamp nothing and get A3's
+    // "an absent slot with no recorded id matches anyone" behaviour, which is
+    // still what local pass-device play relies on.
+    disconnect(player, reason, profileId) {
+        const id = profileId === undefined ? GetProfileId() : profileId;
+        const ack = transport.Send(MakeDisconnectMessage(reason || 'console', { player, profileId: id }));
         if (!ack.ok) { console.warn('✗ disconnect: ' + ack.error); return ack; }
         const left = Math.round((ack.deadline - Date.now()) / 1000);
         console.log(`✓ player ${player} absent — ${left}s to return`);
@@ -116,14 +122,17 @@ const FH = {
     },
 
     reconnect(player, profileId) {
-        // Local play has one client and one profileId, so the slot is matched by
-        // IsReturningPlayer rather than by anything this call asserts. `player`
-        // is here for readability and to warn when the claim didn't land.
-        const ack = transport.Send(MakeConnectMessage(profileId || 'local-player'));
+        // Matched by IsReturningPlayer, not by anything this call asserts: `player`
+        // is here for readability and to warn when the claim did not land.
+        //
+        // Since A5 the default is the real local profile id, so the happy path
+        // exercises real identity. Pass a made-up id to test the negative case -
+        // a slot that recorded a real id must refuse a different one.
+        const ack = transport.Send(MakeConnectMessage(profileId || GetProfileId() || 'local-player'));
         if (ack.refused) { console.warn('✗ reconnect refused: ' + ack.refused); return ack; }
         if (ack.reconnected === null) { console.warn('✗ nobody was absent'); return ack; }
         if (player !== undefined && ack.reconnected !== player) {
-            console.warn(`note: claimed slot ${ack.reconnected}, not ${player} (A5 seam — see IsReturningPlayer)`);
+            console.warn(`note: claimed slot ${ack.reconnected}, not ${player} (matched by IsReturningPlayer)`);
         }
         console.log(`✓ player ${ack.reconnected} back — resync: ${ack.resync.units.length} units, ` +
                     `filtered=${ack.resync.filtered}, turn ${ack.resync.globalTurnNumber} p${ack.resync.currentPlayer}`);
@@ -146,6 +155,52 @@ const FH = {
         });
         console.table(rows);
         return rows;
+    },
+
+    // --- profile: local identity (A5) -------------------------------------
+    //
+    // The real trigger is Menu > Multiplayer > Online, which shows the consent
+    // screen and then calls GetOrCreateProfile. These commands call the EXACT
+    // same functions, so scripted testing does not have to drive a menu click
+    // through the DOM - and there is no second code path that happens to agree.
+    //
+    // Note what these do NOT do: bypass consent capture. FH.createProfile takes
+    // consent as an argument and it defaults to FALSE, so a profile made from here
+    // is unconsented unless you say otherwise. The screen is the thing that
+    // captures a real yes, and it is the only thing that does.
+
+    profile() {
+        const p = GetProfile();
+        if (!p) { console.log('(no profile on this device — that is the normal state)'); return null; }
+        console.table([{ id: p.id, name: p.name, consent: p.consent, created: new Date(p.createdAt).toLocaleString() }]);
+        return p;
+    },
+
+    // Creates if absent, returns the existing one otherwise - GetOrCreateProfile
+    // semantics, matching what the Online button does. Calling it twice does not
+    // produce two profiles.
+    createProfile(name, consent) {
+        const before = GetProfile();
+        const p = GetOrCreateProfile(name, consent === true);
+        console.log((before ? 'existing' : 'created') + ' profile: ' + p.name + '  ' + p.id +
+                    '  consent=' + p.consent);
+        return p;
+    },
+
+    consent(value) {
+        if (value === undefined) return HasArchiveConsent();
+        const p = SetConsent(value);
+        if (p) console.log('consent = ' + p.consent);
+        return p;
+    },
+
+    // Back to the no-profile state, to test the majority case without clearing
+    // site data by hand. Not reachable from any UI: the roadmap rules account
+    // management out of scope, and this is a test seam, not a feature.
+    clearProfile() {
+        ClearProfile();
+        console.log('profile cleared — this device is back to never having gone online');
+        return null;
     },
 
     // The one command here that isn't something a player could do — and it still
@@ -198,9 +253,12 @@ const FH = {
               FH.place(player, 'MELEE', edgeKey)  FH.removeUnit(id)
               FH.fill(q, r, 'WATER')
 
-  session     FH.sessions()                FH.disconnect(player, reason?)
+  session     FH.sessions()                FH.disconnect(player, reason?, profileId?)
               FH.reconnect(player?)        FH.heartbeat()
               FH.expire(player)            FH.resolve(player, 'save')
+
+  profile     FH.profile()                 FH.createProfile('Name', consent?)
+              FH.consent(true|false)       FH.clearProfile()
 
   capture     FH.log('label')
 

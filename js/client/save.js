@@ -9,6 +9,11 @@
 //
 // fineGrid is deliberately absent: it's derived, and rehydrateGameState()
 // rebuilds it via buildFineGridIndex().
+//
+// A5 note: `profile` is deliberately NOT in this list. A save carries who wrote
+// it, but that is a fact about the file, not state the engine owns - so it must
+// not be pushed onto engine.state at load. See ApplyLoadedState below for where
+// it does land, and why loading a save never adopts its author as this device.
 const ENGINE_SAVE_FIELDS = [
     'gameMode', 'playerSide', 'gridRadius', 'playerColorSelections',
     'units', 'currentPlayer', 'globalTurnNumber', 'actionLog', 'matchHistory',
@@ -59,6 +64,13 @@ function ApplyLoadedState(loadedState) {
     ENGINE_SAVE_FIELDS.forEach(field => { delete gameState[field]; });
     delete gameState.tiles;
     delete gameState.edges;
+
+    // A5. `profile` is not an ENGINE_SAVE_FIELD, so it survives the merge above
+    // and sits on gameState as a record of who wrote the file. Nothing reads it
+    // back into localStorage, and that is the point: a save is evidence of who
+    // played a match, never a credential. Loading a friend's save must not make
+    // this browser think it is them - the only thing that writes a local profile
+    // is js/client/profile.js, from the Online flow.
 }
 
 function saveSettings() {

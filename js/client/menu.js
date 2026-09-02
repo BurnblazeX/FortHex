@@ -92,6 +92,29 @@ function WireMainMenu() {
         showInstruction("New Local Multiplayer game started.", 3000);
     });
 
+    // --- A5: the real profile-creation trigger --------------------------
+    //
+    // Menu > Multiplayer > Online is the moment the roadmap names for lazy
+    // profile creation, and this is that click. It was a disabled
+    // "Online (Coming Soon)" button with no listener at all before A5.
+    //
+    // What happens AFTER the profile exists — matchmaking, negotiation, the
+    // actual connection — is Track B, and is deliberately not stubbed out here.
+    // The handler dead-ends in a message saying so. Track B replaces that one
+    // branch and leaves the profile step alone.
+    document.getElementById('onlineMultiplayerButton').addEventListener('click', () => {
+        PromptForProfileSetup((profile) => {
+            // Declined, or dismissed. No profile was created; stay where they were.
+            if (!profile) return;
+
+            // The engine already has it: js/client/profile.js updates
+            // engine.localProfile on every write, so BuildSaveObject can attach it
+            // and connect/disconnect messages can carry a real durable id from here
+            // on. Nothing to wire at this call site.
+
+            showInstruction("Online play isn't available yet — coming in a future build.", 4000);
+        });
+    });
     document.getElementById('backToMainMenuButtonSP').addEventListener('click', () => {
         spMenuContent.style.display = 'none';
         mainMenuContent.style.display = 'block';

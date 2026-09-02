@@ -84,6 +84,21 @@ class FortHexEngine {
             player1: MakePlayerSession(),
             player2: MakePlayerSession(),
         };
+
+        // Who is playing at this device, when they have a local profile (A5).
+        // Null is the normal state: a profile is created lazily on first entry
+        // into Online multiplayer and most players never make one.
+        //
+        // Declared here so the field is discoverable rather than appearing from
+        // outside, and set by the composition root (js/main.js) - the engine is
+        // handed plain data and never learns that localStorage exists. Unlike
+        // the two fields above it DOES reach a save file: BuildSaveObject
+        // (js/testament.js) attaches it as `profile`, which is a record of who
+        // wrote the file rather than anything about the board.
+        //
+        // Track B note: a second concurrent match means a second instance, and
+        // whoever creates it owns setting this on it.
+        this.localProfile = null;
     }
 
     Emit(event) {

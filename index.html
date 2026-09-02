@@ -215,7 +215,7 @@
                  <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;">Multiplayer</h3>
                 <div class="menu-options-container">
                     <button id="localMultiplayerButton" class="action-button">Local</button>
-                    <button id="onlineMultiplayerButton" class="action-button" disabled="">Online (Coming Soon)</button>
+                    <button id="onlineMultiplayerButton" class="action-button">Online</button>
                 </div>
                  <button id="backToMainMenuButtonMP" class="action-button action-button-cancel" style="margin-top: 25px;">Back</button>
             </div>
@@ -740,6 +740,76 @@
         </div>
     </div>
 
+
+    <!-- A5 local profile setup + consent. Shown ONLY on the first Menu > Multiplayer
+         > Online click, and only when no profile exists yet — never at launch, never
+         for Singleplayer or Local Multiplayer.
+
+         Vanilla DOM, matching every other modal here and given the same deliberately
+         unpolished treatment A4 gave the side-selection modal. Roadmap B1 rebuilds
+         this screen in React with a preset-pfp picker; F1 migrates the rest.
+
+         The body text is a PLACEHOLDER. The real Terms of Service copy is a
+         product-level decision and is explicitly not this track's to write. -->
+    <div id="profileSetupModalOverlay" class="modal-overlay" style="display: none;">
+        <div id="profileSetupModalContent" class="modal-content" style="max-width: 620px; text-align: left;">
+            <h2 style="margin-bottom: 6px; text-align: center;">Set up your online profile</h2>
+            <p style="margin-bottom: 18px; text-align: center; font-size: 0.9em; opacity: 0.85;">
+                Stored on this device only. No account, no password, nothing to remember.
+            </p>
+
+            <label for="profileNameInput" style="display: block; margin-bottom: 6px; font-weight: bold;">Display name</label>
+            <input id="profileNameInput" type="text" maxlength="24" autocomplete="off" spellcheck="false"
+                   placeholder="Player"
+                   style="width: 100%; box-sizing: border-box; padding: 10px 12px; margin-bottom: 20px;
+                          font-family: inherit; font-size: 1em; color: #fff; background: rgba(0,0,0,0.35);
+                          border: 2px solid #4a6075; border-radius: 6px;">
+
+            <div style="border: 2px solid #4a6075; border-radius: 6px; background: rgba(0,0,0,0.25);
+                        max-height: 220px; overflow-y: auto; padding: 14px 16px; margin-bottom: 16px;
+                        font-size: 0.88em; line-height: 1.5;">
+                <p style="color: #FFC020; font-weight: bold; margin-bottom: 10px;">
+                    PLACEHOLDER — not final legal text.
+                </p>
+                <p style="margin-bottom: 10px;">
+                    Going online creates a profile on this device: a display name you choose and a
+                    randomly generated identifier. It is not an account. There is no password, nothing
+                    is verified against a server, and it cannot be recovered — clearing your browser
+                    data or playing in a different browser produces a new profile.
+                </p>
+                <p style="margin-bottom: 10px;">
+                    <strong>Match archiving.</strong> With your agreement, matches you play that involve
+                    a human — against another player or against the AI — may be recorded as a log of the
+                    moves made, tagged with your profile identifier. This is intended to power a future
+                    replay feature and to study how the game is actually played.
+                </p>
+                <p style="margin-bottom: 10px;">
+                    <strong>Balance data.</strong> With the same agreement, aggregate information about
+                    matches — which units win, which upgrades get chosen, how long games run — may be
+                    used to balance the game.
+                </p>
+                <p style="margin-bottom: 10px;">
+                    <strong>Nothing is sent anywhere yet.</strong> There is no central server at this
+                    stage of development. Anything recorded stays on your device.
+                </p>
+                <p style="margin-bottom: 0;">
+                    You can change this answer later. Declining means no profile is created and you can
+                    keep playing Singleplayer and Local Multiplayer exactly as before.
+                </p>
+            </div>
+
+            <label for="profileConsentCheckbox" style="display: flex; align-items: center; gap: 10px; margin-bottom: 22px; cursor: pointer;">
+                <input id="profileConsentCheckbox" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;">
+                <span>I agree to the Terms of Service.</span>
+            </label>
+
+            <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                <button id="profileSetupAccept" class="action-button" disabled>Continue</button>
+                <button id="profileSetupCancel" class="action-button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="respawnModalOverlay" class="modal-overlay">
         <div id="respawnModalContent" class="modal-content" style="max-width: 950px; min-height: 450px; display: flex; flex-direction: column;">
             
@@ -801,6 +871,7 @@
     <script src="js/client/theme.js"></script>
     <script src="js/client/assets.js"></script>
     <script src="js/client/storage-keys.js"></script>
+    <script src="js/client/profile.js"></script>
     <script src="js/client/client-state.js"></script>
     <script src="js/client/ui.js"></script>
     <script src="js/client/coordinates.js"></script>

@@ -89,6 +89,10 @@ const failures = [];
 let totalBefore = 0;
 let totalAfter = 0;
 
+// The last fixture to migrate cleanly, kept so the A5 section below has a REAL
+// current-schema file to work from rather than a hand-written approximation of one.
+let lastMigrated = null;
+
 files.sort().forEach(file => {
     const full = path.join(FIXTURE_DIR, file);
     const rawText = fs.readFileSync(full, 'utf8');
@@ -136,6 +140,14 @@ files.sort().forEach(file => {
     if (after.units !== before.units) problems.push('unit count ' + before.units + ' -> ' + after.units);
     if (after.tiles !== before.tiles) problems.push('tile count ' + before.tiles + ' -> ' + after.tiles);
     // Edges are deliberately not carried; the regeneration check below covers them.
+
+    // A5. Every fixture here predates the local profile, so none may arrive with
+    // one. This is the "known version, expected field missing" case the chain has
+    // always handled, and the v8->v9 step is a no-op precisely so it stays that way:
+    // an absent profile is the normal state, not a gap for a migration to fill.
+    if (data.profile !== undefined) {
+        problems.push('migration invented a profile on a pre-A5 file');
+    }
 
     // Every unit must arrive in the current model, whatever era it came from.
     (data.units || []).forEach(u => {
@@ -252,6 +264,7 @@ files.sort().forEach(file => {
     const sizeAfter = Buffer.byteLength(JSON.stringify(data), 'utf8');
     totalBefore += sizeBefore;
     totalAfter += sizeAfter;
+    if (!problems.length) lastMigrated = data;
 
     const content = DescribeContent(data);
     const shrink = Math.round((1 - sizeAfter / sizeBefore) * 100);
@@ -276,6 +289,78 @@ files.sort().forEach(file => {
         failures.push(file + ': ' + p);
     });
 });
+
+
+// --- A5: the with-profile and without-profile cases -------------------------
+//
+// Every archived fixture above is the without-profile case and always will be —
+// they were all written before a profile could exist. So the with-profile case
+// needs a v9 file, and there is no such thing in the archive to load. Rather than
+// invent a save shape by hand (which would test the harness's idea of the format
+// instead of the format), take a real migrated fixture, attach a profile, and put
+// it back through the same chain.
+//
+// What is being proved here is narrow and worth stating: the field survives a
+// round trip, its absence survives one too, and adding it changes nothing else.
+if (lastMigrated) {
+    const a5 = [];
+
+    const shapeOf = (obj) => {
+        const copy = { ...obj };
+        delete copy.profile;
+        return JSON.stringify(copy);
+    };
+
+    const withoutProfile = JSON.parse(JSON.stringify(lastMigrated));
+    const withProfile = JSON.parse(JSON.stringify(lastMigrated));
+    withProfile.profile = { id: 'fixture-profile-0001', name: 'Fixture' };
+
+    console.warn = () => {};
+    const bare = MigrateSave(withoutProfile);
+    const tagged = MigrateSave(withProfile);
+    console.warn = realWarn;
+
+    // A current-version file migrates zero steps either way.
+    if (bare.report.steps.length !== 0) a5.push('a v9 file without a profile was migrated');
+    if (tagged.report.steps.length !== 0) a5.push('a v9 file with a profile was migrated');
+
+    if (bare.data.profile !== undefined) a5.push('a profile appeared on a file that had none');
+    if (!tagged.data.profile) a5.push('the profile did not survive the chain');
+    else {
+        if (tagged.data.profile.id !== 'fixture-profile-0001') a5.push('the profile id changed in migration');
+        if (tagged.data.profile.name !== 'Fixture') a5.push('the profile name changed in migration');
+    }
+
+    // The conditional must be a true no-op, not "usually empty": with the profile
+    // removed the two files are identical.
+    if (shapeOf(tagged.data) !== shapeOf(bare.data)) {
+        a5.push('attaching a profile changed the rest of the file');
+    }
+
+    // And it survives expansion, which is what a load actually calls.
+    const expanded = ExpandSaveObject(tagged.data, { forPlayer: 1 });
+    if (!expanded.profile || expanded.profile.id !== 'fixture-profile-0001') {
+        a5.push('the profile did not survive ExpandSaveObject');
+    }
+    const expandedBare = ExpandSaveObject(bare.data, { forPlayer: 1 });
+    if (expandedBare.profile !== undefined) a5.push('expansion invented a profile');
+
+    // Detection: a v9 file that names its author can be told apart by shape; one
+    // that does not cannot, and reports v8. That is by design — see
+    // MigrateAddProfile — and is asserted so it is a decision, not a surprise.
+    const strip = (o) => { const c = { ...o }; delete c.schemaVersion; delete c.saveVersion; return c; };
+    if (DetectVersion(strip(tagged.data)) !== 9) a5.push('an unlabelled file with a profile did not infer as v9');
+    if (DetectVersion(strip(bare.data)) !== 8) a5.push('an unlabelled file without a profile did not infer as v8');
+
+    console.log('');
+    if (a5.length) {
+        console.log('FAIL A5 profile round trip');
+        a5.forEach(p => { console.log('       !!  ' + p); failures.push('A5: ' + p); });
+    } else {
+        console.log('ok   A5 profile   with-profile and without-profile both round-trip; ' +
+                    'absent stays absent; v9-with-profile infers by shape, v9-without reports v8 by design');
+    }
+}
 
 console.log('');
 console.log('total ' + Math.round(totalBefore / 1024) + 'K -> ' + Math.round(totalAfter / 1024) + 'K' +

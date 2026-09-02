@@ -26,10 +26,13 @@
 // versions. It never re-judges a gameplay decision that was legal under the rules
 // of the build that wrote it. Old saves are not wrong for being old.
 
-// Bumped whenever a new migration step is appended. 8 = B30, the Track A reshape.
+// Bumped whenever a new migration step is appended. 8 = B30, the Track A reshape;
+// 9 = A5, the optional local player profile a save carries when the device that
+// wrote it has one.
 //
-// EXPECTED NEXT BUMP: Track C (fine grid migration). Burn's flag, recorded here
-// because this line is where whoever does it will start.
+// EXPECTED NEXT BUMP: Track C (fine grid migration), now a v9->v10 step since A5
+// took v8->v9. Burn's flag, recorded here because this line is where whoever
+// does it will start.
 //
 // It is NOT the fineGrid index that forces it - that stays derived, rebuilt by
 // buildFineGridIndex() at load, which is why the lean schema drops it. What
@@ -47,7 +50,7 @@
 // no-backporting rule, though arguably it is re-spelling rather than re-judging),
 // or the ledger keeps mixed representations and every reader handles both.
 // A6's archive and D3's Gospel corpus both read that ledger - see the A4 handoff.
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 
 // The verified mapping from beta number to schema version. Built by diffing the ten
 // real fixture files (B20-B29), NOT from the guide's provisional table - which was
@@ -63,6 +66,8 @@ const CURRENT_SCHEMA_VERSION = 8;
 //   v7  B29           edges shed their unit copies; stats/upgrades/typeId model;
 //                     matchHistory and unitIdCounter appear; tile visibility
 //   v8  B30           Track A's engine.state reshape, and the lean schema
+//   v9  B30           A5's optional profile - the one boundary in this table
+//                     that adds nothing mandatory; see MigrateAddProfile
 const BETA_SCHEMA_VERSIONS = {
     B20: 1, B21: 1, B22: 1,
     B23: 2,
@@ -71,7 +76,7 @@ const BETA_SCHEMA_VERSIONS = {
     B27: 5,
     B28: 6,
     B29: 7,
-    B30: 8,
+    B30: 9,
 };
 
 // --- warnings ---------------------------------------------------------------
@@ -139,7 +144,14 @@ function InferVersionFromShape(data) {
     // The lean shape: tiles name their type instead of copying it, and carry no
     // coordinates because the key already holds them.
     const firstTile = NormalizeEntries(data.tiles)[0];
-    if (firstTile && firstTile[1] && firstTile[1].typeId !== undefined) return 8;
+    if (firstTile && firstTile[1] && firstTile[1].typeId !== undefined) {
+        // A9-shaped file that happens to name its author. The absence of a profile
+        // proves nothing - it is the normal state - so an unlabelled lean file with
+        // no profile is reported as v8 and migrates through a no-op step to v9.
+        // This is the one boundary in the table with no reliable distinguishing
+        // mark, and the reason that is acceptable is in MigrateAddProfile.
+        return (data.profile && typeof data.profile === 'object') ? 9 : 8;
+    }
 
     if (sample.stats !== undefined || data.matchHistory !== undefined) return 7;
     if (data.baseCampPositions !== undefined || data.mapMakerBrush !== undefined) return 6;
@@ -175,6 +187,7 @@ const MIGRATIONS = [
     { from: 5, to: 6, Migrate: MigrateAddMapMakerEra },
     { from: 6, to: 7, Migrate: MigrateToStatsModel },
     { from: 7, to: 8, Migrate: MigrateToEngineState },
+    { from: 8, to: 9, Migrate: MigrateAddProfile },
 ];
 
 // The runner. Detect, then step forward one schema version at a time, auditing
@@ -390,6 +403,28 @@ function MigrateToEngineState(data, report) {
     return BuildLeanSave(data, report);
 }
 
+// v8 -> v9 (B30 -> B30). A5's local player profile.
+//
+// This step is a genuine no-op, and that is the correct implementation rather
+// than a placeholder. Every boundary above this one ADDED something a save must
+// carry; v9 adds something a save carries only when the device that wrote it has
+// a profile at all - which most devices never do, because a profile is created
+// lazily on first entry into Online multiplayer and nowhere else.
+//
+// So there is nothing to fill in. A v8 file has no profile because no profile
+// existed when it was written; a v9 file from a device with no profile has none
+// for exactly the same reason. Inventing an empty one here would be the opposite
+// of what A5 asked for - the field being ABSENT is the majority case and the
+// meaningful one, not a gap to paper over.
+//
+// The consequence worth knowing about is in InferVersionFromShape: because the
+// only thing v9 adds is optional, a v9 save without a profile is shape-identical
+// to a v8 one and there is no distinguishing mark to test for. Misdetecting one
+// as the other is harmless precisely because this step does nothing.
+function MigrateAddProfile(data) {
+    return data;
+}
+
 // --- the lean current schema ------------------------------------------------
 //
 // Measured against the real B29 fixture rather than reasoned about abstractly.
@@ -419,6 +454,12 @@ const SAVE_ENGINE_FIELDS = [
     'unitIdCounter', 'flags', 'respawnQueue', 'unitCounts', 'supplyPoints',
     'baseCampPositions', 'gameOver', 'arcadeTotalTurns', 'isTrainingMode',
     'mapMakerMode', 'playerActionTaken',
+
+    // A5. Who wrote the file: { id, name }, or absent. Read off the engine
+    // INSTANCE rather than engine.state in BuildSaveObject (see below) - it is
+    // metadata about the device, not a fact about the board. Listed here so the
+    // migration chain carries it through untouched rather than dropping it.
+    'profile',
 ];
 
 // Everything worth keeping about a unit. type/hp/maxHp are absent on purpose:
@@ -629,6 +670,29 @@ function BuildSaveObject(engineInstance, extras) {
     flat.pendingVictory = engineInstance.pendingVictory !== undefined
         ? engineInstance.pendingVictory
         : null;
+
+    // A5. Who wrote this file, when the device that wrote it has a profile.
+    //
+    // Read off the engine INSTANCE, not engine.state and not a global: this
+    // module is DOM-free and runs inside a bare Worker with no localStorage,
+    // which is what tools/worker-smoke.js actively asserts. The composition root
+    // (js/main.js) hands the engine the profile as plain data, and
+    // js/client/profile.js keeps it current if one is created mid-session. So the
+    // engine never learns how a profile is stored - only what its id and name are.
+    //
+    // ONE call site, deliberately, exactly as A4 built the rest of this function:
+    // both a manual save and ResolveDisconnectOutcome come through here, and
+    // neither has to remember to attach anything.
+    //
+    // Absent, not null, when there is no profile. That is what makes a save from
+    // the majority case - a device that has never gone online - byte-identical to
+    // one written before this track existed.
+    if (engineInstance.localProfile && engineInstance.localProfile.id) {
+        flat.profile = {
+            id: String(engineInstance.localProfile.id),
+            name: String(engineInstance.localProfile.name || ""),
+        };
+    }
 
     const save = BuildLeanSave(flat, report);
     save.savedAt = Date.now();

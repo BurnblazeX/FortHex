@@ -347,3 +347,86 @@ function ApplyChosenSide(side) {
         setTimeout(() => { executeAITurn(); }, 1500);
     }
 }
+
+// === A5: profile setup + consent =============================================
+//
+// The first-Online-entry screen. Collects a display name and a single blanket
+// agreement (guide §6.1 — one toggle covering both match archiving and balance
+// telemetry, not separate consent for each), then creates the profile with that
+// consent already attached rather than creating an unconsented one and setting
+// the flag afterwards.
+//
+// Gating is the standard pattern: the checkbox sits below a scrollable document,
+// and Continue is disabled until it is checked. No scroll-tracking enforcement —
+// the checkbox being at the bottom of something that has to be scrolled is the
+// enforcement, and the stricter version was deliberately left unbuilt (§6.2).
+//
+// Vanilla DOM, same as every modal in this file and the same deliberately
+// unpolished treatment A4 gave the side-selection screen. Roadmap B1 rebuilds it
+// in React with the preset-pfp picker.
+//
+// Calls back with the profile on accept and with null on decline. Declining
+// creates NOTHING — not a consent:false profile — so a player who says no is in
+// exactly the state they were in before they clicked.
+function PromptForProfileSetup(onDone) {
+    const finish = (profile) => { if (typeof onDone === 'function') onDone(profile); };
+
+    // Already has one: this screen is first-entry only, so there is nothing to ask.
+    const existing = GetProfile();
+    if (existing) { finish(existing); return; }
+
+    const overlay = document.getElementById('profileSetupModalOverlay');
+    const nameInput = document.getElementById('profileNameInput');
+    const checkbox = document.getElementById('profileConsentCheckbox');
+    const accept = document.getElementById('profileSetupAccept');
+    const cancel = document.getElementById('profileSetupCancel');
+
+    // No markup is a bug, not a reason to silently create an unconsented profile.
+    if (!overlay || !nameInput || !checkbox || !accept || !cancel) {
+        console.error('[Profile] Setup modal markup missing — refusing to create a profile.');
+        finish(null);
+        return;
+    }
+
+    // Fresh every time: this can open again after a decline, and a stale checkbox
+    // would mean the second visit starts pre-agreed.
+    nameInput.value = '';
+    checkbox.checked = false;
+    accept.disabled = true;
+
+    const close = () => {
+        overlay.classList.remove('modal-visible');
+        setTimeout(() => { overlay.style.display = 'none'; }, 300);
+    };
+
+    // Replace rather than add, for the same reason MaybePromptForSide does: this
+    // screen can open more than once and stale listeners would fire again.
+    checkbox.onchange = () => { accept.disabled = !checkbox.checked; };
+
+    accept.onclick = () => {
+        // Belt and braces. The button is disabled without the checkbox, but the
+        // rule that matters — no profile without consent — is enforced here, where
+        // the write actually happens, not only by a disabled attribute.
+        if (!checkbox.checked) return;
+
+        close();
+        const profile = GetOrCreateProfile(nameInput.value, true);
+        showInstruction('Profile created for ' + profile.name + '.', 2500);
+        finish(profile);
+    };
+
+    cancel.onclick = () => { close(); finish(null); };
+
+    // Clicking the backdrop is a decline, matching how every other dismissible
+    // modal here treats it.
+    overlay.onclick = (e) => { if (e.target === overlay) { close(); finish(null); } };
+
+    // .modal-overlay is display:none AND opacity:0/visibility:hidden (modals.css),
+    // so setting display alone shows nothing. Display first, .modal-visible on a
+    // later frame — the A4 browser pass found this the hard way.
+    overlay.style.display = 'flex';
+    setTimeout(() => {
+        overlay.classList.add('modal-visible');
+        nameInput.focus();
+    }, 10);
+}

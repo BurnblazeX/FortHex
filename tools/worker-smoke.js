@@ -506,10 +506,173 @@ const HARNESS = `
             };
         });
 
+
+        // --- A5: the profile a save carries, and the identity seam it feeds ---
+        //
+        // Two things are under test and they are separate: that a save attaches a
+        // profile WHEN ONE EXISTS and is unchanged when one does not, and that
+        // IsReturningPlayer does the right thing now that a durable id flows into it.
+        //
+        // Running here is the point. This worker has no document, no window and no
+        // localStorage - asserted at the top of this harness - so if testament.js
+        // ever reached for GetProfile() directly instead of taking the profile off
+        // the engine instance, this block is where that would blow up.
+        const profileFlow = await step('A5 profile', async () => {
+            const probe = CreateEngineInstance();
+            const saved = globalThis.engine;
+            globalThis.engine = probe;
+            probe.settings.animationsEnabled = false;
+            InitializeGrid();
+
+            // savedAt is a timestamp, so two saves of the same match differ by it
+            // alone. Strip it to compare the shape rather than the moment.
+            const shapeOf = (save) => {
+                const copy = { ...save };
+                delete copy.savedAt;
+                return JSON.stringify(copy);
+            };
+
+            // --- the majority case: no profile, nothing changes ---
+            if (probe.localProfile !== undefined && probe.localProfile !== null) {
+                throw new Error('a fresh engine instance already carried a profile');
+            }
+            const bare = BuildSaveObject(probe).save;
+            if ('profile' in bare) {
+                throw new Error('a save from a device with no profile carried a profile field');
+            }
+
+            // --- with a profile: attached, and nothing else moved ---
+            probe.localProfile = { id: 'p-smoke-0001', name: 'Smoke' };
+            const tagged = BuildSaveObject(probe).save;
+            if (!tagged.profile) throw new Error('a save from a device with a profile carried none');
+            if (tagged.profile.id !== 'p-smoke-0001') throw new Error('the save recorded the wrong id');
+            if (tagged.profile.name !== 'Smoke') throw new Error('the save recorded the wrong name');
+            if (tagged.profile.consent !== undefined) {
+                throw new Error('consent leaked into a save - it is a device answer, not match data');
+            }
+
+            // The conditional must be a true no-op for the majority case, not
+            // "usually empty": everything except the profile is byte-identical.
+            const strippedTagged = { ...tagged };
+            delete strippedTagged.profile;
+            if (shapeOf(strippedTagged) !== shapeOf(bare)) {
+                throw new Error('attaching a profile changed the rest of the save');
+            }
+
+            // ...and clearing it again returns to exactly the pre-A5 shape.
+            probe.localProfile = null;
+            if (shapeOf(BuildSaveObject(probe).save) !== shapeOf(bare)) {
+                throw new Error('a save is not byte-identical to before once a profile is removed');
+            }
+            probe.localProfile = { id: 'p-smoke-0001', name: 'Smoke' };
+
+            // --- through a real JSON cycle and the migration chain ---
+            const cycled = JSON.parse(JSON.stringify(BuildSaveObject(probe).save));
+            const migrated = MigrateSave(cycled);
+            if (migrated.report.steps.length !== 0) {
+                throw new Error('a current save was migrated: ' + migrated.report.steps.join(','));
+            }
+            if (!migrated.data.profile || migrated.data.profile.id !== 'p-smoke-0001') {
+                throw new Error('the profile did not survive the chain');
+            }
+            const expandedA5 = ExpandSaveObject(migrated.data, { forPlayer: 1 });
+            if (!expandedA5.profile || expandedA5.profile.name !== 'Smoke') {
+                throw new Error('the profile did not survive expansion');
+            }
+
+            // --- the v8 file that predates all of this ---
+            // Every archived fixture is this case. It must detect as v8, take the
+            // one no-op step, and arrive at v9 with no invented profile.
+            const asV8 = JSON.parse(JSON.stringify(bare));
+            asV8.schemaVersion = 8;
+            if (DetectVersion(asV8) !== 8) throw new Error('a v8 save did not detect as v8');
+            const upgraded = MigrateSave(asV8);
+            if (upgraded.report.toVersion !== CURRENT_SCHEMA_VERSION) throw new Error('v8 did not reach current');
+            if (upgraded.report.steps.join(',') !== '8->9') {
+                throw new Error('v8 took the wrong path: ' + upgraded.report.steps.join(','));
+            }
+            if ('profile' in upgraded.data) throw new Error('the v8->v9 step invented a profile');
+
+            // Shape inference has no mark for a v9 without a profile, by design -
+            // see MigrateAddProfile. Assert what it actually does rather than
+            // pretending it can tell them apart.
+            const unlabelled = JSON.parse(JSON.stringify(bare));
+            delete unlabelled.schemaVersion;
+            delete unlabelled.saveVersion;
+            if (DetectVersion(unlabelled) !== 8) throw new Error('an unlabelled lean save did not infer as v8');
+            const unlabelledTagged = JSON.parse(JSON.stringify(cycled));
+            delete unlabelledTagged.schemaVersion;
+            delete unlabelledTagged.saveVersion;
+            if (DetectVersion(unlabelledTagged) !== 9) {
+                throw new Error('an unlabelled save WITH a profile did not infer as v9');
+            }
+
+            // --- the identity seam, with a real durable id ---
+            // A3 built IsReturningPlayer and A5 read it before touching it: it is a
+            // plain equality check and needed no change. This proves that by test.
+            const t = CreateLocalTransport(probe);
+            t.Send(MakeConnectMessage('p-smoke-0001'));
+
+            // 1. a slot that recorded a real id accepts that id back
+            t.Send(MakeDisconnectMessage('a5', { player: 2, profileId: 'p-smoke-0001' }));
+            if (probe.playerSessions.player2.profileId !== 'p-smoke-0001') {
+                throw new Error('the disconnect did not record the profile id');
+            }
+            const rightId = t.Send(MakeConnectMessage('p-smoke-0001'));
+            if (rightId.reconnected !== 2) throw new Error('a real profile id failed to reclaim its own slot');
+
+            // 2. ...and refuses a different one
+            t.Send(MakeDisconnectMessage('a5', { player: 2, profileId: 'p-smoke-0001' }));
+            const wrongId = t.Send(MakeConnectMessage('p-smoke-9999'));
+            if (wrongId.reconnected !== null) {
+                throw new Error('a different profile id claimed a slot it does not own');
+            }
+            if (probe.playerSessions.player2.connected) {
+                throw new Error('a refused claim reconnected the slot anyway');
+            }
+            // The rightful owner can still come back afterwards.
+            if (t.Send(MakeConnectMessage('p-smoke-0001')).reconnected !== 2) {
+                throw new Error('a failed claim by someone else locked the real owner out');
+            }
+
+            // 3. local pass-device play, unchanged from A3: a slot that recorded no
+            //    id matches any returning client. This is the case that must NOT
+            //    have changed, and it is the one most likely to have.
+            probe.playerSessions.player2.profileId = null;
+            t.Send(MakeDisconnectMessage('a5-local', { player: 2 }));
+            if (probe.playerSessions.player2.profileId !== null) {
+                throw new Error('a disconnect with no profileId stamped one anyway');
+            }
+            if (!IsReturningPlayer('anything-at-all', 2)) {
+                throw new Error('A3 pass-device behaviour regressed: an unstamped slot refused a client');
+            }
+            const anyone = t.Send(MakeConnectMessage('some-other-client'));
+            if (anyone.reconnected !== 2) throw new Error('an unstamped slot did not match a returning client');
+
+            // --- the disconnect-resolution save takes the same one path ---
+            DisconnectPlayer(2, 'a5-resolve');
+            probe.playerSessions.player2.deadline -= DISCONNECT_TIMEOUT_MS + 1000;
+            CheckDisconnectDeadlines();
+            const ack = t.Send(MakeActionMessage('resolve-disconnect', { player: 1, choice: 'save' }));
+            const outcome = ack.result && ack.result.outcome;
+            if (!outcome || !outcome.save) throw new Error('resolution returned no save');
+            if (!outcome.save.profile || outcome.save.profile.id !== 'p-smoke-0001') {
+                throw new Error('the disconnect save skipped the profile - two save paths have diverged');
+            }
+
+            globalThis.engine = saved;
+            return {
+                bareBytes: JSON.stringify(bare).length,
+                taggedBytes: JSON.stringify(tagged).length,
+                v8Steps: upgraded.report.steps.join(',') || 'none',
+            };
+        });
+
         parentPort.postMessage({
             ok: true,
             sessionFlow,
             testament,
+            profileFlow,
             steps: trace.length,
             moved: from + ' -> ' + mover.position,
             rejections,
@@ -564,6 +727,9 @@ worker.on('message', (m) => {
         console.log('  A3 ledger       :', m.sessionFlow.ledger);
         console.log('  A4 testament    :', m.testament.schema, 'save,', m.testament.units, 'units,',
                     m.testament.bytes + 'B, round-trips clean; disconnect ->', m.testament.disposition);
+        console.log('  A5 profile      :', 'no-profile save ' + m.profileFlow.bareBytes + 'B, tagged ' +
+                    m.profileFlow.taggedBytes + 'B; v8 file -> ' + m.profileFlow.v8Steps +
+                    '; IsReturningPlayer unchanged (real id matches, wrong id refused, unstamped matches anyone)');
     } else {
         console.error('FAIL after step:', m.failedAfter);
         console.error('  ' + m.error);

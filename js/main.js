@@ -32,9 +32,20 @@ transport.OnMessage((message) => {
     }
 });
 
+// A5: the profile is read once, here, and handed to the engine as plain data.
+// Reading it does NOT create one — GetProfile returns null for the majority of
+// players, who have never entered the Online flow, and null is the normal answer.
+// The engine carries it so BuildSaveObject (js/testament.js) can attach it to a
+// save without that DOM-free module reaching for localStorage, which it does not
+// have in a Worker. js/client/profile.js keeps this field current if a profile is
+// created later in the session.
+engine.localProfile = ProfileForSave(GetProfile());
+
 // Local play still "connects" - one code path for local and networked, which
-// is the whole point of A1.
-transport.Send(MakeConnectMessage('local-player'));
+// is the whole point of A1. The id is the real profile id when this device has
+// one, and the A1 placeholder when it does not: A5 changed what flows into this
+// field, not the field itself or anything that reads it.
+transport.Send(MakeConnectMessage(GetProfileId() || 'local-player'));
 
 // --- 3. Client wiring ---
 // Registered at script scope, not inside window.onload, exactly as before -

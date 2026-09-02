@@ -4,3 +4,7 @@
 const SETTINGS_STORAGE_KEY = 'forthex_user_settings';
 const COLOR_PREF_STORAGE_KEY = 'forthex_color_preferences';
 const MAP_MAKER_AUTOSAVE_KEY = 'forthex_map_maker_autosave';
+// A5. The local player profile — name, stable id, consent flag. Written only
+// when a player first enters the Online flow, never at launch, so the ABSENCE
+// of this key is the normal state for anyone who has not gone online.
+const PROFILE_STORAGE_KEY = 'forthex_local_profile';
