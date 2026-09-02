@@ -87,6 +87,12 @@ async function ApplyBuildBridge(unit, targetEdgeKey, duration = 500) {
     edgeToBridge.bridgeHp = BRIDGE_MAX_HP;
     engine.Emit({ type: 'LOG', text: `${unit.type.name} built bridge on ${targetEdgeKey.substring(0,7)}... HP: ${edgeToBridge.bridgeHp}`, player: engine.state.currentPlayer, duration: 3000 });
 
+    engine.actionManager.RecordHistory({
+        type: "BUILD_BRIDGE", turn: engine.state.globalTurnNumber, player: engine.state.currentPlayer,
+        actorId: unit.id,
+        payload: { targetEdge: targetEdgeKey, bridgeHp: edgeToBridge.bridgeHp, unitState: GetUnitSnapshot(unit) }
+    });
+
     return {};
 }
 
@@ -830,6 +836,12 @@ function ApplyClassSwap(unit, newType) {
     engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
     engine.Emit({ type: 'LOG', text: `P${unit.player} morphed ${oldType} into ${template.name}.`, player: unit.player });
 
+    engine.actionManager.RecordHistory({
+        type: "CLASS_SWAP", turn: engine.state.globalTurnNumber, player: unit.player,
+        actorId: unit.id,
+        payload: { fromType: oldType, toType: template.name, unitState: GetUnitSnapshot(unit) }
+    });
+
     return {};
 }
 
@@ -924,6 +936,16 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
 
             flagCapturedForPlayer = enemyPlayer;
             engine.Emit({ type: 'FLAG_CAPTURED', player: enemyPlayer, carrierId: unit.id, carrierUnit: unit });
+
+            // Until now a flag being stolen left no trace in the ledger at all -
+            // a capture-the-flag win read as a sequence of ordinary MOVEs. A6's
+            // archive is meant to be the corpus Gospel learns from, so the
+            // game-defining events have to be in it.
+            engine.actionManager.RecordHistory({
+                type: "FLAG_TAKEN", turn: engine.state.globalTurnNumber, player: unit.player,
+                actorId: unit.id,
+                payload: { victimPlayer: enemyPlayer, at: actualTarget, unitState: GetUnitSnapshot(unit) }
+            });
         }
     }
 

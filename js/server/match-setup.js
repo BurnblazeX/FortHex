@@ -105,7 +105,7 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
                     const newEdge = { q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r, bridge: false, bridgeHp: null, isPathway: true };
                     Object.defineProperty(newEdge, 'units', {
                         get: function() {
-                            return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!engine.unitVisibilityFilter || engine.unitVisibilityFilter(u)));
+                            return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey);
                         },
                         configurable: true,
                         enumerable: false

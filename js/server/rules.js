@@ -788,6 +788,12 @@ function getAttackRangeFineCells(unit) {
                 
                 engine.Emit({ type: 'LOG', text: `P${player} ${unitType.name} has returned to the fight!`, player });
                 engine.Emit({ type: 'VISION_INVALIDATED' });
+
+                engine.actionManager.RecordHistory({
+                    type: "UNIT_SPAWN", turn: engine.state.globalTurnNumber, player,
+                    actorId: newUnit.id,
+                    payload: { typeName: unitType.name, at: spawnEdgeKey }
+                });
                 return true;
             }
 

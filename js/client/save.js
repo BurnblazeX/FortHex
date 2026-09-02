@@ -486,7 +486,7 @@ function rehydrateGameState() {
         engine.state.edges.forEach((edge, edgeKey) => {
             Object.defineProperty(edge, 'units', {
                 get: function() { 
-                    return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!engine.unitVisibilityFilter || engine.unitVisibilityFilter(u)));
+                    return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey);
                 },
                 configurable: true,
                 enumerable: false

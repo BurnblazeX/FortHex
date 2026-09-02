@@ -76,16 +76,6 @@ class FortHexEngine {
         this.visionCache = null;
         this.visionDirty = true;
 
-        // Optional client hook. The edge `units` accessor hides whatever unit
-        // the player is currently dragging, so it renders lifted off the board
-        // and doesn't block its own move. That is a client concern, but ~90
-        // call sites read edge.units and rely on the filtered view, so rather
-        // than reaching for the client's gameState.draggingUnit from inside the
-        // engine, the client installs a predicate here (see js/main.js).
-        // Stays null headless, which is why js/server/ now runs in a Worker.
-        // Transitional: A2 makes dragging a pure client-side prediction that
-        // never touches engine state, at which point this can go.
-        this.unitVisibilityFilter = null;
     }
 
     Emit(event) {
@@ -134,10 +124,12 @@ class ActionManager {
         if (outcome && typeof outcome.then === 'function') {
             return outcome.then(result => {
                 this.RecordAccepted(message, verdict);
+                this.SettleMatchState(spec);
                 return { ok: true, result };
             });
         }
         this.RecordAccepted(message, verdict);
+        this.SettleMatchState(spec);
         return { ok: true, result: outcome };
     }
 
@@ -147,6 +139,20 @@ class ActionManager {
     // where A6's consent-gated match archive attaches without having to find
     // the dispatch point again.
     RecordAccepted(message, verdict) {
+    }
+
+    // The server decides when a match is over, rather than waiting to be asked.
+    // Before this, CheckVictoryCondition was called only from the client
+    // wrappers - a client that simply never called it would play on forever,
+    // which is precisely the hole server authority exists to close. Editor
+    // actions are exempt: a map maker has no victory condition.
+    //
+    // Training is unaffected: it bypasses the transport entirely and calls core
+    // logic directly, so it never reaches this dispatch point.
+    SettleMatchState(spec) {
+        if (spec.editor) return;
+        if (this.engine.state.gameOver) return;
+        CheckVictoryCondition();
     }
 
     Reject(message, error, detail) {

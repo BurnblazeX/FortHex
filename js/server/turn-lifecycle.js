@@ -153,7 +153,19 @@ function CheckArcadeTimeLimitVictory() {
 }
 
 function CheckVictoryCondition() {
-    if (engine.state.gameOver) return { victory: true, alreadyOver: true };
+    if (engine.state.gameOver) {
+        // The server now detects victory on its own (ActionManager.SubmitAction
+        // calls this after every accepted gameplay action), so by the time the
+        // client asks, the match may already be over. Hand it the verdict once
+        // rather than a bare alreadyOver, or the victory screen and the
+        // champion-brain update never run.
+        if (engine.pendingVictory) {
+            const verdict = engine.pendingVictory;
+            engine.pendingVictory = null;
+            return verdict;
+        }
+        return { victory: true, alreadyOver: true };
+    }
 
     const victoryText = DetermineVictoryText();
     if (!victoryText) {
@@ -190,7 +202,7 @@ function CheckVictoryCondition() {
 
     engine.state.gameOver = true;
 
-    return {
+    const verdict = {
         victory: true,
         isTrainingMode: false,
         isSingleplayerVictory,
@@ -201,6 +213,16 @@ function CheckVictoryCondition() {
         winningPlayer,
         isDraw,
     };
+
+    engine.Emit({ type: 'VICTORY', text: victoryText, winner: winningPlayer, isDraw });
+    engine.actionManager.RecordHistory({
+        type: "VICTORY", turn: engine.state.globalTurnNumber, player: winningPlayer,
+        payload: { victoryText, winner: winningPlayer, isDraw }
+    });
+
+    // Held for whichever client asks next. Consumed above.
+    engine.pendingVictory = verdict;
+    return verdict;
 }
 
 // Arcade forces a random class swap on a random unit. Choosing the victim and

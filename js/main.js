@@ -19,11 +19,6 @@
 // --- 1. Server ---
 const engine = CreateEngineInstance();
 
-// The client's view filter for the edge `units` accessor - hides the unit
-// being dragged so it reads as lifted off the board. Installed from here
-// rather than from inside the engine, which knows nothing about dragging.
-engine.unitVisibilityFilter = (unit) => !gameState.draggingUnit || unit.id !== gameState.draggingUnit.id;
-
 // --- 2. Transport ---
 // Local, in-process for now. Track B swaps this for WebRTC/WebSocket/UPnP
 // adapters carrying the same four message shapes.

@@ -511,7 +511,7 @@ function InitializeGridDimensions(newRadius, baseCampRotation = '3') {
                     engine.state.edges.set(edgeKey, {
                         q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r,
                         get units() {
-                            return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey && (!engine.unitVisibilityFilter || engine.unitVisibilityFilter(u)));
+                            return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey);
                         },
                         bridge: false, bridgeHp: null, isPathway: true
                     });

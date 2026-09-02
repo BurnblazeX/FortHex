@@ -142,6 +142,13 @@ const HARNESS = `
             }
             applied++;
 
+            // The client wrappers (handleMoveAction, completeAttack, ...) call
+            // checkVictoryCondition after every action - the server never decides
+            // on its own that a match is over. Mirror that here, or a replayed
+            // flag capture or annihilation never ends. See the A2 progress notes:
+            // making victory server-authoritative is an open item.
+            CheckVictoryCondition();
+
             // Compare the actor's post-action state against what the log recorded.
             const snap = entry.payload.unitState || entry.payload.attackerState;
             if (snap) {
@@ -186,8 +193,31 @@ const HARNESS = `
             problems.push('  replay: ' + JSON.stringify(finalBoard));
         }
 
+        // Units alone are not the whole outcome. A flag-capture win looks like an
+        // ordinary set of moves in the ledger - nothing records the pickup or the
+        // victory - so without these three checks a replay that failed to trigger
+        // the win would still report REPRODUCED.
+        if (engine.state.gameOver !== log.outcome.gameOver) {
+            problems.push('gameOver: log ' + log.outcome.gameOver + ' vs replay ' + engine.state.gameOver +
+                          (log.outcome.gameOver ? '  (the match-ending condition did not fire on replay)' : ''));
+        }
+        for (const p of ['player1', 'player2']) {
+            if (engine.state.supplyPoints[p] !== log.outcome.supplyPoints[p]) {
+                problems.push('supply ' + p + ': log ' + log.outcome.supplyPoints[p] +
+                              ' vs replay ' + engine.state.supplyPoints[p] +
+                              '  (0 means that flag is being carried)');
+            }
+        }
+        if (engine.state.globalTurnNumber !== log.outcome.turn) {
+            problems.push('final turn: log ' + log.outcome.turn + ' vs replay ' + engine.state.globalTurnNumber);
+        }
+
+        const flags = engine.state.flags ? Object.values(engine.state.flags)
+            .map(f => f.id + ':' + f.status).join(' ') : '(none)';
         parentPort.postMessage({ ok: problems.length === 0, applied, turnsAdvanced, skipped, problems,
-                                 survivors: finalBoard.length, expectedSurvivors: expected.length });
+                                 survivors: finalBoard.length, expectedSurvivors: expected.length,
+                                 gameOver: engine.state.gameOver, flags,
+                                 supply: engine.state.supplyPoints });
     } catch (err) {
         parentPort.postMessage({ ok: false, applied, turnsAdvanced, skipped,
                                  problems: ['THREW: ' + err.message, ...err.stack.split(String.fromCharCode(10)).slice(1, 4)] });
@@ -204,6 +234,7 @@ worker.on('message', (m) => {
     console.log(`  turns advanced  : ${m.turnsAdvanced}`);
     console.log(`  regenerated     : ${Object.entries(m.skipped || {}).map(([k, v]) => k + 'x' + v).join(' ') || '(none)'}`);
     if (m.survivors !== undefined) console.log(`  survivors       : ${m.survivors} (log says ${m.expectedSurvivors})`);
+    if (m.gameOver !== undefined) console.log(`  match ended     : ${m.gameOver}   flags: ${m.flags}   supply: ${JSON.stringify(m.supply)}`);
     console.log('');
     if (m.ok) {
         console.log('REPRODUCED — the engine replayed this match to the same final board.');

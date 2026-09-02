@@ -202,17 +202,14 @@ const HARNESS = `
             fortifyOutcome = 'fortified on ' + target;
         }
 
-        // --- regression guard: rules must not depend on the drag filter ---
-        // engine.unitVisibilityFilter hides the unit a player is dragging from
-        // edge.units. That is a RENDERING concern, but it used to leak into
-        // isZoCSuppressed: an arriving unit suppressed the zone that should have
-        // been damaging it, unless the player happened to be dragging, in which
-        // case the filter hid it and the damage landed. Same move, different
-        // outcome depending on input method. Found by replaying a real match log.
-        //
-        // Any rule that reads edge.units must give the same answer with the
-        // filter installed and without it.
-        const dragParity = await step('drag/click parity', async () => {
+        // --- regression guard: arriving units take zone-of-control damage ---
+        // engine.unitVisibilityFilter used to let the client hide a dragged unit
+        // from edge.units. That leaked into isZoCSuppressed: an arriving unit
+        // suppressed the zone that should have damaged it, EXCEPT while dragging,
+        // where the filter hid it and the damage landed. Same move, different
+        // outcome by input method. The filter is gone and the rule is explicit
+        // now; this guards the rule itself.
+        const zocOnArrival = await step('ZoC on arrival', async () => {
             const probe = CreateEngineInstance();
             const saved = globalThis.engine;
             globalThis.engine = probe;
@@ -229,25 +226,17 @@ const HARNESS = `
             [m, a2, h].forEach(u => { u.positionType = 'edge'; });
 
             const hpStart = h.hp;
-            probe.unitVisibilityFilter = null;
             ApplyFortificationDamageOnMove(h, '0,1_1,0');
-            const clicked = hpStart - h.hp;
-
-            h.hp = hpStart;
-            probe.unitVisibilityFilter = (u) => u.id !== h.id;
-            ApplyFortificationDamageOnMove(h, '0,1_1,0');
-            const dragged = hpStart - h.hp;
-            probe.unitVisibilityFilter = null;
+            const taken = hpStart - h.hp;
 
             globalThis.engine = saved;
-            if (clicked !== dragged) {
-                throw new Error('a rule changed with the drag filter: clicked took ' +
-                                clicked + ' damage, dragged took ' + dragged);
-            }
-            if (dragged === 0) {
+            if (taken === 0) {
                 throw new Error('an arriving unit took no ZoC damage - it is suppressing the zone it walked into');
             }
-            return { clicked, dragged };
+            if (probe.unitVisibilityFilter !== undefined) {
+                throw new Error('engine.unitVisibilityFilter is back - rendering concerns must not sit on the engine');
+            }
+            return { taken };
         });
 
         const byeAck = await step('disconnect', () => transport.Send(MakeDisconnectMessage('smoke_done')));
@@ -269,7 +258,7 @@ const HARNESS = `
             steps: trace.length,
             moved: from + ' -> ' + mover.position,
             rejections,
-            dragParity,
+            zocOnArrival,
             specCoverage,
             fortifyOutcome,
             rejectEvents: rejectEvents.length,
@@ -309,7 +298,7 @@ worker.on('message', (m) => {
         console.log('  turn advanced to:', m.turnAdvancedTo);
         console.log('  rejections      :', Object.entries(m.rejections).map(([k, v]) => k + '=' + v).join(', '));
         console.log('  reject events   :', m.rejectEvents);
-        console.log('  drag/click      : identical, ' + m.dragParity.clicked + ' ZoC damage either way');
+        console.log('  ZoC on arrival  : ' + m.zocOnArrival.taken + ' damage, engine has no view filter');
         console.log('  legal fortify   :', m.fortifyOutcome);
         console.log('  every spec ran  :', Object.keys(m.specCoverage).length, 'actions ->',
                     Object.entries(m.specCoverage).map(([k, v]) => k + ':' + v).join(' '));

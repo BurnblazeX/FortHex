@@ -47,6 +47,13 @@ function HandleActionEvent(event) {
         case 'UNIT_DAMAGED':
             triggerDamageVisual(event.unit, event.attackStatus);
             break;
+        case 'VICTORY':
+            // Deliberately nothing. The victory screen is rendered by
+            // checkVictoryCondition (js/client/game-flow.js) from the verdict the
+            // server holds on engine.pendingVictory - handling it here as well
+            // would draw it twice. The event exists for Track B's transports,
+            // where a remote client has no verdict to consume.
+            break;
         case 'ACTION_REJECTED':
             // The server refused the request. Say so rather than leaving the UI
             // looking frozen, and keep it distinguishable from real game events.

@@ -1,3 +1,19 @@
+// Units on an edge as the PLAYER should see them: the one being dragged is
+// lifted off the board, so it neither draws on its old edge nor counts toward
+// stacking offsets or edge indicators.
+//
+// This used to be engine.unitVisibilityFilter - a predicate the client installed
+// on the engine's own `edge.units` accessor. That leaked a rendering concern into
+// the rules: isZoCSuppressed read the filtered view and an arriving unit stopped
+// suppressing the zone it walked into only when the player happened to be
+// dragging. The rule is fixed and the hook is gone; the hiding lives here now,
+// where it always belonged.
+function DrawableUnitsOnEdge(edge) {
+    if (!edge) return [];
+    if (!gameState.draggingUnit) return edge.units;
+    return edge.units.filter(u => u.id !== gameState.draggingUnit.id);
+}
+
 function getPerspectivePlayer() {
     // In Singleplayer, always view from the human player's side
     if (engine.state.gameMode === 'singleplayer' && engine.state.playerSide) {
@@ -519,14 +535,15 @@ function drawFortificationOutlines() {
             const currentHexSize = HEX_SIZE * gameState.renderScale; // SCALED SIZE
 
             engine.state.edges.forEach((edge, edgeKey) => {
-                if (edge.units.length < 2) return;
+                const edgeUnits = DrawableUnitsOnEdge(edge);
+                if (edgeUnits.length < 2) return;
 
-                const playerOnEdge = edge.units[0].player;
-                const allUnitsSamePlayer = edge.units.every(u => u.player === playerOnEdge);
+                const playerOnEdge = edgeUnits[0].player;
+                const allUnitsSamePlayer = edgeUnits.every(u => u.player === playerOnEdge);
                 if (!allUnitsSamePlayer) return;
 
-                const hasArcher = edge.units.some(u => u.type.name === 'Archer');
-                const hasMelee = edge.units.some(u => u.type.name === 'Melee');
+                const hasArcher = edgeUnits.some(u => u.type.name === 'Archer');
+                const hasMelee = edgeUnits.some(u => u.type.name === 'Melee');
                 
                 if (!hasArcher || !hasMelee) return;
 
@@ -810,7 +827,7 @@ function drawFortificationOutlines() {
                         unitX = mid.x; 
                         unitY = mid.y;
                         
-                        const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge');
+                        const edgeUnitsOnly = DrawableUnitsOnEdge(edge).filter(u => u.positionType === 'edge');
                         const unitIndexOnEdge = edgeUnitsOnly.findIndex(u => u.id === targetUnit.id);
                         
                         if (edgeUnitsOnly.length > 1 && unitIndexOnEdge !== -1) {
@@ -993,7 +1010,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             const offsetDistance = UNIT_ON_EDGE_OFFSET * gameState.renderScale;
 
             engine.state.edges.forEach((edge) => {
-                const edgeUnitsOnly = edge.units.filter(u => u.positionType === 'edge' && (!isEffectivelyDragging || u.id !== gameState.draggingUnit.id));
+                const edgeUnitsOnly = DrawableUnitsOnEdge(edge).filter(u => u.positionType === 'edge');
                 if (edgeUnitsOnly.length > 0) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     const p1_hex_center = axialToPixel(edge.q1, edge.r1); const p2_hex_center = axialToPixel(edge.q2, edge.r2);
@@ -1296,7 +1313,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     targetY = mid.y;
                     targetRadius = UNIT_DRAW_SIZE_ON_EDGE;
                     // Adjust for stacked units
-                    const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
+                    const unitsOnEdge = DrawableUnitsOnEdge(edge).filter(u => u.positionType === 'edge');
                     const unitIndex = unitsOnEdge.findIndex(u => u.id === targetUnit.id);
                     if(unitsOnEdge.length > 1 && unitIndex !== -1) {
                         const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
@@ -1438,7 +1455,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                         unitX = mid.x;
                         unitY = mid.y;
                         unitRadius = UNIT_DRAW_SIZE_ON_EDGE;
-                        const unitsOnEdge = edge.units.filter(u => u.positionType === 'edge');
+                        const unitsOnEdge = DrawableUnitsOnEdge(edge).filter(u => u.positionType === 'edge');
                         const unitIndex = unitsOnEdge.findIndex(u => u.id === unit.id);
                         if (unitsOnEdge.length > 1 && unitIndex !== -1) {
                             const offsetSign = (unitIndex % 2 === 0) ? -1 : 1;
@@ -2000,7 +2017,7 @@ function drawSupplyLines() {
             const isIntercepted = path.some(edgeKey => {
                 const edge = engine.state.edges.get(edgeKey);
                 if (!edge) return false;
-                return edge.units.some(u => u.player !== unit.player && (!gameState.isDragging || u.id !== gameState.draggingUnit.id));
+                return DrawableUnitsOnEdge(edge).some(u => u.player !== unit.player);
             });
 
             let lineColor, lineWidth, isDashed;

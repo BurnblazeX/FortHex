@@ -49,24 +49,45 @@ absent. The ledger and the state it describes agree.
 This is the important part — a green diff on this file does **not** mean nothing
 broke. Untouched by this opening:
 
-- `UNFORTIFY`, `BUILD_BRIDGE`, bridge-as-attack-target
-- Unit upgrade, class swap, respawn / spawn
-- Flag pickup, capture, return; supply-line severing
-- Mountain attrition, start-of-turn healing, siege status
-- Victory of any kind (annihilation, flag, arcade time limit)
-- Fog of war (captured with it **off**)
+- `BUILD_BRIDGE`, bridge-as-attack-target
+- Class swap, respawn / spawn
+- Siege status
+- Arcade time-limit victory
+- Fog of war (all three captured with it **off**)
 - Arcade mode, singleplayer vs AI, map maker
+
+Covered by the other two logs in this folder: unfortify, upgrades, mountain
+attrition, healing, flag capture, annihilation.
+
+## `default-opening-flag-capture.a2.json`
+
+Same opening, ending in a capture-the-flag win. 11 turns, 32 entries.
+
+Adds coverage for: **mountain fortify** (Archer on a peak, with
+`TURN_START_MOUNTAIN_ATTRITION` bleeding it each turn), **unfortify**, and a
+**flag capture victory**.
+
+Two things this log exposed rather than covered:
+
+- **Flag events are not in the ledger.** There is no entry for the pickup on
+  turn 6 or the capture on turn 11 - both are plain `MOVE`s. The only evidence
+  the flag changed hands is `supplyPoints.player1: 0` and `gameOver: true` in
+  the outcome block. A6's match archive would not be able to tell a flag win
+  from a unit wandering home.
+- **Victory is client-driven.** `CheckVictoryCondition` is called only from the
+  client wrappers, never from the server. `replay-matchlog.js` mirrors that
+  call, or a replayed flag capture never ends.
 
 ### Worth capturing next
 
 Three more openings would close most of that gap:
 
-1. **Combat-heavy, fog on** — same map, fog enabled, run to an annihilation
-   victory. Covers fog, healing, respawn, victory.
-2. **Engineering** — bridge building, unfortify, a bridge destroyed by attack,
-   supply lines cut and restored.
-3. **Flag run** — pick up, carry, capture. Covers the flag branches and the
-   supply severing that comes with them.
+1. **Fog on** — the same opening with fog of war enabled. None of the three
+   current logs exercise it, and it gates what the server may send.
+2. **Engineering** — bridge building, a bridge destroyed by attack, supply
+   lines cut and restored. `BUILD_BRIDGE` is the last unexercised action.
+3. **Respawn** — play past a death to a respawn choice, covering spawn-unit and
+   the respawn queue.
 
 Capture each twice on different days; if two captures of the *same* opening
 diverge, the opening isn't deterministic enough to be a reference and needs a
