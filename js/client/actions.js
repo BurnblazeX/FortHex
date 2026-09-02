@@ -61,6 +61,25 @@ function HandleActionEvent(event) {
                          event.detail || '');
             showInstruction(DescribeRejection(event), 2500);
             break;
+        // --- A3 session events -------------------------------------------
+        // These carry everything B3's countdown needs (which player, and the
+        // server's own deadline timestamp). Drawing that countdown is B3's
+        // track, not this one, so all A3 does here is make the events visible
+        // and mark where the UI attaches. Console-only is deliberate: a timer
+        // rendered now would be UI built ahead of the track that owns it.
+        case 'PLAYER_DISCONNECTED':
+            console.warn(`[Client] Player ${event.player} disconnected (${event.reason}). ` +
+                         `Deadline: ${new Date(event.deadline).toISOString()}`);
+            break;
+        case 'PLAYER_RECONNECTED':
+            console.info(`[Client] Player ${event.player} reconnected.`);
+            break;
+        case 'DISCONNECT_RESOLUTION_NEEDED':
+            // B3 surfaces the choice; the answer goes back as a
+            // 'resolve-disconnect' action (FH.resolve() drives it by hand today).
+            console.warn(`[Client] Player ${event.player} did not return. ` +
+                         `Resolution required: ${event.choices.join(' | ')}`);
+            break;
         case 'SUPPLY_CHANGED':
             updateSupplyPointsDisplay();
             break;

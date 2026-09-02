@@ -29,14 +29,24 @@ function MakeActionMessage(action, payload = {}) {
     return { type: 'action', action, payload };
 }
 
-function MakeDisconnectMessage(reason = 'client_closed') {
-    return { type: 'disconnect', reason };
+// `options` may name the player who dropped (and their profileId). A disconnect
+// with no player is the whole local client going away, which is all A1 could
+// express; A3 needs the per-player form because absence is tracked per slot.
+function MakeDisconnectMessage(reason = 'client_closed', options = {}) {
+    return { type: 'disconnect', reason, ...options };
 }
 
 // --- Server -> Client ---
 
 function MakeStateSyncMessage(events, stateVersion) {
     return { type: 'state-sync', events, stateVersion };
+}
+
+// A returning client can't be caught up from the event queue — that queue holds
+// "since the last flush", not "everything since you left". This carries a whole
+// filtered view instead, built by BuildResyncSnapshot (js/server/session.js).
+function MakeResyncMessage(player, snapshot, stateVersion) {
+    return { type: 'state-resync', player, snapshot, stateVersion };
 }
 
 // The action table moved to ACTION_SPECS in js/server/validation.js during A2,
@@ -76,18 +86,55 @@ class LocalTransport {
 
     HandleConnect(message) {
         this.connected = true;
-        // A real transport would send a full state snapshot here. In-process
-        // there's nothing to snapshot - the client reads engine.state directly -
-        // so this just flushes anything already queued.
+
+        // A1 noted that a real transport would send a state snapshot here and
+        // that in-process there was nothing to snapshot. That holds for a first
+        // connect, but not for a RECONNECT: a returning player needs a complete
+        // filtered view, so one gets built and delivered for that case only.
+        const claim = FindReturningPlayerSlot(message.profileId);
+        let resync = null;
+
+        if (claim.refused) {
+            // Came back after the window already resolved the match. Say so
+            // rather than quietly reattaching them to a match that moved on.
+            console.warn('[Server] Reconnect refused: ' + claim.refused);
+        } else if (claim.player !== null) {
+            const outcome = ReconnectPlayer(claim.player, message.profileId);
+            if (outcome.ok) {
+                resync = outcome.resync;
+                this.stateVersion++;
+                this.Deliver(MakeResyncMessage(claim.player, resync, this.stateVersion));
+            }
+        }
+
+        // Flush after the snapshot: the snapshot is the new baseline, the
+        // PLAYER_RECONNECTED event queued behind it is the notification.
         this.Flush();
-        return { ok: true, connected: true, profileId: message.profileId };
+
+        return {
+            ok: true,
+            connected: true,
+            profileId: message.profileId,
+            reconnected: claim.player,
+            refused: claim.refused || null,
+            resync,
+        };
     }
 
     HandleDisconnect(message) {
-        this.connected = false;
-        // The 100-second reconnect countdown is A3's job, not A1's. The message
-        // shape exists so A3 has something to hang it on.
-        return { ok: true, connected: false, reason: message.reason };
+        // No player named: the whole local client is closing, which is the only
+        // thing A1's message shape could express. Nobody is "absent" in the A3
+        // sense, so there is no countdown to start.
+        if (message.player === undefined || message.player === null) {
+            this.connected = false;
+            return { ok: true, connected: false, reason: message.reason };
+        }
+
+        // One player dropped. The transport itself stays up — the other client
+        // is still here, and per §6 keeps playing until the turn reaches the
+        // absent player.
+        const outcome = DisconnectPlayer(message.player, message.reason, message.profileId);
+        return { ...outcome, reason: message.reason, sync: this.Flush() };
     }
 
     HandleAction(message) {

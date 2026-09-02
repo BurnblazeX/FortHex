@@ -100,6 +100,68 @@ const FH = {
     spawn(player, unitTypeName)      { return FH_Run('spawn-unit',   { player, unitTypeName }); },
     endTurn()                        { return FH_Run('end-turn',     {}); },
 
+    // --- session: disconnect / reconnect (A3) -----------------------------
+    // There is no real transport yet, so there is no real disconnect to detect.
+    // These drive LocalTransport's connect/disconnect handling directly, which
+    // is the same entry point Track B's adapters will call when a socket
+    // actually drops — so the server-side flow is exercised for real, only the
+    // trigger is by hand.
+
+    disconnect(player, reason) {
+        const ack = transport.Send(MakeDisconnectMessage(reason || 'console', { player }));
+        if (!ack.ok) { console.warn('✗ disconnect: ' + ack.error); return ack; }
+        const left = Math.round((ack.deadline - Date.now()) / 1000);
+        console.log(`✓ player ${player} absent — ${left}s to return`);
+        return ack;
+    },
+
+    reconnect(player, profileId) {
+        // Local play has one client and one profileId, so the slot is matched by
+        // IsReturningPlayer rather than by anything this call asserts. `player`
+        // is here for readability and to warn when the claim didn't land.
+        const ack = transport.Send(MakeConnectMessage(profileId || 'local-player'));
+        if (ack.refused) { console.warn('✗ reconnect refused: ' + ack.refused); return ack; }
+        if (ack.reconnected === null) { console.warn('✗ nobody was absent'); return ack; }
+        if (player !== undefined && ack.reconnected !== player) {
+            console.warn(`note: claimed slot ${ack.reconnected}, not ${player} (A5 seam — see IsReturningPlayer)`);
+        }
+        console.log(`✓ player ${ack.reconnected} back — resync: ${ack.resync.units.length} units, ` +
+                    `filtered=${ack.resync.filtered}, turn ${ack.resync.globalTurnNumber} p${ack.resync.currentPlayer}`);
+        return ack;
+    },
+
+    // Prompt the server to check its own clock. Nothing is asserted about time.
+    heartbeat() { return FH_Run('heartbeat', {}); },
+
+    resolve(player, choice) { return FH_Run('resolve-disconnect', { player, choice }); },
+
+    sessions() {
+        const rows = [1, 2].map(p => {
+            const s = engine.playerSessions['player' + p];
+            return {
+                player: p, connected: s.connected, profileId: s.profileId,
+                secondsLeft: s.deadline ? Math.round((s.deadline - Date.now()) / 1000) : null,
+                resolution: s.resolutionState + (s.resolution ? ':' + s.resolution : ''),
+            };
+        });
+        console.table(rows);
+        return rows;
+    },
+
+    // The one command here that isn't something a player could do — and it still
+    // isn't a rule bypass. Waiting out a real 100-second window by hand is not a
+    // workable test loop, so this winds the stored deadline back into the past.
+    // The server still decides the timeout itself, off its own clock, on the next
+    // heartbeat; this only moves what that clock is being compared against.
+    expire(player) {
+        const s = engine.playerSessions['player' + player];
+        if (!s || s.connected) { console.warn('player ' + player + ' is not absent'); return null; }
+        s.absentSince -= DISCONNECT_TIMEOUT_MS;
+        s.deadline -= DISCONNECT_TIMEOUT_MS;
+        console.log(`deadline for player ${player} wound back — run FH.heartbeat()`);
+        return this.heartbeat();
+    },
+
     // --- editor (lighter validation path) --------------------------------
 
     paint(tileKey, tileTypeName)             { return FH_Run('paint-tile',  { tileKey, tileTypeName }); },
@@ -135,6 +197,10 @@ const FH = {
   editor      FH.paint(tileKey, 'FOREST')  FH.eraseTile(tileKey)
               FH.place(player, 'MELEE', edgeKey)  FH.removeUnit(id)
               FH.fill(q, r, 'WATER')
+
+  session     FH.sessions()                FH.disconnect(player, reason?)
+              FH.reconnect(player?)        FH.heartbeat()
+              FH.expire(player)            FH.resolve(player, 'save')
 
   capture     FH.log('label')
 

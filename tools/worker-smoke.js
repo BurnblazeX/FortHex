@@ -29,6 +29,7 @@ const SERVER_BUNDLE = [
     'js/server/map-generation.js',
     'js/server/validation.js',
     'js/server/state-filter.js',
+    'js/server/session.js',
     'js/transport.js',
 ];
 
@@ -178,6 +179,12 @@ const HARNESS = `
         await drive('spawn-unit',   { player: a.state.currentPlayer, unitTypeName: 'MELEE' });
         await drive('attack',       { unitId: anyUnit.id, targetUnitId: 12345, attackType: 'Melee' });
 
+        // Session actions, on an engine where nobody is absent: a heartbeat with
+        // no deadline to check is a no-op, and a resolution nobody asked for is
+        // refused. The real flow is exercised further down.
+        await drive('heartbeat', {});
+        await drive('resolve-disconnect', { player: 1, choice: 'save' });
+
         // Editor actions run on the lighter path.
         await drive('paint-tile',   { tileKey: anyTile, tileTypeName: 'FOREST' });
         await drive('erase-tile',   { tileKey: anyTile });
@@ -253,8 +260,136 @@ const HARNESS = `
         const hiddenLeak = filtered.units.some(u => u.player === 2 && u.hidden !== true && !filtered.visibleEdges.has(u.position));
         if (hiddenLeak) throw new Error('filtered payload leaked a fogged enemy position');
 
+        // --- A3: disconnect / reconnect / timeout resolution ---
+        // Own probe engine, same pattern as the ZoC guard above: this walks a
+        // match through turn changes and a resolved timeout, and doing that to
+        // the shared instance would poison every assertion after it.
+        const sessionFlow = await step('A3 session flow', async () => {
+            const probe = CreateEngineInstance();
+            const saved = globalThis.engine;
+            globalThis.engine = probe;
+            probe.settings.animationsEnabled = false;
+            InitializeGrid();
+
+            const seen = [];
+            const t = CreateLocalTransport(probe);
+            t.OnMessage(m => seen.push(m));
+            t.Send(MakeConnectMessage('p-local'));
+
+            const events = () => seen.filter(m => m.type === 'state-sync').flatMap(m => m.events);
+            const countOf = (type) => events().filter(e => e.type === type).length;
+            const probeEdge = [...probe.state.edges.keys()][0];
+
+            // --- a player goes absent ---
+            const askedAt = Date.now();
+            const bye = t.Send(MakeDisconnectMessage('smoke', { player: 2 }));
+            if (!bye.ok) throw new Error('disconnect rejected: ' + bye.error);
+            if (countOf('PLAYER_DISCONNECTED') !== 1) throw new Error('PLAYER_DISCONNECTED did not fire exactly once');
+
+            const dcEvent = events().find(e => e.type === 'PLAYER_DISCONNECTED');
+            if (dcEvent.player !== 2) throw new Error('disconnect event names the wrong player');
+            if (dcEvent.deadline < askedAt + DISCONNECT_TIMEOUT_MS) throw new Error('deadline is less than the full window');
+            if (probe.playerSessions.player2.connected) throw new Error('absence was not recorded');
+            if (!probe.playerSessions.player1.connected) throw new Error('per-player tracking marked the wrong slot');
+
+            // DoD: absence is instance state, never match state.
+            if ('playerSessions' in probe.state) throw new Error('absence leaked into engine.state');
+
+            // --- §6: turn-gating alone produces the freeze, with no new code ---
+            // It is still player 1's turn, and they are present: play continues.
+            const mine = probe.state.units.find(u =>
+                u.player === 1 && u.positionType === 'edge' && getPossibleMoves(u).size > 0);
+            const dest = getPossibleMoves(mine).keys().next().value;
+            const duringWindow = t.Send(MakeActionMessage('move', { unitId: mine.id, targetEdgeKey: dest }));
+            if (!duringWindow.ok) throw new Error('present player was blocked during the window: ' + duringWindow.error);
+
+            // Hand the turn to the absent player. Nothing anyone can send is legal now.
+            t.Send(MakeActionMessage('end-turn', {}));
+            if (probe.state.currentPlayer !== 2) throw new Error('turn did not reach the absent player');
+            const frozen = t.Send(MakeActionMessage('move', { unitId: mine.id, targetEdgeKey: probeEdge }));
+            if (frozen.ok) throw new Error('the present player acted on the absent player turn');
+            if (frozen.error !== 'not_your_turn') throw new Error('freeze came from the wrong check: ' + frozen.error);
+
+            // --- reconnect inside the window, fog off ---
+            const back = t.Send(MakeConnectMessage('p-local'));
+            if (back.reconnected !== 2) throw new Error('reconnect did not claim the absent slot');
+            if (!probe.playerSessions.player2.connected) throw new Error('absence was not cleared');
+            if (probe.playerSessions.player2.deadline !== null) throw new Error('deadline was not cancelled');
+            if (countOf('PLAYER_RECONNECTED') !== 1) throw new Error('PLAYER_RECONNECTED did not fire exactly once');
+
+            const resyncMsg = seen.find(m => m.type === 'state-resync');
+            if (!resyncMsg) throw new Error('no resync was delivered');
+            if (resyncMsg.snapshot.units.length !== probe.state.units.length) throw new Error('resync is not a complete view');
+            if (resyncMsg.snapshot.filtered !== false) throw new Error('a fog-off resync should not be filtered');
+
+            // --- reconnect with fog on: same path, filtered payload ---
+            probe.settings.fogOfWarEnabled = true;
+            t.Send(MakeDisconnectMessage('smoke-fog', { player: 2 }));
+            const fogBack = t.Send(MakeConnectMessage('p-local'));
+            const snap = fogBack.resync;
+            if (!snap || !snap.filtered) throw new Error('a fog-on resync came back unfiltered');
+            const leaked = snap.units.some(u => u.player !== 2 && !u.hidden &&
+                !snap.visibleEdges.includes(u.position) && !snap.visibleTiles.includes(u.position));
+            if (leaked) throw new Error('the resync leaked a fogged enemy position');
+            const redacted = snap.units.filter(u => u.hidden).length;
+            probe.settings.fogOfWarEnabled = false;
+
+            // --- the deadline lapses ---
+            t.Send(MakeDisconnectMessage('gone', { player: 2 }));
+            t.Send(MakeActionMessage('heartbeat', {}));
+            if (countOf('DISCONNECT_RESOLUTION_NEEDED') !== 0) throw new Error('resolution fired before the deadline');
+
+            // Wind the SERVER's own stored deadline back. The comparison under
+            // test is still server clock vs server deadline - only the thing it
+            // is compared against moved, which is what waiting 100s would do.
+            probe.playerSessions.player2.deadline -= DISCONNECT_TIMEOUT_MS + 1000;
+            t.Send(MakeActionMessage('heartbeat', {}));
+            t.Send(MakeActionMessage('heartbeat', {}));
+            t.Send(MakeActionMessage('heartbeat', {}));
+            const fired = countOf('DISCONNECT_RESOLUTION_NEEDED');
+            if (fired !== 1) throw new Error('resolution fired ' + fired + ' times on repeated heartbeats, wanted 1');
+
+            // --- resolving it: the rejections A2 would expect ---
+            const spoofed = t.Send(MakeActionMessage('resolve-disconnect', { player: 2, choice: 'save' }));
+            if (spoofed.ok) throw new Error('the absent player resolved their own disconnect');
+            if (spoofed.error !== 'illegal_action') throw new Error('spoofed resolution gave ' + spoofed.error);
+
+            const badChoice = t.Send(MakeActionMessage('resolve-disconnect', { player: 1, choice: 'delete-everything' }));
+            if (badChoice.ok) throw new Error('an unknown resolution choice was accepted');
+            if (badChoice.error !== 'malformed_payload') throw new Error('bad choice gave ' + badChoice.error);
+
+            // ...and the accepted one. Note it is player 1 submitting while it is
+            // player 2's turn - resolve-disconnect must not be turn-gated.
+            const resolved = t.Send(MakeActionMessage('resolve-disconnect', { player: 1, choice: 'continue-locally' }));
+            if (!resolved.ok) throw new Error('a legal resolution was rejected: ' + resolved.error + ' / ' + resolved.detail);
+            if (probe.playerSessions.player2.resolutionState !== 'resolved') throw new Error('resolution state not closed out');
+
+            // --- a late arrival must not resurrect a resolved match ---
+            const late = t.Send(MakeConnectMessage('p-local'));
+            if (late.reconnected !== null) throw new Error('a late reconnect resurrected a resolved match');
+            if (late.refused !== 'resolution_resolved') throw new Error('late reconnect gave no refusal reason');
+
+            // --- the ledger entries A6 will want ---
+            const ledger = probe.state.matchHistory.map(e => e.type);
+            ['PLAYER_DISCONNECTED', 'PLAYER_RECONNECTED', 'DISCONNECT_TIMEOUT', 'DISCONNECT_RESOLVED']
+                .forEach(want => { if (!ledger.includes(want)) throw new Error('ledger missing ' + want); });
+            if (ledger.filter(x => x === 'DISCONNECT_TIMEOUT').length !== 1) {
+                throw new Error('the timeout was recorded more than once');
+            }
+
+            globalThis.engine = saved;
+            return {
+                window: Math.round(DISCONNECT_TIMEOUT_MS / 1000) + 's',
+                resyncUnits: resyncMsg.snapshot.units.length,
+                fogRedacted: redacted,
+                resolutionsFired: fired,
+                ledger: ledger.filter(x => x.startsWith('PLAYER_') || x.startsWith('DISCONNECT_')).join(' '),
+            };
+        });
+
         parentPort.postMessage({
             ok: true,
+            sessionFlow,
             steps: trace.length,
             moved: from + ' -> ' + mover.position,
             rejections,
@@ -303,6 +438,10 @@ worker.on('message', (m) => {
         console.log('  every spec ran  :', Object.keys(m.specCoverage).length, 'actions ->',
                     Object.entries(m.specCoverage).map(([k, v]) => k + ':' + v).join(' '));
         console.log('  fog filter      :', m.filteredUnitsVisibleToP1 + '/' + m.totalUnits, 'units visible to P1');
+        console.log('  A3 session      :', m.sessionFlow.window, 'window, resync', m.sessionFlow.resyncUnits, 'units,',
+                    m.sessionFlow.fogRedacted, 'redacted under fog, resolution fired',
+                    m.sessionFlow.resolutionsFired + 'x');
+        console.log('  A3 ledger       :', m.sessionFlow.ledger);
     } else {
         console.error('FAIL after step:', m.failedAfter);
         console.error('  ' + m.error);

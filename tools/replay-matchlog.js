@@ -35,7 +35,7 @@ const BUNDLE = [
     'js/server/engine.js', 'js/server/rules.js', 'js/server/actions.js',
     'js/server/turn-lifecycle.js', 'js/server/match-setup.js',
     'js/server/map-generation.js', 'js/transport.js',
-    'js/server/validation.js', 'js/server/state-filter.js',
+    'js/server/validation.js', 'js/server/state-filter.js', 'js/server/session.js',
 ];
 
 // Actions a player initiates, and how to rebuild the payload from the ledger.

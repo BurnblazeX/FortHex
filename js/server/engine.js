@@ -76,6 +76,14 @@ class FortHexEngine {
         this.visionCache = null;
         this.visionDirty = true;
 
+        // Who is currently connected, and if not, how long they have to come
+        // back (A3). Same category as pendingVictory: session truth, not match
+        // truth, so it sits on the instance and never reaches a save file.
+        // See js/server/session.js — including the note there for A4.
+        this.playerSessions = {
+            player1: MakePlayerSession(),
+            player2: MakePlayerSession(),
+        };
     }
 
     Emit(event) {

@@ -280,6 +280,60 @@ const ACTION_SPECS = {
         Apply: () => AdvanceTurn(),
     },
 
+    // --- session actions: not turn-gated, and deliberately so (A3) ----------
+
+    // Prompts the server to look at its own clock. Carries nothing: a client
+    // that reported elapsed time would be a client deciding when it wins the
+    // wait. Provisional until Track B can push without being asked — see the
+    // note on CheckDisconnectDeadlines.
+    'heartbeat': {
+        turnGated: false,
+        required: [],
+        Resolve() {
+            return { resolved: {} };
+        },
+        Apply: () => CheckDisconnectDeadlines(),
+    },
+
+    // The present player's answer to "your opponent didn't come back". Must NOT
+    // be turn-gated: by the time it's asked, the turn has usually cycled to the
+    // absent player, so gating it on the current turn would make it impossible
+    // to submit at exactly the moment it's needed.
+    'resolve-disconnect': {
+        turnGated: false,
+        required: ['player', 'choice'],
+        Resolve(payload) {
+            // Requester identity comes off the payload because nothing carries
+            // it yet — same shape as spawn-unit's `player`. Track B replaces
+            // this with the identity of the connection the message arrived on;
+            // until then a single local client is the only sender there is.
+            if (payload.player !== 1 && payload.player !== 2) {
+                return { error: 'malformed_payload', detail: 'player must be 1 or 2' };
+            }
+            if (!DISCONNECT_RESOLUTIONS.includes(payload.choice)) {
+                return { error: 'malformed_payload', detail: 'unknown resolution choice' };
+            }
+
+            const absentPlayer = FindPlayerAwaitingResolution();
+            if (absentPlayer === null) {
+                return { error: 'illegal_action', detail: 'no resolution pending' };
+            }
+
+            // Only the player who stayed gets to decide. The absent one is by
+            // definition not the one asking.
+            if (absentPlayer === payload.player) {
+                return { error: 'illegal_action', detail: 'requester is the absent player' };
+            }
+            const requesterSession = GetPlayerSession(payload.player);
+            if (!requesterSession || !requesterSession.connected) {
+                return { error: 'illegal_action', detail: 'requester is not connected' };
+            }
+
+            return { resolved: { requester: payload.player, absentPlayer, choice: payload.choice } };
+        },
+        Apply: (r) => ApplyDisconnectResolution(r.requester, r.absentPlayer, r.choice),
+    },
+
     // --- editor actions: lighter path, same protocol shape (A2 §8) ----------
     // Shape and id resolution are checked. Turn order and rule legality are not,
     // because a map editor has neither turns nor gameplay rules.
