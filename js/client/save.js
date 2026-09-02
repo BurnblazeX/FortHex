@@ -19,7 +19,12 @@ const ENGINE_SAVE_FIELDS = [
     'units', 'currentPlayer', 'globalTurnNumber', 'actionLog', 'matchHistory',
     'unitIdCounter', 'flags', 'respawnQueue', 'unitCounts', 'supplyPoints',
     'baseCampPositions', 'gameOver', 'arcadeTotalTurns', 'isTrainingMode',
-    'mapMakerMode', 'playerActionTaken'
+    'mapMakerMode', 'playerActionTaken',
+
+    // A6. Unlike `profile`, this one DOES belong on engine.state: which match this
+    // is, is a fact about the match. It is what keeps a saved-then-resumed game
+    // updating one archive record instead of forking a second partial one.
+    'matchId'
 ];
 
 // Goes through Testament's canonical serializer (A4 §8), the same one
@@ -64,6 +69,11 @@ function ApplyLoadedState(loadedState) {
     ENGINE_SAVE_FIELDS.forEach(field => { delete gameState[field]; });
     delete gameState.tiles;
     delete gameState.edges;
+
+    // A6. A save written before this version has no match identity to keep, so it
+    // gets one now — once, here, rather than inside a migration, which has to stay
+    // pure. Everything written from B30 onward arrives with its own id and keeps it.
+    if (!engine.state.matchId) engine.state.matchId = NewMatchId();
 
     // A5. `profile` is not an ENGINE_SAVE_FIELD, so it survives the merge above
     // and sits on gameState as a record of who wrote the file. Nothing reads it

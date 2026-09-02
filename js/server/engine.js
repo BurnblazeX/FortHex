@@ -99,6 +99,20 @@ class FortHexEngine {
         // Track B note: a second concurrent match means a second instance, and
         // whoever creates it owns setting this on it.
         this.localProfile = null;
+
+        // Whether this device has agreed to match archiving (A6). Separate from
+        // localProfile on purpose: A5 decided consent never travels into a save
+        // file, so ProfileForSave strips it and localProfile carries { id, name }
+        // only. Mirroring it here rather than putting it back on that object keeps
+        // A5's decision intact and keeps BuildSaveObject unable to leak it by
+        // accident.
+        //
+        // Set by the composition root and kept current by js/client/profile.js,
+        // exactly like localProfile. Server-side code reads this boolean and never
+        // calls HasArchiveConsent(), which is client-side and needs localStorage.
+        //
+        // Defaults FALSE. Nothing is archived until somebody has said yes.
+        this.archiveConsent = false;
     }
 
     Emit(event) {
@@ -156,12 +170,21 @@ class ActionManager {
         return { ok: true, result: outcome };
     }
 
-    // Hook for "a client asked for this and we allowed it". The detailed
-    // per-action ledger entries the Apply* functions write via RecordHistory
-    // are the actual match record today, so this is deliberately empty - it is
-    // where A6's consent-gated match archive attaches without having to find
-    // the dispatch point again.
+    // Hook for "a client asked for this and we allowed it". Empty from A2 through
+    // A5, and this is A6 filling it in - the dispatch point it was left here to
+    // mark.
+    //
+    // What it does NOT do is write anything. A Worker has no IndexedDB any more
+    // than it has a disk, so this raises a signal and js/client/archive.js does
+    // the storing - the same division ResolveDisconnectOutcome uses, where the
+    // server produces a save object and the client decides what happens to it.
+    //
+    // Turn end is the snapshot point (Burn's call): one write per turn loses at
+    // most a turn if a match is abandoned, against one write per action which
+    // would mean an IndexedDB write per move for a gap this already closes.
     RecordAccepted(message, verdict) {
+        if (!message || message.action !== 'end-turn') return;
+        SignalArchiveDue(this.engine, false);
     }
 
     // The server decides when a match is over, rather than waiting to be asked.
@@ -196,6 +219,32 @@ class ActionManager {
         const historyEntry = JSON.parse(JSON.stringify(action));
         this.engine.state.matchHistory.push(historyEntry);
     }
+}
+
+// A6. The one place that decides whether a match moment is worth archiving, so
+// the turn-end and match-complete triggers cannot drift apart.
+//
+// Consent is read off the engine instance rather than through profile.js's
+// HasArchiveConsent(), which is client-side and needs localStorage - the exact
+// constraint that made A5 mirror the profile onto the instance in the first place.
+// This function runs inside tools/worker-smoke.js's bare Worker, where reaching for
+// a browser API would fail loudly, and that is the point.
+//
+// Training never reaches here (it bypasses the transport entirely), but it is
+// checked anyway: this function is also called from CheckVictoryCondition, which
+// training DOES reach.
+function SignalArchiveDue(engineInstance, complete) {
+    if (!engineInstance || !engineInstance.archiveConsent) return;
+    if (engineInstance.state.isTrainingMode) return;
+    if (engineInstance.state.mapMakerMode) return;
+    if (!engineInstance.state.matchId) return;
+
+    engineInstance.Emit({
+        type: 'ARCHIVE_DUE',
+        matchId: engineInstance.state.matchId,
+        turn: engineInstance.state.globalTurnNumber,
+        complete: !!complete,
+    });
 }
 
 function CreateEngineInstance() {

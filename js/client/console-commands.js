@@ -203,6 +203,86 @@ const FH = {
         return null;
     },
 
+    // --- archive: the consent-gated match record (A6) ---------------------
+    //
+    // The archive writes itself: a snapshot at the start of a match and at every
+    // turn end, finalized when the match is won. These are for looking at what it
+    // recorded, not for driving it - except archiveNow(), which forces the same
+    // snapshot a turn end would take, so the store can be exercised without
+    // playing eight turns by hand.
+    //
+    // Everything here is async and returns a promise. Use await, or .then, or just
+    // read what gets printed.
+
+    archive() {
+        return ListArchivedMatches().then(rows => {
+            if (!rows.length) { console.log('(the archive is empty)'); return rows; }
+            console.table(rows.map(r => ({
+                matchId: r.matchId.slice(0, 8) + '...',
+                who: r.profileName, mode: r.gameMode, turn: r.turn,
+                done: r.complete, entries: r.entries,
+                kb: Math.round(r.bytes / 1024) + 'K',
+                updated: new Date(r.updatedAt).toLocaleString(),
+            })));
+            return rows;
+        });
+    },
+
+    // Full record, both saves included. Pass a prefix - the console prints
+    // shortened ids and typing a whole UUID from memory is nobody's idea of a
+    // testing loop.
+    archiveEntry(matchIdOrPrefix) {
+        return ListArchivedMatches().then(rows => {
+            const hit = rows.find(r => r.matchId === matchIdOrPrefix) ||
+                        rows.find(r => r.matchId.startsWith(String(matchIdOrPrefix || '')));
+            if (!hit) { console.warn('no archived match matching: ' + matchIdOrPrefix); return null; }
+            return GetArchivedMatch(hit.matchId).then(record => {
+                console.log('match ' + record.matchId + '  ' + (record.complete ? 'complete' : 'in progress') +
+                            '  turn ' + record.turn + '  v' + record.schemaVersion);
+                console.log('  opening: ' + record.opening.units.length + ' units, ' +
+                            (record.opening.matchHistory || []).length + ' ledger entries');
+                console.log('  latest : ' + record.latest.units.length + ' units, ' +
+                            (record.latest.matchHistory || []).length + ' ledger entries');
+                if (record.verdict) console.log('  verdict: ' + record.verdict.text);
+                return record;
+            });
+        });
+    },
+
+    // Whether this device is recording at all, and why not if it isn't. The most
+    // useful thing here when the archive looks empty and shouldn't be.
+    archiveState() {
+        const row = {
+            consent: typeof engine !== 'undefined' ? !!engine.archiveConsent : false,
+            matchId: engine.state.matchId ? engine.state.matchId.slice(0, 8) + '...' : null,
+            mode: engine.state.gameMode,
+            training: !!engine.state.isTrainingMode,
+            mapMaker: !!engine.state.mapMakerMode,
+            testingMap: !!(typeof gameState !== 'undefined' && gameState.isTestingMap),
+            recording: ArchiveIsEnabled(),
+        };
+        console.table([row]);
+        return row;
+    },
+
+    archiveNow(complete) {
+        if (!ArchiveIsEnabled()) {
+            console.warn('not recording - run FH.archiveState() to see why');
+            return Promise.resolve(null);
+        }
+        return ArchiveMatchSnapshot(complete === true).then(r => {
+            console.log('snapshot written for ' + r.matchId.slice(0, 8) + '... at turn ' + r.turn +
+                        (r.complete ? ' (complete)' : ''));
+            return r;
+        });
+    },
+
+    clearArchive() {
+        return ClearArchive().then(() => { console.log('archive cleared'); return null; });
+    },
+
+    archiveSync() { return SyncArchiveToServer(); },
+
     // The one command here that isn't something a player could do — and it still
     // isn't a rule bypass. Waiting out a real 100-second window by hand is not a
     // workable test loop, so this winds the stored deadline back into the past.
@@ -259,6 +339,10 @@ const FH = {
 
   profile     FH.profile()                 FH.createProfile('Name', consent?)
               FH.consent(true|false)       FH.clearProfile()
+
+  archive     FH.archiveState()            FH.archive()
+              FH.archiveEntry('1ce1c77f')  FH.archiveNow(complete?)
+              FH.clearArchive()            FH.archiveSync()
 
   capture     FH.log('label')
 

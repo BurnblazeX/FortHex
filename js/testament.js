@@ -50,7 +50,7 @@
 // no-backporting rule, though arguably it is re-spelling rather than re-judging),
 // or the ledger keeps mixed representations and every reader handles both.
 // A6's archive and D3's Gospel corpus both read that ledger - see the A4 handoff.
-const CURRENT_SCHEMA_VERSION = 9;
+const CURRENT_SCHEMA_VERSION = 10;
 
 // The verified mapping from beta number to schema version. Built by diffing the ten
 // real fixture files (B20-B29), NOT from the guide's provisional table - which was
@@ -76,7 +76,7 @@ const BETA_SCHEMA_VERSIONS = {
     B27: 5,
     B28: 6,
     B29: 7,
-    B30: 9,
+    B30: 10,
 };
 
 // --- warnings ---------------------------------------------------------------
@@ -145,6 +145,11 @@ function InferVersionFromShape(data) {
     // coordinates because the key already holds them.
     const firstTile = NormalizeEntries(data.tiles)[0];
     if (firstTile && firstTile[1] && firstTile[1].typeId !== undefined) {
+        // Newest first. Both v9 and v10 added only OPTIONAL fields, so each can be
+        // recognised when its own field is present and not otherwise - a lean save
+        // with neither is reported as v8 and walks up through two no-op steps. See
+        // MigrateAddProfile for why that is acceptable rather than merely tolerated.
+        if (typeof data.matchId === 'string' && data.matchId) return 10;
         // A9-shaped file that happens to name its author. The absence of a profile
         // proves nothing - it is the normal state - so an unlabelled lean file with
         // no profile is reported as v8 and migrates through a no-op step to v9.
@@ -188,6 +193,7 @@ const MIGRATIONS = [
     { from: 6, to: 7, Migrate: MigrateToStatsModel },
     { from: 7, to: 8, Migrate: MigrateToEngineState },
     { from: 8, to: 9, Migrate: MigrateAddProfile },
+    { from: 9, to: 10, Migrate: MigrateAddMatchId },
 ];
 
 // The runner. Detect, then step forward one schema version at a time, auditing
@@ -425,6 +431,21 @@ function MigrateAddProfile(data) {
     return data;
 }
 
+// v9 -> v10 (B30 -> B30). A6's match identity.
+//
+// A no-op for the same reason MigrateAddProfile is, and deliberately NOT the place
+// an id gets minted. A migration has to be pure: minting here would mean migrating
+// the same file twice produced two different files, and any harness comparing runs
+// would be right to complain.
+//
+// Where the minting actually happens is InitializeGrid (a new match) and
+// ApplyLoadedState (a save from before this version, which has no id to keep). A
+// pre-A6 save resumed twice therefore becomes two archive records, which is honest:
+// they are two separate resumptions of a match nothing was recording at the time.
+function MigrateAddMatchId(data) {
+    return data;
+}
+
 // --- the lean current schema ------------------------------------------------
 //
 // Measured against the real B29 fixture rather than reasoned about abstractly.
@@ -460,6 +481,10 @@ const SAVE_ENGINE_FIELDS = [
     // metadata about the device, not a fact about the board. Listed here so the
     // migration chain carries it through untouched rather than dropping it.
     'profile',
+
+    // A6. Which match this is, so a save resumed later keeps updating the same
+    // archive record instead of forking a second partial one.
+    'matchId',
 ];
 
 // Everything worth keeping about a unit. type/hp/maxHp are absent on purpose:
@@ -548,6 +573,45 @@ const SAVE_CLIENT_FIELDS = ['arcadeTurnTimer'];
 // ledger to rebuild one from.
 const LEGACY_LOG_TAIL = 10;
 
+// Post-action snapshots the Apply* functions attach to their ledger entries:
+// the actor's hp/mp/position after a move, and both sides of an attack.
+//
+// They are roughly half of every MOVE entry, and matchHistory is 100% of a save's
+// growth (A4's size ceiling note) - so dropping them is the one lever that moves
+// that ceiling materially, roughly doubling it.
+//
+// They are also regenerable by definition: replaying the actions reproduces them,
+// which is precisely what tools/replay-matchlog.js does. So this follows the same
+// governing principle as the rest of the lean schema - anything that can be
+// rebuilt should be rebuilt, the file holds the skeleton.
+//
+// STRIPPED HERE AND NOWHERE ELSE (Burn's call). The LIVE ledger keeps them, because
+// they are what makes replay-matchlog and compare-matchlog verification tools
+// rather than did-it-throw checks: those read a captured live ledger and compare
+// each recorded snapshot against the replayed board. Removing them at the source
+// would leave both tools printing REPRODUCED with nothing behind it.
+//
+// The cost, stated plainly: a log rebuilt from a LOADED save loses the "MP: 4"
+// suffix on move lines (DescribeLedgerEntry already guards for their absence), and
+// an archived ledger cannot be drift-checked against itself - only re-derived by
+// replaying it, which is what a corpus reader would do anyway.
+const LEDGER_SNAPSHOT_FIELDS = ['unitState', 'attackerState', 'targetState'];
+
+function LeanLedgerEntry(entry) {
+    if (!entry || !entry.payload) return entry;
+
+    let lean = null;
+    LEDGER_SNAPSHOT_FIELDS.forEach(field => {
+        if (entry.payload[field] === undefined) return;
+        // Copied only when there is something to remove, so an entry that carries
+        // no snapshot is passed through untouched rather than cloned.
+        if (!lean) lean = { ...entry, payload: { ...entry.payload } };
+        delete lean.payload[field];
+    });
+
+    return lean || entry;
+}
+
 function BuildLeanSave(data, report) {
     const out = { schemaVersion: CURRENT_SCHEMA_VERSION };
 
@@ -591,6 +655,13 @@ function BuildLeanSave(data, report) {
     // files there is no ledger to rebuild from and dropping the log would discard
     // the only history they carry. Keep the tail in that case. Same principle
     // either way - rebuild what can be rebuilt, keep only what cannot.
+    // The ledger, minus what a replay would regenerate. Done here rather than in
+    // BuildSaveObject so that MIGRATED files are leaned the same way freshly saved
+    // ones are - both go through this function, which is the point of it.
+    if (Array.isArray(out.matchHistory)) {
+        out.matchHistory = out.matchHistory.map(LeanLedgerEntry);
+    }
+
     const hasLedger = Array.isArray(data.matchHistory) && data.matchHistory.length > 0;
     if (!hasLedger && Array.isArray(data.actionLog) && data.actionLog.length > 0) {
         out.actionLog = data.actionLog.slice(-LEGACY_LOG_TAIL);
@@ -933,6 +1004,50 @@ function DescribeLedgerEntry(entry, nameOf, opts) {
 
         case 'TURN_START_HEAL':
             return DescribeEventList(p.events, nameOf, opts, 'healed');
+
+        // A6's ledger completions. Four of these five restore lines the live game
+        // already printed but a rebuilt log could not reproduce (A4 §5.1); the
+        // supply one is genuinely new information the live log never had.
+        //
+        // Fog filtering needs no change for any of them: every unit id they carry
+        // belongs to entry.player, so VisibleInRebuiltLog's owner test already
+        // covers them without ReferencedUnitIds having to learn new payload shapes.
+        case 'UNIT_DESTROYED': {
+            const who = 'P' + entry.player + ' ' + (p.typeName || actor);
+            switch (p.reason) {
+                case 'bridge_collapse': return [who + ' fell as the bridge collapsed!'];
+                case 'cowardice':       return [who + ' was destroyed for cowardice!'];
+                case 'crushed':         return [who + "'s defenses collapsed, and they were crushed with no escape!"];
+                case 'zoc_move':
+                case 'zoc_turn_start':
+                case 'fort_zoc':
+                case 'zoc_fort':        return [who + ' destroyed by ZoC!'];
+                default:                return [who + ' has been destroyed!'];
+            }
+        }
+
+        case 'FLAG_RETURNED':
+            return ['The P' + entry.player + ' flag has been returned to base!'];
+
+        case 'BRIDGE_DESTROYED':
+            return ['Bridge destroyed on ' + (p.edge ? String(p.edge).substring(0, 7) + '...' : 'the board') + '.'];
+
+        case 'SIEGE_STATUS':
+            return (p.besieged || []).map(id =>
+                'P' + entry.player + ' ' + nameOf(id) + ' is under siege and cannot heal!');
+
+        case 'SUPPLY_LINES_CHANGED': {
+            const lines = [];
+            if ((p.established || []).length) {
+                lines.push('P' + entry.player + ' supply established for ' +
+                           p.established.map(nameOf).join(', ') + '.');
+            }
+            if ((p.severed || []).length) {
+                lines.push('P' + entry.player + ' supply severed for ' +
+                           p.severed.map(nameOf).join(', ') + '.');
+            }
+            return lines;
+        }
 
         // A3's session entries. Worth showing: a disconnect is exactly the kind of
         // thing a player scrolling back would want explained.

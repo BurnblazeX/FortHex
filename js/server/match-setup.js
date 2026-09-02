@@ -16,6 +16,13 @@
 // Unit placement for generated maps goes through PlaceUnitsOnNewGeneratedMap
 // in js/server/map-generation.js, split out of map.js in step 9.
 
+function NewMatchId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
 function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData = null) {
     // 1. Setup Base Camp Defaults if needed
     if (baseCampData) {
@@ -35,6 +42,17 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
     engine.state.globalTurnNumber = 1;
     engine.state.actionLog = [];
     engine.state.matchHistory = [];
+
+    // A6. A fresh board is a new match, and the archive keys its record on this.
+    // Minted here rather than at the archive's write point so that a match already
+    // in progress when the first snapshot is taken still has a stable identity.
+    //
+    // Not a UUID by necessity the way the profile id is - this identifies a match,
+    // not a person, and nothing depends on it being unguessable. randomUUID is used
+    // when it exists (Node has it unconditionally; a browser only in a secure
+    // context) purely because a central archive will one day hold match ids from
+    // many devices at once.
+    engine.state.matchId = NewMatchId();
     engine.state.respawnQueue = { player1: [], player2: [] };
     engine.state.arcadeTotalTurns = 0;
 

@@ -222,6 +222,13 @@ function CheckVictoryCondition() {
 
     // Held for whichever client asks next. Consumed above.
     engine.pendingVictory = verdict;
+
+    // A6. The completion signal comes from HERE rather than from RecordAccepted,
+    // because RecordAccepted runs BEFORE SettleMatchState and therefore before
+    // gameOver is set - a match-ending move would have signalled itself as merely
+    // another turn. This is the moment the match is actually over.
+    SignalArchiveDue(engine, true);
+
     return verdict;
 }
 
@@ -469,6 +476,11 @@ function LogSiegeStatus() {
         }
     }
 
+    // A6. Siege was never a ledger type either (A4 §5.1). Collected into ONE entry
+    // per turn rather than one per unit: "who is under siege this turn" is a single
+    // fact about the board, even though the live log prints it unit by unit.
+    const besieged = [];
+
     engine.state.units.forEach(unit => {
         if (unit.player === activePlayer && unit.isFortified && unit.supplyLine && unit.supplyLine.path) {
             const isIntercepted = unit.supplyLine.path.some(edgeKey => {
@@ -478,9 +490,17 @@ function LogSiegeStatus() {
 
             if (isIntercepted) {
                 engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} is under siege and cannot heal!`, player: activePlayer });
+                besieged.push(unit.id);
             }
         }
     });
+
+    if (besieged.length > 0) {
+        engine.actionManager.RecordHistory({
+            type: "SIEGE_STATUS", turn: engine.state.globalTurnNumber, player: activePlayer,
+            payload: { besieged }
+        });
+    }
 
     return {};
 }

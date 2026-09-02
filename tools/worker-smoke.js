@@ -588,23 +588,39 @@ const HARNESS = `
             if (DetectVersion(asV8) !== 8) throw new Error('a v8 save did not detect as v8');
             const upgraded = MigrateSave(asV8);
             if (upgraded.report.toVersion !== CURRENT_SCHEMA_VERSION) throw new Error('v8 did not reach current');
-            if (upgraded.report.steps.join(',') !== '8->9') {
-                throw new Error('v8 took the wrong path: ' + upgraded.report.steps.join(','));
+            // Built rather than hardcoded, so appending a schema version does not
+            // silently turn this into an assertion about nothing.
+            const expectedPath = [];
+            for (let v = 8; v < CURRENT_SCHEMA_VERSION; v++) expectedPath.push(v + '->' + (v + 1));
+            if (upgraded.report.steps.join(',') !== expectedPath.join(',')) {
+                throw new Error('v8 took the wrong path: ' + upgraded.report.steps.join(',') +
+                                ', wanted ' + expectedPath.join(','));
             }
             if ('profile' in upgraded.data) throw new Error('the v8->v9 step invented a profile');
 
             // Shape inference has no mark for a v9 without a profile, by design -
             // see MigrateAddProfile. Assert what it actually does rather than
             // pretending it can tell them apart.
+            // matchId has to come off too (A6 added it to every save), or this is
+            // testing v10 detection rather than the v8-shaped case it means to.
             const unlabelled = JSON.parse(JSON.stringify(bare));
             delete unlabelled.schemaVersion;
             delete unlabelled.saveVersion;
+            delete unlabelled.matchId;
             if (DetectVersion(unlabelled) !== 8) throw new Error('an unlabelled lean save did not infer as v8');
             const unlabelledTagged = JSON.parse(JSON.stringify(cycled));
             delete unlabelledTagged.schemaVersion;
             delete unlabelledTagged.saveVersion;
+            delete unlabelledTagged.matchId;
             if (DetectVersion(unlabelledTagged) !== 9) {
                 throw new Error('an unlabelled save WITH a profile did not infer as v9');
+            }
+            // ...and with the matchId left on, the newer mark wins.
+            const unlabelledV10 = JSON.parse(JSON.stringify(cycled));
+            delete unlabelledV10.schemaVersion;
+            delete unlabelledV10.saveVersion;
+            if (DetectVersion(unlabelledV10) !== 10) {
+                throw new Error('an unlabelled save with a matchId did not infer as v10');
             }
 
             // --- the identity seam, with a real durable id ---
@@ -668,11 +684,353 @@ const HARNESS = `
             };
         });
 
+
+        // --- A6: the five ledger gaps A4 assigned to this track ---
+        //
+        // A4 §5.1 named five things the live game does that leave no ledger trace,
+        // so a rebuilt log could not reproduce them and an archive would record a
+        // match that was missing its most decisive moments. Each is asserted to
+        // fire AND to come back out of RebuildActionLog as a readable line, since
+        // an entry nothing can phrase is only half a fix.
+        //
+        // The preconditions are constructed directly rather than played out. The
+        // rules that produce these situations are already covered elsewhere in this
+        // harness; what is under test here is only that the ledger records them.
+        const ledgerGaps = await step('A6 ledger', async () => {
+            const probe = CreateEngineInstance();
+            const saved = globalThis.engine;
+            globalThis.engine = probe;
+            probe.settings.animationsEnabled = false;
+            InitializeGrid();
+
+            const t = CreateLocalTransport(probe);
+            t.Send(MakeConnectMessage('p-ledger'));
+
+            const since = () => probe.state.matchHistory.slice(mark);
+            const typesSince = () => {
+                const seen = {};
+                since().forEach(e => { seen[e.type] = (seen[e.type] || 0) + 1; });
+                return seen;
+            };
+            let mark = probe.state.matchHistory.length;
+
+            // --- 1. unit death, as its own entry -----------------------------
+            // Previously only inferable from ATTACK.isKill, which misses every death
+            // that was not an attack.
+            const victim = probe.state.units.find(u => u.player === 2);
+            const victimId = victim.id;
+            DestroyUnit(victim, 'zoc_move');
+
+            const death = since().find(e => e.type === 'UNIT_DESTROYED');
+            if (!death) throw new Error('a death wrote no UNIT_DESTROYED entry');
+            if (death.actorId !== victimId) throw new Error('UNIT_DESTROYED names the wrong unit');
+            if (death.player !== 2) throw new Error('UNIT_DESTROYED names the wrong player');
+            if (death.payload.reason !== 'zoc_move') throw new Error('the death reason was not recorded');
+            // The snapshot has to be taken before the unit leaves state.units.
+            if (!death.payload.unitState || death.payload.unitState.id !== victimId) {
+                throw new Error('UNIT_DESTROYED carries no unit snapshot');
+            }
+            if (probe.state.units.some(u => u.id === victimId)) throw new Error('the victim survived');
+
+            // --- 2. flag returned to base ------------------------------------
+            mark = probe.state.matchHistory.length;
+            const carrier = probe.state.units.find(u => u.player === 1);
+            const flag = probe.state.flags.p2_flag;
+            flag.status = 'carried';
+            flag.carrierId = carrier.id;
+            carrier.isCarryingFlag = true;
+            DestroyUnit(carrier, 'destroyed');
+
+            const returned = since().find(e => e.type === 'FLAG_RETURNED');
+            if (!returned) throw new Error('a carrier dying wrote no FLAG_RETURNED entry');
+            if (returned.player !== 2) throw new Error('FLAG_RETURNED names the wrong flag owner');
+            if (returned.payload.carrierId !== carrier.id) throw new Error('FLAG_RETURNED names the wrong carrier');
+            if (probe.state.flags.p2_flag.status !== 'at_base') throw new Error('the flag did not actually go home');
+            // Both entries for one death, in the order they happened.
+            const order = since().map(e => e.type);
+            if (order.indexOf('FLAG_RETURNED') > order.indexOf('UNIT_DESTROYED')) {
+                throw new Error('the flag returned after the carrier was already gone');
+            }
+
+            // --- 3. bridge destruction ---------------------------------------
+            mark = probe.state.matchHistory.length;
+            const bridgeEdgeKey = [...probe.state.edges.keys()].find(k => {
+                const e = probe.state.edges.get(k);
+                return e && !e.bridge;
+            });
+            const bridgeEdge = probe.state.edges.get(bridgeEdgeKey);
+            bridgeEdge.bridge = true;
+            bridgeEdge.bridgeHp = 1;
+
+            const attacker = probe.state.units.find(u => u.player === probe.state.currentPlayer);
+            // ApplyAttack is async (it waits out the animation duration), so this
+            // has to be awaited or the assertions below run before the bridge falls.
+            await ApplyAttack(attacker, { edgeKey: bridgeEdgeKey, isBridgeTarget: true, unit: null }, 'Melee', 0);
+
+            const bridgeGone = since().find(e => e.type === 'BRIDGE_DESTROYED');
+            if (!bridgeGone) throw new Error('destroying a bridge wrote no BRIDGE_DESTROYED entry');
+            if (bridgeGone.payload.edge !== bridgeEdgeKey) throw new Error('BRIDGE_DESTROYED names the wrong edge');
+            if (probe.state.edges.get(bridgeEdgeKey).bridge) throw new Error('the bridge survived');
+
+            // --- 4. supply lines established / severed -----------------------
+            // The severing path first, because it is the early return that would be
+            // easiest to leave un-instrumented: a stolen flag wipes every line for
+            // that player and exits before the normal diff at the end.
+            mark = probe.state.matchHistory.length;
+            const fortified = probe.state.units.find(u => u.player === 1);
+            fortified.isFortified = true;
+            fortified.supplyLine = { cost: 1, path: [fortified.position] };
+
+            probe.state.flags.p1_flag.status = 'carried';
+            recalculatePlayerSupplyNetwork(1);
+
+            const severed = since().find(e => e.type === 'SUPPLY_LINES_CHANGED');
+            if (!severed) throw new Error('wiping a players supply wrote no SUPPLY_LINES_CHANGED entry');
+            if (!severed.payload.severed.includes(fortified.id)) {
+                throw new Error('SUPPLY_LINES_CHANGED did not name the unit that lost its line');
+            }
+            if (severed.payload.established.length !== 0) {
+                throw new Error('a pure severing reported establishments');
+            }
+
+            // A recalculation that changes nothing must write nothing - otherwise
+            // every ordinary move fills the ledger with noise.
+            mark = probe.state.matchHistory.length;
+            recalculatePlayerSupplyNetwork(1);
+            if (Object.keys(typesSince()).length !== 0) {
+                throw new Error('a no-op supply recalculation still wrote to the ledger');
+            }
+
+            // --- 5. siege status ---------------------------------------------
+            mark = probe.state.matchHistory.length;
+            probe.state.flags.p1_flag.status = 'at_base';
+            const besieged = probe.state.units.find(u => u.player === probe.state.currentPlayer);
+            const enemyEdge = probe.state.units.find(u => u.player !== besieged.player &&
+                u.positionType === 'edge');
+            besieged.isFortified = true;
+            besieged.supplyLine = { cost: 1, path: [enemyEdge.position] };
+            LogSiegeStatus();
+
+            const siege = since().find(e => e.type === 'SIEGE_STATUS');
+            if (!siege) throw new Error('an intercepted supply line wrote no SIEGE_STATUS entry');
+            if (!siege.payload.besieged.includes(besieged.id)) {
+                throw new Error('SIEGE_STATUS did not name the besieged unit');
+            }
+
+            // Nobody under siege writes nothing.
+            mark = probe.state.matchHistory.length;
+            besieged.supplyLine = null;
+            LogSiegeStatus();
+            if (since().some(e => e.type === 'SIEGE_STATUS')) {
+                throw new Error('SIEGE_STATUS fired with nobody under siege');
+            }
+
+            // --- all five must survive into a rebuilt log --------------------
+            // An entry nothing can phrase leaves the log exactly as sparse as before,
+            // which was A4 §5.1's actual complaint.
+            const rebuilt = RebuildActionLog(probe.state.matchHistory, {
+                units: probe.state.units, forPlayer: 1, fogOfWarEnabled: false,
+            }).map(l => l.message).join(' | ');
+
+            [
+                ['UNIT_DESTROYED', 'destroyed by ZoC'],
+                ['FLAG_RETURNED', 'returned to base'],
+                ['BRIDGE_DESTROYED', 'Bridge destroyed'],
+                ['SUPPLY_LINES_CHANGED', 'supply severed'],
+                ['SIEGE_STATUS', 'under siege'],
+            ].forEach(([type, phrase]) => {
+                if (!rebuilt.includes(phrase)) {
+                    throw new Error(type + ' has no phrasing in the rebuilt log (wanted "' + phrase + '")');
+                }
+            });
+
+            // --- the live ledger keeps snapshots; a SAVED one does not ---------
+            // Burn's call, and it has to hold in both directions: strip at the
+            // source and replay-matchlog stops verifying anything; fail to strip on
+            // save and the size ceiling never moves.
+            const liveDeath = probe.state.matchHistory.find(e => e.type === 'UNIT_DESTROYED');
+            if (!liveDeath.payload.unitState) {
+                throw new Error('the LIVE ledger lost its snapshots - replay-matchlog now verifies nothing');
+            }
+            const liveMove = probe.state.matchHistory.find(e => e.type === 'MOVE');
+            if (liveMove && !liveMove.payload.unitState) {
+                throw new Error('a live MOVE carries no snapshot');
+            }
+
+            // --- and into a save, which is what the archive stores ------------
+            const save = BuildSaveObject(probe).save;
+            const archived = JSON.parse(JSON.stringify(save)).matchHistory.map(e => e.type);
+            ['UNIT_DESTROYED', 'FLAG_RETURNED', 'BRIDGE_DESTROYED', 'SUPPLY_LINES_CHANGED', 'SIEGE_STATUS']
+                .forEach(want => {
+                    if (!archived.includes(want)) throw new Error(want + ' did not survive into a save');
+                });
+
+            // ...and arrive with their snapshots gone.
+            const savedEntries = JSON.parse(JSON.stringify(save)).matchHistory;
+            const leaked = savedEntries.filter(e => e.payload &&
+                (e.payload.unitState || e.payload.attackerState || e.payload.targetState));
+            if (leaked.length) {
+                throw new Error(leaked.length + ' saved ledger entries still carry a snapshot');
+            }
+            // Stripping must not eat the entries themselves.
+            if (savedEntries.length !== probe.state.matchHistory.length) {
+                throw new Error('leaning the ledger changed its length');
+            }
+
+            globalThis.engine = saved;
+            return {
+                entries: probe.state.matchHistory.length,
+                newTypes: ['UNIT_DESTROYED', 'FLAG_RETURNED', 'BRIDGE_DESTROYED',
+                           'SUPPLY_LINES_CHANGED', 'SIEGE_STATUS'].join(' '),
+            };
+        });
+
+
+        // --- A6: the consent gate, checked where localStorage does not exist ---
+        //
+        // The whole point of running this here. This Worker asserts at the top that
+        // document, window and localStorage are all undefined, so if the archive
+        // gate ever reached for HasArchiveConsent() - which is client-side and
+        // needs localStorage - this block is where it would blow up rather than in
+        // somebody's browser.
+        //
+        // Both directions matter equally. A device that never consented producing
+        // no signal is not a weaker claim than a consenting one producing signals;
+        // it is the claim that keeps the feature honest.
+        const archiveGate = await step('A6 consent gate', async () => {
+            const probe = CreateEngineInstance();
+            const saved = globalThis.engine;
+            globalThis.engine = probe;
+            probe.settings.animationsEnabled = false;
+            InitializeGrid();
+
+            // A6 mints one per match, and the archive keys its record on it.
+            if (typeof probe.state.matchId !== 'string' || !probe.state.matchId) {
+                throw new Error('a new match has no matchId');
+            }
+            const firstMatchId = probe.state.matchId;
+
+            // Two matches must not share an identity, or their records collide.
+            const other = CreateEngineInstance();
+            globalThis.engine = other;
+            InitializeGrid();
+            if (other.state.matchId === firstMatchId) throw new Error('two matches share a matchId');
+            globalThis.engine = probe;
+
+            const seen = [];
+            const t = CreateLocalTransport(probe);
+            t.OnMessage(m => { if (m.type === 'state-sync') seen.push(...m.events); });
+            t.Send(MakeConnectMessage('p-archive'));
+            const archiveEvents = () => seen.filter(e => e.type === 'ARCHIVE_DUE');
+
+            // --- default off: nothing is archived until somebody says yes ---
+            if (probe.archiveConsent !== false) throw new Error('archiveConsent did not default to false');
+            // end-turn is async (the turn lifecycle waits out animations), so the
+            // send has to be awaited or these assertions run before it lands.
+            await t.Send(MakeActionMessage('end-turn', {}));
+            if (archiveEvents().length !== 0) {
+                throw new Error('a turn ended on a non-consenting device and still signalled the archive');
+            }
+
+            // --- consent on: a turn end signals, exactly once ---
+            probe.archiveConsent = true;
+            await t.Send(MakeActionMessage('end-turn', {}));
+            const afterTurn = archiveEvents();
+            if (afterTurn.length !== 1) {
+                throw new Error('a turn end signalled ' + afterTurn.length + ' times, wanted 1');
+            }
+            if (afterTurn[0].matchId !== firstMatchId) throw new Error('the signal names the wrong match');
+            if (afterTurn[0].complete !== false) throw new Error('a turn end signalled as a completed match');
+
+            // An ordinary action is NOT a snapshot point - that is the difference
+            // between one write per turn and one per move.
+            const mover = probe.state.units.find(u =>
+                u.player === probe.state.currentPlayer && u.positionType === 'edge' &&
+                getPossibleMoves(u).size > 0);
+            if (mover) {
+                const before = archiveEvents().length;
+                await t.Send(MakeActionMessage('move', {
+                    unitId: mover.id, targetEdgeKey: getPossibleMoves(mover).keys().next().value }));
+                if (archiveEvents().length !== before) {
+                    throw new Error('an ordinary move signalled the archive');
+                }
+            }
+
+            // --- completion signals separately, and says so ---
+            // Driven through the real victory path rather than by setting a flag,
+            // because the bug this guards against is exactly an ordering one:
+            // RecordAccepted runs BEFORE victory is detected.
+            const beforeVictory = archiveEvents().length;
+            probe.state.units = probe.state.units.filter(u => u.player === 1);
+            CheckVictoryCondition();
+            // Called directly rather than through an action, so nothing has drained the
+            // engine's queue - the event is real but has not been delivered yet.
+            t.Flush();
+            const completions = archiveEvents().filter(e => e.complete === true);
+            if (archiveEvents().length === beforeVictory) {
+                throw new Error('a match ending signalled nothing');
+            }
+            if (completions.length !== 1) {
+                throw new Error('the match completed ' + completions.length + ' times, wanted 1');
+            }
+            if (!probe.state.gameOver) throw new Error('the match did not actually end');
+
+            // --- consent revoked mid-match stops the recording ---
+            const probe2 = CreateEngineInstance();
+            globalThis.engine = probe2;
+            probe2.settings.animationsEnabled = false;
+            InitializeGrid();
+            probe2.archiveConsent = true;
+            const seen2 = [];
+            const t2 = CreateLocalTransport(probe2);
+            t2.OnMessage(m => { if (m.type === 'state-sync') seen2.push(...m.events); });
+            t2.Send(MakeConnectMessage('p-archive-2'));
+            await t2.Send(MakeActionMessage('end-turn', {}));
+            const consented = seen2.filter(e => e.type === 'ARCHIVE_DUE').length;
+            probe2.archiveConsent = false;
+            await t2.Send(MakeActionMessage('end-turn', {}));
+            if (seen2.filter(e => e.type === 'ARCHIVE_DUE').length !== consented) {
+                throw new Error('revoking consent did not stop the archive signal');
+            }
+
+            // --- training never signals, whatever consent says ---
+            const probe3 = CreateEngineInstance();
+            globalThis.engine = probe3;
+            probe3.settings.animationsEnabled = false;
+            InitializeGrid();
+            probe3.archiveConsent = true;
+            probe3.state.isTrainingMode = true;
+            SignalArchiveDue(probe3, false);
+            SignalArchiveDue(probe3, true);
+            if (probe3.DrainEvents().some(e => e.type === 'ARCHIVE_DUE')) {
+                throw new Error('a training match signalled the archive');
+            }
+
+            // --- map maker is authoring, not play ---
+            const probe4 = CreateEngineInstance();
+            globalThis.engine = probe4;
+            probe4.archiveConsent = true;
+            probe4.state.mapMakerMode = true;
+            probe4.state.matchId = 'm-editor';
+            SignalArchiveDue(probe4, false);
+            if (probe4.DrainEvents().some(e => e.type === 'ARCHIVE_DUE')) {
+                throw new Error('the map maker signalled the archive');
+            }
+
+            globalThis.engine = saved;
+            return {
+                matchId: firstMatchId.slice(0, 8) + '...',
+                signals: afterTurn.length + completions.length,
+            };
+        });
+
         parentPort.postMessage({
             ok: true,
             sessionFlow,
             testament,
             profileFlow,
+            ledgerGaps,
+            archiveGate,
             steps: trace.length,
             moved: from + ' -> ' + mover.position,
             rejections,
@@ -730,6 +1088,10 @@ worker.on('message', (m) => {
         console.log('  A5 profile      :', 'no-profile save ' + m.profileFlow.bareBytes + 'B, tagged ' +
                     m.profileFlow.taggedBytes + 'B; v8 file -> ' + m.profileFlow.v8Steps +
                     '; IsReturningPlayer unchanged (real id matches, wrong id refused, unstamped matches anyone)');
+        console.log('  A6 archive      :', 'consent gate holds both ways; match', m.archiveGate.matchId,
+                    'signalled', m.archiveGate.signals, 'times (turn end + completion), never without consent');
+        console.log('  A6 ledger       :', m.ledgerGaps.entries, 'entries; five gaps closed and phrased:', m.ledgerGaps.newTypes);
+
     } else {
         console.error('FAIL after step:', m.failedAfter);
         console.error('  ' + m.error);

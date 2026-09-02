@@ -51,4 +51,14 @@ function initializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
     updateSelectedUnitInfoPanel();
     checkVictoryCondition();
     updateSupplyPointsDisplay();
+
+    // A6. Remember where this match started, without writing anything yet. The
+    // record appears at the first turn end; a completed record needs the opening
+    // board because its own `latest` is the FINAL board, with nothing to replay
+    // forward from.
+    //
+    // A match that gains consent mid-way through has no captured start, so its
+    // "opening" is wherever the recording began. Honest, and the alternative would
+    // be inventing a start nobody witnessed.
+    if (typeof CaptureArchiveOpening === 'function') CaptureArchiveOpening();
 }

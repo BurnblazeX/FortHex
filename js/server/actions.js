@@ -362,6 +362,15 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                 bridgeEdge.bridge = false;
                 bridgeEdge.bridgeHp = null;
                 bridgeDestroyed = true;
+
+                // A6. The ATTACK entry records isKill, but a destroyed bridge is a
+                // board change with its own consequences — severed supply, drowned
+                // units — and reads as an ordinary attack without this.
+                engine.actionManager.RecordHistory({
+                    type: "BRIDGE_DESTROYED", turn: engine.state.globalTurnNumber,
+                    player: attackingUnit.player, actorId: attackingUnit.id,
+                    payload: { edge: targetUnitInfo.edgeKey }
+                });
                 recalculatePlayerSupplyNetwork(1);
                 recalculatePlayerSupplyNetwork(2);
 
@@ -579,6 +588,16 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
 
             SetSupplyPointsForFlagStatus(flag.player);
             recalculatePlayerSupplyNetwork(flag.player);
+
+            // A6. A flag going home was a LOG line and nothing else, so a rebuilt
+            // log could not reproduce it and the archive could not show why a
+            // capture attempt failed. Server-decided, like the two below it:
+            // nobody requested this, it is a consequence of the carrier dying.
+            engine.actionManager.RecordHistory({
+                type: "FLAG_RETURNED", turn: engine.state.globalTurnNumber, player: flag.player,
+                actorId: unitToDestroy.id,
+                payload: { flagId: flag.id, carrierId: unitToDestroy.id, at: unitToDestroy.position }
+            });
         }
     }
 
@@ -603,6 +622,24 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
     } else {
         engine.Emit({ type: 'LOG', text: `P${destroyedPlayer} ${unitToDestroy.type.name} has been destroyed!`, player: activePlayer, duration: 3000 });
     }
+
+    // A6. Death was only ever inferable from ATTACK.isKill, which misses every
+    // death that was not an attack — ZoC, bridge collapse, cowardice, mountain
+    // attrition. Recorded here rather than at each call site precisely because
+    // this function is the one place they all converge.
+    //
+    // The snapshot is taken NOW, while the unit is still in engine.state.units:
+    // a moment later it is filtered out and its final hp and position are gone.
+    engine.actionManager.RecordHistory({
+        type: "UNIT_DESTROYED", turn: engine.state.globalTurnNumber, player: destroyedPlayer,
+        actorId: unitToDestroy.id,
+        payload: {
+            reason,
+            typeName: unitToDestroy.type ? unitToDestroy.type.name : null,
+            wasFortified,
+            unitState: GetUnitSnapshot(unitToDestroy),
+        }
+    });
 
     // --- Nuclear Tile Clearing ---
     if (unitToDestroy.positionType === 'edge') {

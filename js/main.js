@@ -41,6 +41,11 @@ transport.OnMessage((message) => {
 // created later in the session.
 engine.localProfile = ProfileForSave(GetProfile());
 
+// A6's gate, mirrored the same way and for the same reason. False for every device
+// that has never gone online and said yes, which is the state that matters most:
+// nothing is archived until somebody has agreed to it.
+engine.archiveConsent = HasArchiveConsent();
+
 // Local play still "connects" - one code path for local and networked, which
 // is the whole point of A1. The id is the real profile id when this device has
 // one, and the A1 placeholder when it does not: A5 changed what flows into this

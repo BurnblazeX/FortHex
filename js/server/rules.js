@@ -1056,6 +1056,20 @@ function getAttackRangeFineCells(unit) {
             const playerSupplyKey = `player${playerNum}`;
             const maxSupply = 10;
 
+            // A6. Supply transitions were never a ledger type, so Testament's rebuilt
+            // log could not reproduce them (A4 §5.1) and the archive had no record of
+            // a network forming or collapsing.
+            //
+            // Recorded as a DIFF rather than as per-unit events, because this function
+            // recomputes the whole network from scratch on every call: what matters is
+            // which units changed state, not that a recalculation ran. A call that
+            // changes nothing writes nothing, which keeps an ordinary move from filling
+            // the ledger with noise.
+            const supplyBefore = new Map();
+            engine.state.units.forEach(u => {
+                if (u.player === playerNum) supplyBefore.set(u.id, !!u.supplyLine);
+            });
+
             // Guard clause to prevent supply calculation if flag is stolen
             const playerFlag = engine.state.flags[`p${playerNum}_flag`];
             if (playerFlag && playerFlag.status === 'carried') {
@@ -1064,7 +1078,10 @@ function getAttackRangeFineCells(unit) {
                         unit.supplyLine = null;
                     }
                 });
-                return; 
+                // Every line for this player just went away. That is a severing, and
+                // it is the one exit from this function that skips the diff below.
+                RecordSupplyTransitions(playerNum, supplyBefore);
+                return;
             }
 
             // --- FIX: Get Normalized Base Tiles ---
@@ -1130,6 +1147,36 @@ function getAttackRangeFineCells(unit) {
 
             engine.state.supplyPoints[playerSupplyKey] = maxSupply - Math.round(networkSupplyCost);
             engine.Emit({ type: 'SUPPLY_CHANGED', player: playerNum, newValue: engine.state.supplyPoints[playerSupplyKey] });
+            RecordSupplyTransitions(playerNum, supplyBefore);
+        }
+
+        // Compares the supply state captured before a recalculation against what came
+        // out of it, and records the difference — nothing at all when there is no
+        // difference, which is the common case.
+        function RecordSupplyTransitions(playerNum, before) {
+            if (!engine.state.matchHistory) return;
+
+            const established = [];
+            const severed = [];
+            engine.state.units.forEach(u => {
+                if (u.player !== playerNum) return;
+                const had = before.get(u.id);
+                if (had === undefined) return;
+                const has = !!u.supplyLine;
+                if (has && !had) established.push(u.id);
+                else if (!has && had) severed.push(u.id);
+            });
+
+            if (established.length === 0 && severed.length === 0) return;
+
+            engine.actionManager.RecordHistory({
+                type: "SUPPLY_LINES_CHANGED", turn: engine.state.globalTurnNumber,
+                player: playerNum,
+                payload: {
+                    established, severed,
+                    supplyPoints: engine.state.supplyPoints[`player${playerNum}`],
+                }
+            });
         }
 
         function getPotentialUnfortifyTargets(unit) {

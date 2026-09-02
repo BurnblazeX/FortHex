@@ -153,6 +153,12 @@ function WriteProfile(profile) {
     // for what it does with it.
     if (typeof engine !== 'undefined' && engine) {
         engine.localProfile = ProfileForSave(profile);
+
+        // A6 reads this, and only this, to decide whether a match may be archived.
+        // Mirrored as its own boolean rather than left on localProfile because that
+        // object is what BuildSaveObject writes into a file, and consent has no
+        // business travelling in one.
+        engine.archiveConsent = !!profile.consent;
     }
 }
 
@@ -221,5 +227,8 @@ function ClearProfile() {
     } catch (e) {
         console.warn('[Profile] Failed to clear profile:', e);
     }
-    if (typeof engine !== 'undefined' && engine) engine.localProfile = null;
+    if (typeof engine !== 'undefined' && engine) {
+        engine.localProfile = null;
+        engine.archiveConsent = false;
+    }
 }

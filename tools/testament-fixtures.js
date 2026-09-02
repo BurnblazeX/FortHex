@@ -149,6 +149,14 @@ files.sort().forEach(file => {
         problems.push('migration invented a profile on a pre-A5 file');
     }
 
+    // A6, same principle. A pre-A6 file has no match identity, and the v9->v10
+    // step must not mint one: a migration that produced a different file each time
+    // it ran would make every downstream comparison meaningless. Minting happens at
+    // load (ApplyLoadedState), once, where it can be seen.
+    if (data.matchId !== undefined) {
+        problems.push('migration invented a matchId on a pre-A6 file');
+    }
+
     // Every unit must arrive in the current model, whatever era it came from.
     (data.units || []).forEach(u => {
         if (!u.typeId) problems.push('unit ' + u.id + ' has no typeId');

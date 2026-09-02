@@ -54,6 +54,18 @@ function HandleActionEvent(event) {
             // would draw it twice. The event exists for Track B's transports,
             // where a remote client has no verdict to consume.
             break;
+        // --- A6 archive ---------------------------------------------------
+        // The server decided this moment is worth recording and that consent
+        // allows it; the client owns the storage, so the write happens here.
+        //
+        // Fire-and-forget on purpose. An archive write must never be able to take
+        // a turn down with it - a full quota or a browser blocking IndexedDB is a
+        // reason to lose a record, not a reason to lose the match in progress.
+        case 'ARCHIVE_DUE':
+            ArchiveMatchSnapshot(event.complete).catch(err => {
+                console.warn('[Archive] snapshot failed for match ' + event.matchId + ':', err);
+            });
+            break;
         case 'ACTION_REJECTED':
             // The server refused the request. Say so rather than leaving the UI
             // looking frozen, and keep it distinguishable from real game events.
