@@ -252,16 +252,31 @@ function ApplyDisconnectResolution(requester, absentPlayer, choice) {
     return { absentPlayer, choice, outcome: ResolveDisconnectOutcome(choice, absentPlayer) };
 }
 
-// HOOK FOR A4 (Testament) — intentionally empty, exactly like
-// ActionManager.RecordAccepted is for A6.
+// FILLED IN BY A4 (Testament). Was an intentionally empty hook through A3.
 //
-// 'save'             -> serialize the live match into the Testament save format
-//                       (the online-match to local-save conversion in A4's spec)
-// 'continue-locally' -> hand the match to the local client as a normal game
+// Both choices serialize the live match through exactly the same canonical path a
+// manual save uses — BuildSaveObject in js/testament.js, called directly and
+// in-process, no message round trip. That directness is why Testament's pure logic
+// is a shared root module rather than client-side code.
 //
-// Both need BuildSaveState/ApplyLoadedState work that does not exist yet, so A3
-// deliberately builds neither, not even partially. The action, its validation,
-// its ledger entry and this call site are all in place; A4 fills in the body.
+//   'save'             -> hand back the save object; the client writes the bytes.
+//   'continue-locally' -> the same object, flagged for immediate reload as a local
+//                         pass-device match instead of a disk write (Burn's call).
+//
+// What this function deliberately does NOT do is touch a filesystem or a running
+// client. It produces the object and says what should happen to it; js/client/save.js
+// and the composition root own the rest, because a Worker has no disk and loading a
+// file into a *new* match happens before an engine instance fully exists.
 function ResolveDisconnectOutcome(choice, absentPlayer) {
-    return null;
+    const { save, report } = BuildSaveObject(engine);
+
+    return {
+        choice,
+        absentPlayer,
+        save,
+        schemaVersion: save.schemaVersion,
+        warnings: report.warnings,
+        // The client reads this to decide between a file dialog and a local reload.
+        disposition: choice === 'continue-locally' ? 'reload-local' : 'write-file',
+    };
 }

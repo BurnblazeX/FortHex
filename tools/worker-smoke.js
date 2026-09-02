@@ -21,6 +21,7 @@ const ROOT = path.join(__dirname, '..');
 const SERVER_BUNDLE = [
     'js/config-data.js',
     'js/grid-math.js',
+    'js/testament.js',
     'js/server/engine.js',
     'js/server/rules.js',
     'js/server/actions.js',
@@ -387,9 +388,128 @@ const HARNESS = `
             };
         });
 
+        // --- A4: Testament round trip through the canonical save path ---
+        // The disconnect resolution and a manual save must produce the same format,
+        // and that format must survive a real JSON cycle and come back as the same
+        // match. Own probe again, for the same reason the A3 block has one.
+        const testament = await step('A4 save round trip', async () => {
+            const probe = CreateEngineInstance();
+            const saved = globalThis.engine;
+            globalThis.engine = probe;
+            probe.settings.animationsEnabled = false;
+            InitializeGrid();
+
+            const t = CreateLocalTransport(probe);
+            t.Send(MakeConnectMessage('p-save'));
+
+            // Give the match something to lose: a real move, and a held verdict.
+            const mover = probe.state.units.find(u =>
+                u.player === 1 && u.positionType === 'edge' && getPossibleMoves(u).size > 0);
+            t.Send(MakeActionMessage('move', {
+                unitId: mover.id, targetEdgeKey: getPossibleMoves(mover).keys().next().value }));
+            probe.pendingVictory = { winner: 1, isDraw: false, text: 'smoke verdict' };
+
+            const built = BuildSaveObject(probe);
+            const save = built.save;
+
+            if (save.schemaVersion !== CURRENT_SCHEMA_VERSION) {
+                throw new Error('BuildSaveObject wrote schema v' + save.schemaVersion);
+            }
+            // A4 §7.1, Burn's call: the verdict is persisted, closing A2's known gap.
+            if (!save.pendingVictory || save.pendingVictory.winner !== 1) {
+                throw new Error('pendingVictory did not survive the save');
+            }
+
+            // The bloat the lean schema exists to drop must actually be absent.
+            if (save.units.some(u => u.type !== undefined || u.hp !== undefined)) {
+                throw new Error('lean save still carries derived unit fields');
+            }
+            // The edge set is regenerated from the tiles, not stored at all.
+            if (save.edges !== undefined) throw new Error('lean save still stores an edge list');
+            if (save.actionLog !== undefined) throw new Error('lean save still stores an action log');
+
+            // A real JSON cycle, not a claim about one - this is where a stray Map
+            // or Set silently becomes {}.
+            const cycled = JSON.parse(JSON.stringify(save));
+            if (cycled.units.length !== probe.state.units.length) {
+                throw new Error('units lost across the JSON cycle');
+            }
+
+            // And back in through the same chain a historical file would take.
+            const migrated = MigrateSave(cycled);
+            if (migrated.report.toVersion !== CURRENT_SCHEMA_VERSION) {
+                throw new Error('a current-version save did not stay current');
+            }
+            if (migrated.report.steps.length !== 0) {
+                throw new Error('a current-version save was migrated: ' + migrated.report.steps.join(','));
+            }
+
+            const expanded = ExpandSaveObject(migrated.data, { forPlayer: 1 });
+            if (expanded.tiles.length !== probe.state.tiles.size) throw new Error('tiles lost in round trip');
+            // Regenerated from the tiles, so this proves the regeneration matches
+            // the board the engine actually built.
+            if (expanded.edges.length !== probe.state.edges.size) {
+                throw new Error('regenerated ' + expanded.edges.length + ' edges, engine had ' + probe.state.edges.size);
+            }
+            probe.state.units.forEach(u => {
+                if (u.positionType !== 'edge') return;
+                if (!expanded.edges.some(([k]) => k === u.position)) {
+                    throw new Error('unit ' + u.id + ' lost its edge ' + u.position);
+                }
+            });
+            // The log is rebuilt from the ledger rather than stored.
+            if (!expanded.actionLog || expanded.actionLog.length === 0) {
+                throw new Error('action log was not rebuilt from matchHistory');
+            }
+
+            // Units omit default-valued fields; expansion must restore every one,
+            // and re-leaning must reproduce exactly what was stored.
+            expanded.units.forEach(u => {
+                SAVE_UNIT_FIELDS.forEach(f => {
+                    if (u[f] === undefined) throw new Error('unit ' + u.id + ' lost ' + f + ' expanding');
+                });
+                const stored = save.units.find(x => x.id === u.id);
+                if (JSON.stringify(LeanUnit(u)) !== JSON.stringify(stored)) {
+                    throw new Error('unit ' + u.id + ' is not stable across lean/expand/lean');
+                }
+            });
+            const anyTile = expanded.tiles[0][1];
+            if (!anyTile.type || anyTile.type.name === undefined) throw new Error('tile type not re-linked');
+            if (anyTile.q === undefined || anyTile.r === undefined) throw new Error('tile coords not rebuilt from key');
+
+            const content = DescribeContent(migrated.data);
+            if (content.opensAs !== 'match') throw new Error('a real match was routed as a map');
+
+            // A3's hook, now filled in: same canonical path, both choices.
+            DisconnectPlayer(2, 'smoke-save');
+            probe.playerSessions.player2.deadline -= DISCONNECT_TIMEOUT_MS + 1000;
+            CheckDisconnectDeadlines();
+            const ack = t.Send(MakeActionMessage('resolve-disconnect',
+                { player: 1, choice: 'continue-locally' }));
+            if (!ack.ok) throw new Error('resolution rejected: ' + ack.error);
+
+            const outcome = ack.result && ack.result.outcome;
+            if (!outcome || !outcome.save) throw new Error('ResolveDisconnectOutcome returned no save');
+            if (outcome.disposition !== 'reload-local') {
+                throw new Error("continue-locally gave disposition '" + outcome.disposition + "'");
+            }
+            if (outcome.save.schemaVersion !== CURRENT_SCHEMA_VERSION) {
+                throw new Error('the disconnect save used a different schema');
+            }
+
+            globalThis.engine = saved;
+            return {
+                schema: 'v' + save.schemaVersion,
+                bytes: JSON.stringify(save).length,
+                units: save.units.length,
+                disposition: outcome.disposition,
+            };
+        });
+
         parentPort.postMessage({
             ok: true,
             sessionFlow,
+            testament,
             steps: trace.length,
             moved: from + ' -> ' + mover.position,
             rejections,
@@ -442,6 +562,8 @@ worker.on('message', (m) => {
                     m.sessionFlow.fogRedacted, 'redacted under fog, resolution fired',
                     m.sessionFlow.resolutionsFired + 'x');
         console.log('  A3 ledger       :', m.sessionFlow.ledger);
+        console.log('  A4 testament    :', m.testament.schema, 'save,', m.testament.units, 'units,',
+                    m.testament.bytes + 'B, round-trips clean; disconnect ->', m.testament.disposition);
     } else {
         console.error('FAIL after step:', m.failedAfter);
         console.error('  ' + m.error);

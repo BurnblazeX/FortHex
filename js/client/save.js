@@ -17,20 +17,20 @@ const ENGINE_SAVE_FIELDS = [
     'mapMakerMode', 'playerActionTaken'
 ];
 
+// Goes through Testament's canonical serializer (A4 §8), the same one
+// ResolveDisconnectOutcome uses — two paths to one nominal format would defeat
+// having a single versioned schema at all.
+//
+// The result is the skeleton: no edge list (regenerated from the tiles), no action
+// log (rebuilt from matchHistory), no type objects repeating a config-data.js
+// constant, no coordinates the key already holds, and none of the client's
+// presentation state, and no unit field that merely holds its default. Measured
+// across the ten archived fixtures that is a 91% reduction. Everything dropped is
+// either rebuilt at load or was never read back.
 function BuildSaveState() {
-    const payload = { ...gameState };
-
-    ENGINE_SAVE_FIELDS.forEach(field => {
-        payload[field] = engine.state[field];
-    });
-
-    // Maps aren't JSON-serializable
-    payload.tiles = Array.from(engine.state.tiles.entries());
-    payload.edges = Array.from(engine.state.edges.entries());
-    payload.currentReachableMoves = Array.from(gameState.currentReachableMoves.entries());
-
-    payload.saveVersion = BUILD_VERSION;
-    return payload;
+    const { save } = BuildSaveObject(engine, { arcadeTurnTimer: gameState.arcadeTurnTimer });
+    save.saveVersion = BUILD_VERSION;
+    return save;
 }
 
 // Splits a loaded save back across the two owners. Call before
@@ -45,9 +45,17 @@ function ApplyLoadedState(loadedState) {
     if (loadedState.tiles !== undefined) engine.state.tiles = loadedState.tiles;
     if (loadedState.edges !== undefined) engine.state.edges = loadedState.edges;
 
-    // What's left is the client's half. Strip the engine keys so gameState
-    // doesn't accumulate a stale shadow copy of state it no longer owns.
-    gameState = loadedState;
+    // What's left is the client's half. Strip the engine keys so gameState doesn't
+    // accumulate a stale shadow copy of state it no longer owns.
+    //
+    // MERGED onto the live gameState rather than replacing it (changed in A4). The
+    // lean schema deliberately saves almost no client state, so a wholesale replace
+    // would leave gameState missing fields the client assumes exist — visualEffects
+    // is pushed to unguarded by HandleActionEvent, and would be undefined on the
+    // next flag capture. Merging keeps the client's own defaults for anything the
+    // file legitimately doesn't carry; rehydrateGameState resets the transient ones
+    // and re-links selectedUnit/draggingUnit, so nothing stale survives that matters.
+    gameState = { ...gameState, ...loadedState };
     ENGINE_SAVE_FIELDS.forEach(field => { delete gameState[field]; });
     delete gameState.tiles;
     delete gameState.edges;
@@ -187,111 +195,45 @@ function saveGameToFile() {
     }
 }
 
-function attemptLegacyConversion(data) {
-    console.groupCollapsed(`[Converter] Checking Save (v: ${data.saveVersion || "Old"})...`);
-    
-    // We attempt conversion on anything that looks like a save file
-    const converted = { ...data };
-    converted.saveVersion = BUILD_VERSION; // Update version tag
-
-    // 1. Default Game Mode & Radius
-    if (!converted.gameMode) converted.gameMode = 'local';
-    if (!converted.gridRadius) {
-        let maxDist = 0;
-        const tilesIter = Array.isArray(converted.tiles) ? converted.tiles : Object.entries(converted.tiles || {});
-        tilesIter.forEach(([k]) => {
-            const [q, r] = k.split(',').map(Number);
-            const dist = Math.max(Math.abs(q), Math.abs(r), Math.abs(-q-r));
-            if (dist > maxDist) maxDist = dist;
-        });
-        converted.gridRadius = maxDist || 3;
-    }
-
-    // 2. State Normalization
-    if (converted.currentPlayer === undefined) converted.currentPlayer = 1;
-    if (converted.globalTurnNumber === undefined) converted.globalTurnNumber = 1;
-    if (!converted.playerColorSelections) converted.playerColorSelections = { player1: 2, player2: 2 };
-    if (!converted.colorTransition) converted.colorTransition = { active: false, startTime: 0, from: {}, to: {} };
-
-    // 3. UNIT CONVERSION (The Fix for 0 Movement)
-    if (Array.isArray(converted.units)) {
-        converted.units = converted.units.map(u => {
-            // Determine Type
-            let tName = u.typeName || u.typeId || (u.type ? u.type.name : 'MELEE');
-            tName = tName.toUpperCase();
-            // Validate Type
-            const template = UNIT_TYPES[tName] || UNIT_TYPES.MELEE;
-            
-            // Build new 'stats' object if missing
-            if (!u.stats) {
-                console.log(`[Converter] Upgrading unit ${u.id} to new Stats system.`);
-                u.stats = {
-                    hp: u.hp !== undefined ? u.hp : template.hp,
-                    maxHp: u.maxHp !== undefined ? u.maxHp : template.hp,
-                    // Map old 'baseMove' or template 'speed'
-                    speed: (u.type && u.type.baseMove) ? u.type.baseMove : template.speed,
-                    damage: (u.type && u.type.damage) ? u.type.damage : template.damage,
-                    defense: (u.type && u.type.fortificationBonus) ? u.type.fortificationBonus : template.defense,
-                    range: template.attackType === 'ranged' ? 2 : 1
-                };
-            }
-
-            // Ensure TypeID is set
-            u.typeId = tName;
-            
-            // Ensure essential flags exist
-            if (u.turnsFortifiedAtBase === undefined) u.turnsFortifiedAtBase = 0;
-            if (u.mountainAttritionTurns === undefined) u.mountainAttritionTurns = 0;
-            if (u.fortifyCooldown === undefined) u.fortifyCooldown = 0;
-            if (u.level === undefined) u.level = 0;
-            if (u.spearWalled === undefined) u.spearWalled = false;
-            if (!u.upgrades) u.upgrades = { health: 0, speed: 0, damage: 0, defense: 0 };
-
-            return u;
-        });
-    }
-
-    // 4. Tile Normalization (Re-hydrating objects)
-    let tileEntries = [];
-    if (Array.isArray(converted.tiles)) {
-        tileEntries = converted.tiles;
-    } else if (typeof converted.tiles === 'object') {
-        tileEntries = Object.entries(converted.tiles);
-    }
-
-    converted.tiles = tileEntries.map(([key, value]) => {
-        let tileObj = value;
-        // Handle raw string types (Old saves)
-        if (typeof value === 'string') {
-            const [q, r] = key.split(',').map(Number);
-            tileObj = { q, r, type: TILE_TYPES[value] || TILE_TYPES.PLAINS };
-        } else {
-            // Re-link Tile Type Object
-            let typeName = 'PLAINS';
-            if (typeof tileObj.type === 'string') typeName = tileObj.type;
-            else if (tileObj.type && tileObj.type.name) typeName = tileObj.type.name;
-            tileObj.type = TILE_TYPES[typeName.toUpperCase()] || TILE_TYPES.PLAINS;
-        }
-        // Ensure coords
-        if (tileObj.q === undefined) {
-            const [q, r] = key.split(',').map(Number);
-            tileObj.q = q; tileObj.r = r;
-        }
-        if (tileObj.isBaseCampTile === undefined) tileObj.isBaseCampTile = false; 
-        if (tileObj.fortifiedByPlayer === undefined) tileObj.fortifiedByPlayer = null;
-        
-        // Add Visibility property if missing (B29 feature)
-        if (tileObj.type.visibility === undefined) {
-             const freshType = TILE_TYPES[tileObj.type.name.toUpperCase()];
-             tileObj.type.visibility = freshType ? freshType.visibility : 3;
-        }
-
-        return [key, tileObj];
+// === Loading, through Testament (A4) ===
+//
+// This replaced attemptLegacyConversion: one reactive pass that tried to patch
+// every broken shape from B20 to B29 at once, with no idea which version it was
+// actually looking at. The ordered chain that does that job properly lives in
+// js/testament.js, shared by both sides. What is left here is the client edge —
+// running the chain, reporting what it found, and handing the rest of this file
+// the shape it already expects.
+function LoadThroughTestament(data) {
+    const outcome = MigrateSave(data);
+    // The action log is rebuilt from matchHistory rather than stored, so expansion
+    // needs to know who is watching: under fog a player's log shows their own
+    // actions and what happened to their own units, not the whole board's history.
+    const expanded = ExpandSaveObject(outcome.data, {
+        forPlayer: outcome.data.playerSide || outcome.data.currentPlayer,
+        fogOfWarEnabled: engine.settings.fogOfWarEnabled,
     });
+    const report = outcome.report;
 
-    console.log("Conversion Complete.");
+    const from = report.fromVersion === null ? 'unrecognised' : 'v' + report.fromVersion;
+    console.groupCollapsed('[Testament] ' + from + ' -> v' + report.toVersion +
+                           (report.steps.length ? ' (' + report.steps.join(', ') + ')' : ' (already current)'));
+    report.warnings.forEach(w => console.warn(w));
+    report.corrections.forEach(c => console.log('corrected: ' + c));
     console.groupEnd();
-    return converted;
+
+    // Repairs are worth saying out loud — the player's file was wrong and is not
+    // any more. Warnings stay in the console; they are not the player's problem.
+    if (report.corrections.length) {
+        showInstruction('Repaired ' + report.corrections.length + ' problem(s) in this file.', 3000);
+    }
+
+    // Back-compat for the rest of save.js, which predates the lean schema: a map
+    // file is read through `radius`, and loadMapFromDataObject gates on the build
+    // label rather than on the schema version.
+    expanded.saveVersion = BUILD_VERSION;
+    if (expanded.radius === undefined) expanded.radius = expanded.gridRadius;
+
+    return expanded;
 }
 
 function createMapDataObject() {
@@ -342,7 +284,7 @@ function loadAutoSave() {
             let loadedState = JSON.parse(savedStateString);
             
             // 1. Convert
-            loadedState = attemptLegacyConversion(loadedState);
+            loadedState = LoadThroughTestament(loadedState);
 
             // 2. Resize Environment (Calculates renderScale global)
             const radiusToLoad = loadedState.gridRadius || 3;
@@ -385,6 +327,10 @@ function loadAutoSave() {
 
             fullGameRedraw();
             showInstruction("Game Loaded.", 2000);
+
+            // A4: singleplayer and online saves ask which side to continue on.
+            // Local pass-device resumes on whoever was to move and never asks.
+            MaybePromptForSide();
         } catch (error) {
             console.error("Load Critical Failure:", error);
             showInstruction("Save File Corrupted.", 3000);
@@ -548,7 +494,7 @@ function autoSaveMap() {
 
 function loadMapFromDataObject(mapData) {
     try {
-        mapData = attemptLegacyConversion(mapData);
+        mapData = LoadThroughTestament(mapData);
     } catch (error) {
         console.error("Conversion failed:", error);
         showInstruction(error.message, 3000);

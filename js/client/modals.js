@@ -160,10 +160,24 @@ function WireLoadAndConfirmModals() {
                 let data = JSON.parse(e.target.result);
 
                 try {
-                    data = attemptLegacyConversion(data);
+                    data = LoadThroughTestament(data);
                 } catch (convError) {
                     console.warn("Conversion Error:", convError);
                     showInstruction("File too old.", 3000);
+                    console.groupEnd();
+                    return;
+                }
+
+                // A4 §9: what a file opens into is decided by what is actually in
+                // it, never by its extension. The three contexts below are user
+                // INTENT (resume / edit / play), so content can't replace them —
+                // but it does catch the one mismatch that used to produce a broken
+                // half-loaded match: a map file opened through "Load Game".
+                const content = DescribeContent(data);
+                if (fileLoadContext === 'game_save' && content.opensAs === 'map') {
+                    console.warn('[Testament] this file is a map, not a saved match');
+                    showInstruction("That's a map, not a saved game. Opening the Map Maker.", 3000);
+                    if (loadMapFromDataObject(data)) hideLoadGameModal();
                     console.groupEnd();
                     return;
                 }
@@ -195,6 +209,7 @@ function WireLoadAndConfirmModals() {
                         fullGameRedraw();
                         hideLoadGameModal();
                         showInstruction("Game loaded from file!", 2000);
+                        MaybePromptForSide();
                         break;
 
                     case 'edit_map':
@@ -236,4 +251,91 @@ function WireLoadAndConfirmModals() {
         reader.readAsText(file);
         event.target.value = null; 
     });
+}
+
+// === Testament load-time side selection (A4) ===
+//
+// The roadmap asks A4 for a load-time decision UI covering saves whose state is
+// ambiguous once loaded. The ambiguity that actually exists is which side the human
+// takes: a save records a playerSide, but nothing says the player still wants it,
+// and a match can legitimately be resumed from either chair.
+//
+// Local pass-device play never needs asking — both sides are one person at one
+// device, and the save simply resumes on whoever was to move. Singleplayer always
+// asks. Online multiplayer is offered the same choice (Burn's call); that mode
+// arrives with Track B, and this handles it the moment it does.
+//
+// Vanilla DOM, matching every other modal here. The roadmap names this screen for
+// Track B's React adoption and Candidates F1's migration — it is deliberately not
+// built in React now, because React is not in the project yet.
+function MaybePromptForSide(onDone) {
+    const mode = engine.state.gameMode;
+    const finish = () => { if (typeof onDone === 'function') onDone(); };
+
+    if (mode !== 'singleplayer' && mode !== 'online') {
+        finish();
+        return;
+    }
+
+    const overlay = document.getElementById('sideSelectModalOverlay');
+    const summary = document.getElementById('sideSelectSummary');
+    const p1 = document.getElementById('sideSelectP1');
+    const p2 = document.getElementById('sideSelectP2');
+    if (!overlay || !p1 || !p2) { finish(); return; }
+
+    const savedSide = engine.state.playerSide;
+    const toMove = engine.state.currentPlayer;
+
+    if (summary) {
+        let text = 'Saved on turn ' + engine.state.globalTurnNumber +
+                   ', with Player ' + toMove + ' to move.';
+        if (savedSide) text += ' You were playing Player ' + savedSide + '.';
+        if (mode === 'singleplayer') text += ' The other side will be played by the AI.';
+        summary.textContent = text;
+    }
+
+    // Mark the side the file recorded, so keeping it is the obvious default.
+    [[p1, 1], [p2, 2]].forEach(([button, side]) => {
+        button.textContent = 'Player ' + side + (side === savedSide ? ' (as saved)' : '');
+    });
+
+    // Replace rather than add: this modal can open once per load, and stale
+    // listeners from a previous load would fire again on the next one.
+    const choose = (side) => {
+        overlay.style.display = 'none';
+        ApplyChosenSide(side);
+        finish();
+    };
+    p1.onclick = () => choose(1);
+    p2.onclick = () => choose(2);
+
+    overlay.style.display = 'flex';
+}
+
+function ApplyChosenSide(side) {
+    engine.state.playerSide = side;
+
+    // The action log is rebuilt per viewer (js/testament.js): under fog it shows
+    // that player's own actions and what happened to their own units, so choosing
+    // a side changes what the log should say.
+    engine.state.actionLog = RebuildActionLog(engine.state.matchHistory, {
+        units: engine.state.units,
+        forPlayer: side,
+        fogOfWarEnabled: engine.settings.fogOfWarEnabled,
+    });
+    updateActionLogDisplay();
+
+    engine.visionDirty = true;
+    gameState.needsRedraw = true;
+    fullGameRedraw();
+
+    showInstruction('Continuing as Player ' + side + '.', 2500);
+
+    // Same shape as starting a singleplayer match as P2 (game-flow.js): if it is
+    // not the human's turn, the AI owes the first move, and the end-turn button
+    // stays disabled until it has taken it.
+    if (engine.state.gameMode === 'singleplayer' && engine.state.currentPlayer !== side) {
+        if (ui.endTurnButton) ui.endTurnButton.disabled = true;
+        setTimeout(() => { executeAITurn(); }, 1500);
+    }
 }

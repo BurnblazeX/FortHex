@@ -726,6 +726,20 @@
     </div>
 
     <!-- Respawn / Recruit Modal -->
+    <!-- Testament load-time side selection (A4). Shown when a save is resumed in a
+         mode where which side the human plays is a real choice: singleplayer always,
+         online multiplayer as an option. Local pass-device never needs it. -->
+    <div id="sideSelectModalOverlay" class="modal-overlay" style="display: none;">
+        <div id="sideSelectModalContent" class="modal-content" style="max-width: 520px;">
+            <h2 style="margin-bottom: 10px;">Continue as which side?</h2>
+            <p id="sideSelectSummary" style="margin-bottom: 22px;"></p>
+            <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                <button id="sideSelectP1" class="action-button">Player 1</button>
+                <button id="sideSelectP2" class="action-button">Player 2</button>
+            </div>
+        </div>
+    </div>
+
     <div id="respawnModalOverlay" class="modal-overlay">
         <div id="respawnModalContent" class="modal-content" style="max-width: 950px; min-height: 450px; display: flex; flex-direction: column;">
             
@@ -773,6 +787,7 @@
     <!-- Modular Scripts (Loaded in exact order of dependency) -->
     <script src="js/config-data.js"></script>
     <script src="js/grid-math.js"></script>
+    <script src="js/testament.js"></script>
     <script src="js/server/engine.js"></script>
     <script src="js/server/rules.js"></script>
     <script src="js/server/actions.js"></script>

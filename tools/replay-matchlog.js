@@ -31,7 +31,7 @@ if (!logPath) {
 }
 
 const BUNDLE = [
-    'js/config-data.js', 'js/grid-math.js',
+    'js/config-data.js', 'js/grid-math.js', 'js/testament.js',
     'js/server/engine.js', 'js/server/rules.js', 'js/server/actions.js',
     'js/server/turn-lifecycle.js', 'js/server/match-setup.js',
     'js/server/map-generation.js', 'js/transport.js',
