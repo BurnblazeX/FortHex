@@ -198,7 +198,9 @@ async function proceedToEndTurn() {
         }
     }
 
-    const { result } = await SendAction('end-turn', {});
+    const outcome = await SendAction('end-turn', {});
+    if (!outcome.ok) return;
+    const result = outcome.result;
 
     if (result.arcadeMaxTurnsReached) {
         // Drain before bailing out: AdvanceTurn may have queued logs before it
@@ -313,17 +315,13 @@ function handleForcedSwap() {
 }
 
 function checkArcadeVictoryCondition() {
-    const p1HP = engine.state.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
-    const p2HP = engine.state.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
-    
-    let victoryText = "";
-    if (p1HP > p2HP) victoryText = "Time Limit! Player 1 Wins by Health!";
-    else if (p2HP > p1HP) victoryText = "Time Limit! Player 2 Wins by Health!";
-    else victoryText = "Time Limit! It's a Draw!";
-    
-    ui.victoryMessage.textContent = victoryText;
+    // Who won and the gameOver flag are the server's call (see
+    // CheckArcadeTimeLimitVictory in js/server/turn-lifecycle.js). This half only
+    // renders the result.
+    const result = CheckArcadeTimeLimitVictory();
+
+    ui.victoryMessage.textContent = result.victoryText;
     ui.victoryMessage.style.display = 'block';
-    engine.state.gameOver = true;
     gameState.currentActionState = ACTION_STATES.IDLE;
     gameState.selectedUnit = null;
     gameState.currentReachableMoves.clear();

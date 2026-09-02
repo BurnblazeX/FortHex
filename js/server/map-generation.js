@@ -532,3 +532,138 @@ function InitializeGridDimensions(newRadius, baseCampRotation = '3') {
 
     buildFineGridIndex();
 }
+
+// === Map editor mutations (A2 §8) ===
+//
+// The map maker used to mutate engine.state directly from js/client/map-maker.js.
+// These are the mutation halves, reached through the same submitAction dispatch
+// as gameplay actions but on the lighter validation path (see the `editor: true`
+// specs in js/server/validation.js): payload shape and id resolution are checked,
+// turn order and gameplay legality are not, because an offline editor has neither.
+//
+// Each returns a reason code rather than calling showInstruction - the client
+// turns those into on-screen messages, same split as PerformFloodFill.
+
+function PaintTile(tileKey, tileType) {
+    const tile = engine.state.tiles.get(tileKey);
+    if (!tile) return { painted: false, reason: 'no_tile' };
+    if (tile.isBaseCampTile) return { painted: false, reason: 'base_camp' };
+
+    tile.type = tileType;
+
+    // A unit stranded between two water tiles has nowhere to stand.
+    if (tileType === TILE_TYPES.WATER) {
+        getEdgesOfTile(tile.q, tile.r).forEach(edgeKey => {
+            const edge = engine.state.edges.get(edgeKey);
+            if (!edge || edge.units.length === 0) return;
+
+            const otherQ = (edge.q1 === tile.q && edge.r1 === tile.r) ? edge.q2 : edge.q1;
+            const otherR = (edge.r1 === tile.r && edge.q1 === tile.q) ? edge.r2 : edge.r1;
+            const otherTile = engine.state.tiles.get(getTileKey(otherQ, otherR));
+
+            if (otherTile && otherTile.type === TILE_TYPES.WATER) {
+                const stranded = edge.units;
+                engine.state.units = engine.state.units.filter(u => !stranded.some(s => s.id === u.id));
+            }
+        });
+    }
+
+    return { painted: true, reason: 'ok' };
+}
+
+function EraseTile(tileKey) {
+    const tile = engine.state.tiles.get(tileKey);
+    if (!tile) return { erased: false, reason: 'no_tile' };
+    if (tile.isBaseCampTile) return { erased: false, reason: 'base_camp' };
+
+    tile.type = TILE_TYPES.PLAINS;
+    return { erased: true, reason: 'ok' };
+}
+
+function RemoveUnitFromEditor(unitId) {
+    const before = engine.state.units.length;
+    engine.state.units = engine.state.units.filter(u => u.id !== unitId);
+    return { removed: engine.state.units.length < before };
+}
+
+function PlaceUnitInEditor(player, unitType, edgeKey) {
+    if (isInternalBaseEdge(edgeKey)) return { placed: false, reason: 'inside_base' };
+    if (!isEdgePlaceable(edgeKey)) return { placed: false, reason: 'edge_not_placeable' };
+
+    const edge = engine.state.edges.get(edgeKey);
+    if (edge.units.length > 0 && edge.units[0].player !== player) return { placed: false, reason: 'enemy_occupied' };
+    if (edge.units.length >= 2) return { placed: false, reason: 'edge_full' };
+
+    const maxUnits = getMaxUnitsForCurrentMap();
+    if (engine.state.units.filter(u => u.player === player).length >= maxUnits) {
+        return { placed: false, reason: 'max_units', limit: maxUnits };
+    }
+
+    const cap = UNIT_CAPS[unitType.name];
+    if (getUnitCountsForPlayer(player)[unitType.name] >= cap) {
+        return { placed: false, reason: 'type_cap', limit: cap, typeName: unitType.name };
+    }
+
+    engine.state.units.push(createUnit(player, unitType, edgeKey));
+    return { placed: true, reason: 'ok' };
+}
+
+// Base camp painting on expansive (R=4) maps: click a tile to add or remove it
+// from that player's base. Contiguity and the max-of-3 rule are editor rules,
+// not gameplay rules, so they live here with the mutation rather than in
+// js/server/validation.js.
+function ToggleBaseCampTile(player, tileKey) {
+    if (engine.state.gridRadius !== 4) return { changed: false, reason: 'wrong_radius' };
+
+    const tile = engine.state.tiles.get(tileKey);
+    if (!tile) return { changed: false, reason: 'no_tile' };
+
+    const playerKey = `player${player}`;
+    const enemyKey = `player${player === 1 ? 2 : 1}`;
+    const current = Array.isArray(engine.state.baseCampPositions[playerKey])
+        ? engine.state.baseCampPositions[playerKey] : [];
+    const enemy = Array.isArray(engine.state.baseCampPositions[enemyKey])
+        ? new Set(engine.state.baseCampPositions[enemyKey]) : new Set();
+
+    const [q, r] = tileKey.split(',').map(Number);
+    for (const n of getNeighbors(q, r)) {
+        if (enemy.has(getTileKey(n.q, n.r))) return { changed: false, reason: 'adjacent_to_enemy' };
+    }
+
+    let next = [...current];
+    if (next.includes(tileKey)) {
+        next = next.filter(k => k !== tileKey);
+        tile.isBaseCampTile = false;
+    } else {
+        if (next.length >= 3) return { changed: false, reason: 'base_max_size' };
+        next.push(tileKey);
+        if (!isSetContiguous(next)) return { changed: false, reason: 'not_contiguous' };
+        tile.type = TILE_TYPES.PLAINS;
+        tile.isBaseCampTile = true;
+    }
+
+    engine.state.baseCampPositions[playerKey] = next;
+    return { changed: true, reason: 'ok' };
+}
+
+// Bulk editor reset: every tile back to plains and unlocked, every unit gone.
+// Base camp restoration differs by radius and the R=3 case needs the editor's
+// slider position, so the caller passes it in.
+function ClearMapForEditor(baseCampRotation) {
+    engine.state.tiles.forEach(tile => {
+        tile.type = TILE_TYPES.PLAINS;
+        tile.isBaseCampTile = false;
+    });
+    engine.state.units = [];
+
+    if (engine.state.gridRadius === 3 && baseCampRotation !== null && baseCampRotation !== undefined) {
+        UpdateBaseCampLocations(baseCampRotation);
+    } else {
+        engine.state.baseCampPositions = { player1: null, player2: null };
+        if (engine.state.flags) {
+            engine.state.flags.p1_flag.homePosition = null;
+            engine.state.flags.p2_flag.homePosition = null;
+        }
+    }
+    return { cleared: true };
+}

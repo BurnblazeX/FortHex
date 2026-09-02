@@ -496,6 +496,37 @@ function getAttackRangeFineCells(unit) {
             return !!tile.type.canFortify;
         }
 
+        // The full "where may this unit fortify" rule, as opposed to
+        // canUnitFortifyOnTile which only answers "is this terrain fortifiable by
+        // this unit". Returns tile keys. This used to be inline in three client
+        // files and, once A2 needed it server-side too, drifted immediately - the
+        // validation path checked only the terrain half and crashed on the rest.
+        // One implementation now; client highlight code calls the same function.
+        function GetValidFortifyTargets(unit) {
+            if (!unit || unit.positionType !== 'edge' || unit.isFortified) return [];
+
+            const edgeCoords = parseEdgeKey(unit.position);
+            if (!edgeCoords || edgeCoords.some(c => isNaN(c.q))) return [];
+
+            const enemyPlayer = unit.player === 1 ? 2 : 1;
+            const myFlagTileKey = getFlagTileKey(unit.player);
+            const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
+            const enemyBaseTileKeys = new Set(GetBaseCamp(enemyPlayer));
+
+            const valid = [];
+            edgeCoords.forEach(coord => {
+                const tileKey = getTileKey(coord.q, coord.r);
+                const tile = engine.state.tiles.get(tileKey);
+                if (!tile) return;
+                if (!canUnitFortifyOnTile(unit, tile)) return;
+                if (tile.fortifiedByPlayer !== null) return;
+                if (tileKey === myFlagTileKey && !unit.isCarryingFlag) return;
+                if (enemyBaseTileKeys.has(tileKey) && tileKey !== enemyFlagTileKey) return;
+                valid.push(tileKey);
+            });
+            return valid;
+        }
+
         // baseCampPositions[playerN] is either an array of tile keys or a single edge-key
         // string depending on map radius. Normalise to an array of tile keys — hand-rolled
         // copies of this that forgot the string case have already caused one live bug.
@@ -1239,7 +1270,15 @@ function getAttackRangeFineCells(unit) {
             return collectTargetsFromAttackRange(attackingUnit, getAttackRangeCells(attackingUnit));
         }
 
-        function isZoCSuppressed(fortifiedUnit) {
+        // excludeUnitId: a unit that should not count toward suppression. Used for
+        // the unit currently ARRIVING on an adjacent edge - it takes the zone's
+        // damage on arrival and only starts suppressing once it has been there
+        // for the turn. Without this exclusion an arriving unit suppresses the
+        // very zone that should be hitting it, and whether that happened
+        // depended on whether the player dragged or clicked (the drag filter
+        // hid the mover from edge.units, which silently produced the correct
+        // answer for the wrong reason).
+        function isZoCSuppressed(fortifiedUnit, excludeUnitId = null) {
             if (!fortifiedUnit || !fortifiedUnit.isFortified) return false;
     
             const tileKey = fortifiedUnit.position;
@@ -1257,7 +1296,7 @@ function getAttackRangeFineCells(unit) {
         
                 if (edge && edge.units.length > 0) {
                     // Count enemies on this specific edge
-                    const enemiesOnEdge = edge.units.filter(u => u.player !== fortPlayer).length;
+                    const enemiesOnEdge = edge.units.filter(u => u.player !== fortPlayer && u.id !== excludeUnitId).length;
             
                     if (enemiesOnEdge > 0) {
                         totalEnemyCount += enemiesOnEdge;

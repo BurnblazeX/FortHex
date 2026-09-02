@@ -47,14 +47,30 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// The server-side half of the animationsEnabled design: wait out the
-// animation's duration before the caller applies its real mutation, so
-// authoritative state changes land when the (client-drawn) animation finishes
-// instead of instantly. Skipped entirely when animations are off.
+// How far ahead of the animation's end the mutation lands. Waiting the FULL
+// duration leaves a one-frame gap: the animation has finished and drawn the unit
+// back at its old position, but the state that would draw it at its new one
+// hasn't been applied yet - so a fortifying unit flickers on its edge before
+// snapping to the tile centre. Landing the mutation a couple of frames early
+// closes that gap; the tail of the animation just draws the already-committed
+// result, which is what the eye expects anyway.
+//
+// Two frames at 60fps. One frame is enough in principle but leaves no room for
+// rAF jitter; much more than this and the state change becomes visible BEFORE
+// the animation finishes, which is the opposite artefact. Tune here.
+const ANIMATION_SETTLE_LEAD_MS = 33;
+
+// The server-side half of the animationsEnabled design: wait out the animation's
+// duration before the caller applies its real mutation, so authoritative state
+// changes land as the (client-drawn) animation finishes rather than instantly.
+// Skipped entirely when animations are off.
 async function WaitForAnimation(durationMs) {
     if (!engine.settings.animationsEnabled) return;
-    console.log('[Server] Waiting for animation to complete...');
-    await delay(durationMs);
+
+    // Never invert on very short animations - a 20ms effect should still wait
+    // its own length rather than resolving before it starts.
+    const wait = Math.max(0, durationMs - ANIMATION_SETTLE_LEAD_MS);
+    await delay(wait);
 }
 
 async function ApplyBuildBridge(unit, targetEdgeKey, duration = 500) {
@@ -105,7 +121,7 @@ async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
     unit.hasPerformedMajorAction = true;
 
     if (typeof engine !== 'undefined') {
-        engine.actionManager.SubmitAction({
+        engine.actionManager.RecordHistory({
             type: "UNFORTIFY",
             turn: engine.state.globalTurnNumber,
             player: unfortifyingPlayer,
@@ -147,7 +163,7 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
     targetTileObject.fortifiedByPlayer = fortifyingPlayer;
 
     if (typeof engine !== 'undefined') {
-        engine.actionManager.SubmitAction({
+        engine.actionManager.RecordHistory({
             type: "FORTIFY",
             turn: engine.state.globalTurnNumber,
             player: fortifyingPlayer,
@@ -230,7 +246,7 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
     });
 
     if (zocHits.length > 0 && typeof engine !== 'undefined') {
-        engine.actionManager.SubmitAction({
+        engine.actionManager.RecordHistory({
             type: "FORTIFY_ZOC_BLAST",
             turn: engine.state.globalTurnNumber,
             player: fortifyingPlayer,
@@ -482,7 +498,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
     if (hitAndRunMessage) logParts.push(hitAndRunMessage);
 
     if (typeof engine !== 'undefined') {
-        engine.actionManager.SubmitAction({
+        engine.actionManager.RecordHistory({
             type: "ATTACK",
             turn: engine.state.globalTurnNumber,
             player: attackingUnit.player,
@@ -668,14 +684,17 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
     const checkAndApply = (tile, tileKey) => {
         if (tile && tile.fortifiedByPlayer === enemyPlayer && !unitDestroyed) {
             const fortUnit = engine.state.units.find(u => u.isFortified && u.position === tileKey && u.player === enemyPlayer);
-            if (fortUnit && isZoCSuppressed(fortUnit)) {
+            // The mover is already standing on the destination edge by now
+            // (unit.position was assigned above), so exclude it - it should not
+            // suppress the zone it is walking into.
+            if (fortUnit && isZoCSuppressed(fortUnit, unitMoving.id)) {
                 return false;
             }
 
             unitMoving.hp -= FORTIFICATION_DAMAGE;
 
             if (typeof engine !== 'undefined') {
-                engine.actionManager.SubmitAction({
+                engine.actionManager.RecordHistory({
                     type: "MOVEMENT_ZOC_HIT",
                     turn: engine.state.globalTurnNumber,
                     player: unitMoving.player,
@@ -765,7 +784,7 @@ function ApplyUnitUpgrade(unit, statType) {
     engine.Emit({ type: 'LOG', text: logMsg, player: unit.player });
 
     if (typeof engine !== 'undefined') {
-        engine.actionManager.SubmitAction({
+        engine.actionManager.RecordHistory({
             type: "UNIT_UPGRADE",
             turn: engine.state.globalTurnNumber,
             player: unit.player,
@@ -912,7 +931,7 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
     const unitDestroyedByZoC = fortDamageResult.destroyed;
 
     if (typeof engine !== 'undefined') {
-        engine.actionManager.SubmitAction({
+        engine.actionManager.RecordHistory({
             type: "MOVE", turn: engine.state.globalTurnNumber, player: engine.state.currentPlayer,
             actorId: unit.id, payload: { from: originPos, to: actualTarget, cost: actualCost, unitState: GetUnitSnapshot(unit) }
         });

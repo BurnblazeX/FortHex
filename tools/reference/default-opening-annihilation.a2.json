@@ -1,0 +1,1954 @@
+{
+  "label": "a2-baseline",
+  "capturedAt": "2026-09-02T08:09:03.861Z",
+  "build": "InDev B30",
+  "setup": {
+    "gameMode": "local",
+    "playerSide": null,
+    "gridRadius": 3,
+    "fogOfWarEnabled": false,
+    "baseCampPositions": {
+      "player1": "-2,-1_-1,-2",
+      "player2": "1,2_2,1"
+    }
+  },
+  "outcome": {
+    "turn": 17,
+    "currentPlayer": 1,
+    "gameOver": true,
+    "supplyPoints": {
+      "player1": 10,
+      "player2": 10
+    },
+    "units": [
+      {
+        "id": "u_p1_MELEE_t1_1",
+        "player": 1,
+        "type": "Melee",
+        "hp": 3,
+        "pos": "0,1_1,0",
+        "fortified": false
+      }
+    ]
+  },
+  "entryCount": 92,
+  "matchHistory": [
+    {
+      "type": "MOVE",
+      "turn": 1,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "from": "-1,-1_0,-2",
+        "to": "-1,0_0,-1",
+        "cost": 2,
+        "unitState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 13,
+          "mp": 1,
+          "pos": "-1,0_0,-1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 1,
+      "player": 1,
+      "actorId": "u_p1_ARCHER_t1_2",
+      "payload": {
+        "from": "-2,0_-1,-1",
+        "to": "-2,1_-1,0",
+        "cost": 3,
+        "unitState": {
+          "id": "u_p1_ARCHER_t1_2",
+          "hp": 10,
+          "mp": 0,
+          "pos": "-2,1_-1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 1,
+      "player": 1,
+      "actorId": "u_p1_HORSEMAN_t1_4",
+      "payload": {
+        "from": "-2,0_-2,1",
+        "to": "-1,1_0,0",
+        "cost": 5,
+        "unitState": {
+          "id": "u_p1_HORSEMAN_t1_4",
+          "hp": 11,
+          "mp": 0,
+          "pos": "-1,1_0,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "FORTIFY",
+      "turn": 1,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "tile": "0,-1",
+        "relativeLocation": "center",
+        "unitState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 13,
+          "mp": 0,
+          "pos": "0,-1",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 1,
+      "player": 2,
+      "actorId": "u_p2_HORSEMAN_t1_8",
+      "payload": {
+        "from": "2,-1_2,0",
+        "to": "0,0_1,-1",
+        "cost": 5,
+        "unitState": {
+          "id": "u_p2_HORSEMAN_t1_8",
+          "hp": 11,
+          "mp": 0,
+          "pos": "0,0_1,-1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 1,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "from": "0,2_1,1",
+        "to": "-1,2_0,1",
+        "cost": 3,
+        "unitState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 13,
+          "mp": 0,
+          "pos": "-1,2_0,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 1,
+      "player": 2,
+      "actorId": "u_p2_ARCHER_t1_6",
+      "payload": {
+        "from": "1,1_2,0",
+        "to": "0,1_1,0",
+        "cost": 2,
+        "unitState": {
+          "id": "u_p2_ARCHER_t1_6",
+          "hp": 10,
+          "mp": 1,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "FORTIFY",
+      "turn": 1,
+      "player": 2,
+      "actorId": "u_p2_ARCHER_t1_6",
+      "payload": {
+        "tile": "0,1",
+        "relativeLocation": "center",
+        "unitState": {
+          "id": "u_p2_ARCHER_t1_6",
+          "hp": 10,
+          "mp": 0,
+          "pos": "0,1",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 2,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p1_PIKEMAN_t1_3",
+            "type": "SHIELD",
+            "amount": 1,
+            "finalHp": 14
+          }
+        ]
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 2,
+      "player": 1,
+      "actorId": "u_p1_ARCHER_t1_2",
+      "payload": {
+        "from": "-2,1_-1,0",
+        "to": "-1,0_-1,1",
+        "cost": 1,
+        "unitState": {
+          "id": "u_p1_ARCHER_t1_2",
+          "hp": 10,
+          "mp": 2,
+          "pos": "-1,0_-1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 2,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "from": "0,-2_1,-2",
+        "to": "-1,0_0,-1",
+        "cost": 3,
+        "unitState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 12,
+          "mp": 1,
+          "pos": "-1,0_0,-1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 2,
+      "player": 1,
+      "actorId": "u_p1_ARCHER_t1_2",
+      "payload": {
+        "from": "-1,0_-1,1",
+        "to": "-1,1_0,0",
+        "cost": 2,
+        "unitState": {
+          "id": "u_p1_ARCHER_t1_2",
+          "hp": 10,
+          "mp": 0,
+          "pos": "-1,1_0,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 2,
+      "player": 2,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p2_ARCHER_t1_6",
+            "type": "SHIELD",
+            "amount": 1,
+            "finalHp": 11
+          }
+        ]
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 2,
+      "player": 2,
+      "actorId": "u_p2_ARCHER_t1_6",
+      "payload": {
+        "targetType": "UNIT_SPLIT",
+        "damageDealt": 2,
+        "isKill": false,
+        "targetId": "u_p1_HORSEMAN_t1_4",
+        "splitTargets": [
+          "u_p1_ARCHER_t1_2",
+          "u_p1_HORSEMAN_t1_4"
+        ],
+        "modifiers": [
+          "SPLIT_DAMAGE"
+        ],
+        "attackerState": {
+          "id": "u_p2_ARCHER_t1_6",
+          "hp": 11,
+          "mp": 0,
+          "pos": "0,1",
+          "isFortified": true
+        },
+        "targetState": {
+          "id": "u_p1_HORSEMAN_t1_4",
+          "hp": 9,
+          "mp": 5,
+          "pos": "-1,1_0,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVEMENT_ZOC_HIT",
+      "turn": 2,
+      "player": 2,
+      "actorId": "u_p2_HORSEMAN_t1_8",
+      "payload": {
+        "location": "0,-1_0,0",
+        "damage": 1,
+        "isFatal": false
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 2,
+      "player": 2,
+      "actorId": "u_p2_HORSEMAN_t1_8",
+      "payload": {
+        "from": "0,0_1,-1",
+        "to": "0,-1_0,0",
+        "cost": 3,
+        "unitState": {
+          "id": "u_p2_HORSEMAN_t1_8",
+          "hp": 10,
+          "mp": 2,
+          "pos": "0,-1_0,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 2,
+      "player": 2,
+      "actorId": "u_p2_HORSEMAN_t1_8",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": false,
+        "targetId": "u_p1_MELEE_t1_1",
+        "modifiers": [
+          "ADVANTAGE"
+        ],
+        "attackerState": {
+          "id": "u_p2_HORSEMAN_t1_8",
+          "hp": 10,
+          "mp": 1,
+          "pos": "0,-1_0,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 8,
+          "mp": 1,
+          "pos": "-1,0_0,-1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "TURN_START_ZOC",
+      "turn": 3,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p2_HORSEMAN_t1_8",
+            "damage": 1,
+            "remainingHp": 9,
+            "isFatal": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 3,
+      "player": 1,
+      "actorId": "u_p1_HORSEMAN_t1_4",
+      "payload": {
+        "from": "-1,1_0,0",
+        "to": "0,0_1,0",
+        "cost": 5,
+        "unitState": {
+          "id": "u_p1_HORSEMAN_t1_4",
+          "hp": 9,
+          "mp": 0,
+          "pos": "0,0_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 3,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "from": "-1,0_0,-1",
+        "to": "-1,1_0,0",
+        "cost": 4,
+        "unitState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 8,
+          "mp": 0,
+          "pos": "-1,1_0,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 3,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": false,
+        "targetId": "u_p2_HORSEMAN_t1_8",
+        "modifiers": [
+          "ADVANTAGE"
+        ],
+        "attackerState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 14,
+          "mp": 0,
+          "pos": "0,-1",
+          "isFortified": true
+        },
+        "targetState": {
+          "id": "u_p2_HORSEMAN_t1_8",
+          "hp": 5,
+          "mp": 1,
+          "pos": "0,-1_0,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 3,
+      "player": 2,
+      "actorId": "u_p2_ARCHER_t1_6",
+      "payload": {
+        "targetType": "UNIT_SPLIT",
+        "damageDealt": 2,
+        "isKill": false,
+        "targetId": "u_p1_ARCHER_t1_2",
+        "splitTargets": [
+          "u_p1_MELEE_t1_1",
+          "u_p1_ARCHER_t1_2"
+        ],
+        "modifiers": [
+          "SPLIT_DAMAGE"
+        ],
+        "attackerState": {
+          "id": "u_p2_ARCHER_t1_6",
+          "hp": 11,
+          "mp": 0,
+          "pos": "0,1",
+          "isFortified": true
+        },
+        "targetState": {
+          "id": "u_p1_ARCHER_t1_2",
+          "hp": 6,
+          "mp": 3,
+          "pos": "-1,1_0,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "TURN_START_ZOC",
+      "turn": 4,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p2_HORSEMAN_t1_8",
+            "damage": 1,
+            "remainingHp": 4,
+            "isFatal": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "MOVEMENT_ZOC_HIT",
+      "turn": 4,
+      "player": 1,
+      "actorId": "u_p1_ARCHER_t1_2",
+      "payload": {
+        "location": "-1,1_0,1",
+        "damage": 1,
+        "isFatal": false
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 4,
+      "player": 1,
+      "actorId": "u_p1_ARCHER_t1_2",
+      "payload": {
+        "from": "-1,1_0,0",
+        "to": "-1,1_0,1",
+        "cost": 2,
+        "unitState": {
+          "id": "u_p1_ARCHER_t1_2",
+          "hp": 5,
+          "mp": 1,
+          "pos": "-1,1_0,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVEMENT_ZOC_HIT",
+      "turn": 4,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "location": "-1,1_0,1",
+        "damage": 1,
+        "isFatal": false
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 4,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "from": "-1,1_0,0",
+        "to": "-1,1_0,1",
+        "cost": 2,
+        "unitState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 5,
+          "mp": 2,
+          "pos": "-1,1_0,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVEMENT_ZOC_HIT",
+      "turn": 4,
+      "player": 1,
+      "actorId": "u_p1_HORSEMAN_t1_4",
+      "payload": {
+        "location": "0,1_1,0",
+        "damage": 1,
+        "isFatal": false
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 4,
+      "player": 1,
+      "actorId": "u_p1_HORSEMAN_t1_4",
+      "payload": {
+        "from": "0,0_1,0",
+        "to": "0,1_1,0",
+        "cost": 2,
+        "unitState": {
+          "id": "u_p1_HORSEMAN_t1_4",
+          "hp": 8,
+          "mp": 3,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 4,
+      "player": 1,
+      "actorId": "u_p1_HORSEMAN_t1_4",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 2,
+        "isKill": false,
+        "targetId": "u_p2_ARCHER_t1_6",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_HORSEMAN_t1_4",
+          "hp": 8,
+          "mp": 2,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_ARCHER_t1_6",
+          "hp": 9,
+          "mp": 0,
+          "pos": "0,1",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 4,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": false,
+        "targetId": "u_p2_ARCHER_t1_6",
+        "modifiers": [
+          "ADVANTAGE",
+          "COMBINED_ARMS"
+        ],
+        "attackerState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 5,
+          "mp": 0,
+          "pos": "-1,1_0,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_ARCHER_t1_6",
+          "hp": 5,
+          "mp": 0,
+          "pos": "0,1",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 4,
+      "player": 1,
+      "actorId": "u_p1_ARCHER_t1_2",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 2,
+        "isKill": false,
+        "targetId": "u_p2_ARCHER_t1_6",
+        "modifiers": [
+          "COMBINED_ARMS"
+        ],
+        "attackerState": {
+          "id": "u_p1_ARCHER_t1_2",
+          "hp": 5,
+          "mp": 0,
+          "pos": "-1,1_0,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_ARCHER_t1_6",
+          "hp": 3,
+          "mp": 0,
+          "pos": "0,1",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 4,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p1_MELEE_t1_1",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 13,
+          "mp": 0,
+          "pos": "-1,2_0,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 2,
+          "mp": 0,
+          "pos": "-1,1_0,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 4,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "from": "-1,2_0,2",
+        "to": "-1,2_0,1",
+        "cost": 2,
+        "unitState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 12,
+          "mp": 2,
+          "pos": "-1,2_0,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 4,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": false,
+        "targetId": "u_p1_ARCHER_t1_2",
+        "modifiers": [
+          "ADVANTAGE"
+        ],
+        "attackerState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 12,
+          "mp": 0,
+          "pos": "-1,2_0,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_ARCHER_t1_2",
+          "hp": 1,
+          "mp": 0,
+          "pos": "-1,1_0,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "TURN_START_ZOC",
+      "turn": 5,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p2_HORSEMAN_t1_8",
+            "damage": 1,
+            "remainingHp": 3,
+            "isFatal": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 5,
+      "player": 1,
+      "actorId": "u_p1_HORSEMAN_t1_4",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 2,
+        "isKill": false,
+        "targetId": "u_p2_ARCHER_t1_6",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_HORSEMAN_t1_4",
+          "hp": 8,
+          "mp": 4,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_ARCHER_t1_6",
+          "hp": 1,
+          "mp": 3,
+          "pos": "0,1",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 5,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": true,
+        "targetId": "u_p2_ARCHER_t1_6",
+        "modifiers": [
+          "ADVANTAGE",
+          "COMBINED_ARMS"
+        ],
+        "attackerState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 2,
+          "mp": 0,
+          "pos": "-1,1_0,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_ARCHER_t1_6",
+          "hp": -3,
+          "mp": 3,
+          "pos": "0,1",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 5,
+      "player": 1,
+      "actorId": "u_p1_ARCHER_t1_2",
+      "payload": {
+        "targetType": "UNIT_SPLIT",
+        "damageDealt": 2,
+        "isKill": false,
+        "targetId": "u_p2_PIKEMAN_t1_7",
+        "splitTargets": [
+          "u_p2_MELEE_t1_5",
+          "u_p2_PIKEMAN_t1_7"
+        ],
+        "modifiers": [
+          "ADVANTAGE",
+          "SPLIT_DAMAGE"
+        ],
+        "attackerState": {
+          "id": "u_p1_ARCHER_t1_2",
+          "hp": 1,
+          "mp": 0,
+          "pos": "-1,1_0,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 11,
+          "mp": 0,
+          "pos": "-1,2_0,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 5,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": true,
+        "targetId": "u_p2_HORSEMAN_t1_8",
+        "modifiers": [
+          "ADVANTAGE"
+        ],
+        "attackerState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 14,
+          "mp": 0,
+          "pos": "0,-1",
+          "isFortified": true
+        },
+        "targetState": {
+          "id": "u_p2_HORSEMAN_t1_8",
+          "hp": -1,
+          "mp": 5,
+          "pos": "0,-1_0,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 5,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "from": "-1,2_0,1",
+        "to": "0,1_1,1",
+        "cost": 2,
+        "unitState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 11,
+          "mp": 1,
+          "pos": "0,1_1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 5,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": false,
+        "targetId": "u_p1_HORSEMAN_t1_4",
+        "modifiers": [
+          "ADVANTAGE"
+        ],
+        "attackerState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 11,
+          "mp": 0,
+          "pos": "0,1_1,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_HORSEMAN_t1_4",
+          "hp": 4,
+          "mp": 4,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 5,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": true,
+        "targetId": "u_p1_ARCHER_t1_2",
+        "modifiers": [
+          "ADVANTAGE"
+        ],
+        "attackerState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 10,
+          "mp": 0,
+          "pos": "-1,2_0,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_ARCHER_t1_2",
+          "hp": -3,
+          "mp": 0,
+          "pos": "-1,1_0,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 6,
+      "player": 1,
+      "actorId": "u_p1_HORSEMAN_t1_4",
+      "payload": {
+        "from": "0,1_1,0",
+        "to": "1,1_2,0",
+        "cost": 2,
+        "unitState": {
+          "id": "u_p1_HORSEMAN_t1_4",
+          "hp": 4,
+          "mp": 3,
+          "pos": "1,1_2,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "FORTIFY",
+      "turn": 6,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "tile": "0,1",
+        "relativeLocation": "center",
+        "unitState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 2,
+          "mp": 3,
+          "pos": "0,1",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "FORTIFY_ZOC_BLAST",
+      "turn": 6,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "hits": [
+          {
+            "unitId": "u_p2_PIKEMAN_t1_7",
+            "damage": 1,
+            "isFatal": false
+          },
+          {
+            "unitId": "u_p2_MELEE_t1_5",
+            "damage": 1,
+            "isFatal": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "UNFORTIFY",
+      "turn": 6,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "fromTile": "0,-1",
+        "toEdge": "0,-1_0,0",
+        "relativeLocation": "edge",
+        "unitState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 14,
+          "mp": 2,
+          "pos": "0,-1_0,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 6,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "from": "0,1_1,1",
+        "to": "1,0_1,1",
+        "cost": 1,
+        "unitState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 10,
+          "mp": 2,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 6,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": true,
+        "targetId": "u_p1_HORSEMAN_t1_4",
+        "modifiers": [
+          "ADVANTAGE"
+        ],
+        "attackerState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 10,
+          "mp": 0,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_HORSEMAN_t1_4",
+          "hp": 0,
+          "mp": 3,
+          "pos": "1,1_2,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 6,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "from": "-1,2_0,1",
+        "to": "1,1_1,2",
+        "cost": 4,
+        "unitState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 9,
+          "mp": 0,
+          "pos": "1,1_1,2",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 7,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p1_MELEE_t1_1",
+            "type": "HEAL",
+            "amount": 1,
+            "finalHp": 3
+          }
+        ]
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 7,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "from": "0,-1_0,0",
+        "to": "1,-1_1,0",
+        "cost": 3,
+        "unitState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 14,
+          "mp": 0,
+          "pos": "1,-1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "MOVE",
+      "turn": 7,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "from": "1,0_1,1",
+        "to": "1,0_2,-1",
+        "cost": 3,
+        "unitState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 10,
+          "mp": 0,
+          "pos": "1,0_2,-1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 8,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p1_MELEE_t1_1",
+            "type": "HEAL",
+            "amount": 1,
+            "finalHp": 4
+          }
+        ]
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 8,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p2_PIKEMAN_t1_7",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 14,
+          "mp": 0,
+          "pos": "1,-1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 7,
+          "mp": 0,
+          "pos": "1,0_2,-1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "FORTIFY",
+      "turn": 8,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "tile": "1,1",
+        "relativeLocation": "center",
+        "unitState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 9,
+          "mp": 3,
+          "pos": "1,1",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 8,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p1_PIKEMAN_t1_3",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 7,
+          "mp": 0,
+          "pos": "1,0_2,-1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 11,
+          "mp": 0,
+          "pos": "1,-1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 9,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p1_MELEE_t1_1",
+            "type": "HEAL",
+            "amount": 1,
+            "finalHp": 5
+          }
+        ]
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 9,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p2_PIKEMAN_t1_7",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 11,
+          "mp": 0,
+          "pos": "1,-1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 4,
+          "mp": 0,
+          "pos": "1,0_2,-1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 9,
+      "player": 2,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p2_MELEE_t1_5",
+            "type": "HEAL",
+            "amount": 1,
+            "finalHp": 10
+          }
+        ]
+      }
+    },
+    {
+      "type": "FORTIFY",
+      "turn": 9,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "tile": "1,0",
+        "relativeLocation": "center",
+        "unitState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 4,
+          "mp": 2,
+          "pos": "1,0",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "FORTIFY_ZOC_BLAST",
+      "turn": 9,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "hits": [
+          {
+            "unitId": "u_p1_PIKEMAN_t1_3",
+            "damage": 1,
+            "isFatal": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 10,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p1_MELEE_t1_1",
+            "type": "HEAL",
+            "amount": 1,
+            "finalHp": 6
+          }
+        ]
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 10,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 1,
+        "isKill": false,
+        "targetId": "u_p2_PIKEMAN_t1_7",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 10,
+          "mp": 0,
+          "pos": "1,-1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 3,
+          "mp": 2,
+          "pos": "1,0",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "TURN_START_ZOC",
+      "turn": 10,
+      "player": 2,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p1_PIKEMAN_t1_3",
+            "damage": 1,
+            "remainingHp": 9,
+            "isFatal": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 10,
+      "player": 2,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p2_MELEE_t1_5",
+            "type": "HEAL",
+            "amount": 1,
+            "finalHp": 11
+          }
+        ]
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 10,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p1_PIKEMAN_t1_3",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 3,
+          "mp": 0,
+          "pos": "1,0",
+          "isFortified": true
+        },
+        "targetState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 6,
+          "mp": 0,
+          "pos": "1,-1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 11,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p1_MELEE_t1_1",
+            "type": "HEAL",
+            "amount": 1,
+            "finalHp": 7
+          }
+        ]
+      }
+    },
+    {
+      "type": "UNFORTIFY",
+      "turn": 11,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "fromTile": "0,1",
+        "toEdge": "0,1_1,0",
+        "relativeLocation": "edge",
+        "unitState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 7,
+          "mp": 3,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 11,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 1,
+        "isKill": false,
+        "targetId": "u_p2_PIKEMAN_t1_7",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 6,
+          "mp": 0,
+          "pos": "1,-1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 2,
+          "mp": 0,
+          "pos": "1,0",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 11,
+      "player": 2,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p2_MELEE_t1_5",
+            "type": "HEAL",
+            "amount": 1,
+            "finalHp": 12
+          }
+        ]
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 11,
+      "player": 2,
+      "actorId": "u_p2_PIKEMAN_t1_7",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p1_PIKEMAN_t1_3",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 2,
+          "mp": 0,
+          "pos": "1,0",
+          "isFortified": true
+        },
+        "targetState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 3,
+          "mp": 0,
+          "pos": "1,-1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 12,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 1,
+        "isKill": false,
+        "targetId": "u_p2_PIKEMAN_t1_7",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 7,
+          "mp": 0,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 1,
+          "mp": 0,
+          "pos": "1,0",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 12,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 1,
+        "isKill": true,
+        "targetId": "u_p2_PIKEMAN_t1_7",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 3,
+          "mp": 0,
+          "pos": "1,-1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_PIKEMAN_t1_7",
+          "hp": 0,
+          "mp": 0,
+          "pos": "1,0",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "TURN_START_HEAL",
+      "turn": 12,
+      "player": 2,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p2_MELEE_t1_5",
+            "type": "SHIELD",
+            "amount": 1,
+            "finalHp": 13
+          }
+        ]
+      }
+    },
+    {
+      "type": "UNFORTIFY",
+      "turn": 12,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "fromTile": "1,1",
+        "toEdge": "1,0_1,1",
+        "relativeLocation": "edge",
+        "unitState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 13,
+          "mp": 3,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "FORTIFY",
+      "turn": 13,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "tile": "1,0",
+        "relativeLocation": "center",
+        "unitState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 3,
+          "mp": 2,
+          "pos": "1,0",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "FORTIFY_ZOC_BLAST",
+      "turn": 13,
+      "player": 1,
+      "actorId": "u_p1_PIKEMAN_t1_3",
+      "payload": {
+        "hits": [
+          {
+            "unitId": "u_p2_MELEE_t1_5",
+            "damage": 1,
+            "isFatal": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 13,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p2_MELEE_t1_5",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 7,
+          "mp": 0,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 9,
+          "mp": 3,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 13,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 1,
+        "isKill": false,
+        "targetId": "u_p1_PIKEMAN_t1_3",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 9,
+          "mp": 0,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 2,
+          "mp": 2,
+          "pos": "1,0",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "TURN_START_ZOC",
+      "turn": 14,
+      "player": 1,
+      "payload": {
+        "events": [
+          {
+            "unitId": "u_p2_MELEE_t1_5",
+            "damage": 1,
+            "remainingHp": 8,
+            "isFatal": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 14,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p2_MELEE_t1_5",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 7,
+          "mp": 0,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 5,
+          "mp": 0,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "UNIT_UPGRADE",
+      "turn": 14,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "stat": "damage",
+        "level": 1,
+        "penaltyStat": null,
+        "unitState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 5,
+          "mp": 4,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "UNIT_UPGRADE",
+      "turn": 14,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "stat": "health",
+        "level": 2,
+        "penaltyStat": null,
+        "unitState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 7,
+          "mp": 4,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 14,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 2,
+        "isKill": true,
+        "targetId": "u_p1_PIKEMAN_t1_3",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 7,
+          "mp": 0,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_PIKEMAN_t1_3",
+          "hp": 0,
+          "mp": 3,
+          "pos": "1,0",
+          "isFortified": true
+        }
+      }
+    },
+    {
+      "type": "UNIT_UPGRADE",
+      "turn": 15,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "stat": "health",
+        "level": 1,
+        "penaltyStat": null,
+        "unitState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 9,
+          "mp": 4,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 15,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p2_MELEE_t1_5",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 9,
+          "mp": 0,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 4,
+          "mp": 0,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 15,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": false,
+        "targetId": "u_p1_MELEE_t1_1",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 4,
+          "mp": 0,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 5,
+          "mp": 0,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "UNIT_UPGRADE",
+      "turn": 16,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "stat": "health",
+        "level": 2,
+        "penaltyStat": "speed",
+        "unitState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 7,
+          "mp": 3,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 16,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": false,
+        "targetId": "u_p2_MELEE_t1_5",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 7,
+          "mp": 0,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 1,
+          "mp": 0,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 16,
+      "player": 2,
+      "actorId": "u_p2_MELEE_t1_5",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 4,
+        "isKill": false,
+        "targetId": "u_p1_MELEE_t1_1",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": 1,
+          "mp": 0,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 3,
+          "mp": 0,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        }
+      }
+    },
+    {
+      "type": "ATTACK",
+      "turn": 17,
+      "player": 1,
+      "actorId": "u_p1_MELEE_t1_1",
+      "payload": {
+        "targetType": "UNIT",
+        "damageDealt": 3,
+        "isKill": true,
+        "targetId": "u_p2_MELEE_t1_5",
+        "modifiers": [],
+        "attackerState": {
+          "id": "u_p1_MELEE_t1_1",
+          "hp": 3,
+          "mp": 0,
+          "pos": "0,1_1,0",
+          "isFortified": false
+        },
+        "targetState": {
+          "id": "u_p2_MELEE_t1_5",
+          "hp": -2,
+          "mp": 0,
+          "pos": "1,0_1,1",
+          "isFortified": false
+        }
+      }
+    }
+  ]
+}

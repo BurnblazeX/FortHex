@@ -39,20 +39,10 @@ function MakeStateSyncMessage(events, stateVersion) {
     return { type: 'state-sync', events, stateVersion };
 }
 
-// The server's action table: the only place an action name maps to an engine
-// function. A2 adds "is this legal, is it this player's turn" in front of each
-// entry; A1 just needs the indirection to exist so there's somewhere to put it.
-const SERVER_ACTION_HANDLERS = {
-    'move':         (p) => ApplyMoveAction(p.unit, p.targetEdgeKey, p.cost, p.path),
-    'attack':       (p) => ApplyAttack(p.attackingUnit, p.targetUnitInfo, p.attackType, p.duration),
-    'fortify':      (p) => ApplyFortify(p.unit, p.targetTileKey, p.duration),
-    'unfortify':    (p) => ApplyUnfortify(p.unit, p.targetEdgeKey, p.duration),
-    'build-bridge': (p) => ApplyBuildBridge(p.unit, p.targetEdgeKey, p.duration),
-    'upgrade-unit': (p) => ApplyUnitUpgrade(p.unit, p.statType),
-    'swap-class':   (p) => ApplyClassSwap(p.unit, p.newType),
-    'spawn-unit':   (p) => SpawnUnit(p.player, p.unitType),
-    'end-turn':     () => AdvanceTurn(),
-};
+// The action table moved to ACTION_SPECS in js/server/validation.js during A2,
+// where each entry now carries its validation contract alongside its Apply*
+// function. Dispatch goes through ActionManager.SubmitAction (js/server/engine.js),
+// which is the sole path from a client request to a mutation.
 
 class LocalTransport {
     constructor(engineInstance) {
@@ -101,20 +91,15 @@ class LocalTransport {
     }
 
     HandleAction(message) {
-        const handler = SERVER_ACTION_HANDLERS[message.action];
-        if (!handler) {
-            console.warn('[Transport] Unknown action:', message.action);
-            return { ok: false, error: 'unknown_action' };
-        }
+        // Everything - resolution, turn checks, rule legality, the Apply* call,
+        // and the matchHistory write - happens inside submitAction. The transport
+        // does not know or care which actions exist; it just carries messages.
+        const outcome = this.engine.actionManager.SubmitAction(message);
 
-        const outcome = handler(message.payload || {});
-
-        // The animation-delayed actions (fortify/unfortify/bridge/attack) and
-        // end-turn are async; flush only once they've actually finished.
         if (outcome && typeof outcome.then === 'function') {
-            return outcome.then(result => ({ ok: true, result, sync: this.Flush() }));
+            return outcome.then(settled => ({ ...settled, sync: this.Flush() }));
         }
-        return { ok: true, result: outcome, sync: this.Flush() };
+        return { ...outcome, sync: this.Flush() };
     }
 
     // Drain the engine's queue and push it out as a state-sync. This is the

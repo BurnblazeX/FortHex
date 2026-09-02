@@ -106,7 +106,11 @@ function stopMapTest() {
 }
 
 function performFloodFill(startQ, startR) {
-    const result = PerformFloodFill(startQ, startR, gameState.mapMakerBrush.value);
+    const outcome = SendAction('flood-fill', {
+        startQ, startR, tileTypeName: gameState.mapMakerBrush.value.name
+    });
+    if (!outcome.ok) return;
+    const result = outcome.result;
 
     if (result.reason === 'base_camp') {
         showInstruction("Cannot change the terrain of a base camp tile.", 2000);
@@ -818,69 +822,81 @@ function resizeMapGrid(newRadius) {
 function eraseAt(x, y) {
     const hexCoords = pixelToAxial(x, y);
     const hexKey = getTileKey(hexCoords.q, hexCoords.r);
-    
+
     const { key: closestEdgeKey, distance } = findClosestEdgeToPoint(x, y);
     const edge = engine.state.edges.get(closestEdgeKey);
-    
-    // Prioritize erasing units if clicking near an edge with units on it
+
+    // Prioritise erasing units if clicking near an edge with units on it.
+    // Which unit is picked is a hit-test - a client concern - but the removal
+    // itself goes through the protocol like every other mutation.
     if (edge && edge.units.length > 0 && distance < (HEX_SIZE * 0.4)) {
-        const unitToRemove = edge.units[edge.units.length - 1]; 
-        engine.state.units = engine.state.units.filter(u => u.id !== unitToRemove.id);
+        const unitToRemove = edge.units[edge.units.length - 1];
+        SendAction('remove-unit', { unitId: unitToRemove.id });
     } else {
-        // Otherwise, erase the tile by setting it to plains
-        const tile = engine.state.tiles.get(hexKey);
-        if (tile) {
-            if (tile.isBaseCampTile) {
-                showInstruction("Cannot erase a base camp tile.", 1500);
-                return;
-            }
-            tile.type = TILE_TYPES.PLAINS;
+        const outcome = SendAction('erase-tile', { tileKey: hexKey });
+        if (outcome.ok && outcome.result.reason === 'base_camp') {
+            showInstruction("Cannot erase a base camp tile.", 1500);
+            return;
         }
+        if (!outcome.ok) return;
     }
+
     autoSaveMap();
     gameState.needsRedraw = true;
 }
 
 function clearMapForMaker() {
-    // Clear tiles back to plains and unlock them
-    engine.state.tiles.forEach(tile => {
-        tile.type = TILE_TYPES.PLAINS;
-        tile.isBaseCampTile = false; // Reset the lock flag
-    });
+    const sliderEl = document.getElementById('baseCampSlider');
+    const rotation = (engine.state.gridRadius === 3 && sliderEl) ? sliderEl.value : null;
 
-    // Clear all units
-    engine.state.units = [];   
+    const outcome = SendAction('clear-map', { baseCampRotation: rotation });
+    if (!outcome.ok) return;
 
-    //Fog of War Reset 
+    // Client-owned fog/redraw bookkeeping.
     engine.visionCache = null;
     gameState.fogAnimState = null;
     engine.visionDirty = true;
 
-    // Reset Base Camp Data
-    if (engine.state.gridRadius === 3) {
-        // For Standard maps (R=3), re-apply the slider position to restore the fixed base camps
-        const sliderEl = document.getElementById('baseCampSlider');
-        if (sliderEl) {
-            updateBaseCampLocations(sliderEl.value);
-        }
-    } else {
-        // For Expansive (R=4) and Compact (R=2), fully clear the base camp data
-        engine.state.baseCampPositions = { player1: null, player2: null };
-        if (engine.state.flags) {
-             engine.state.flags.p1_flag.homePosition = null;
-             engine.state.flags.p2_flag.homePosition = null;
-        }
-    }
-
     showInstruction('Map Cleared!', 2000);
-    autoSaveMap(); // Autosave the cleared state
+    autoSaveMap();
     gameState.needsRedraw = true;
 }
 
 function updateBaseCampLocations(sliderValue) {
-    if (UpdateBaseCampLocations(sliderValue)) {
+    const outcome = SendAction('set-base-camp-rotation', { rotation: sliderValue });
+    if (outcome.ok && outcome.result.changed) {
         gameState.needsRedraw = true;
     }
+}
+
+// Editor painting. The hit-testing (pixel -> tile/edge) stays client-side; every
+// mutation goes through the action protocol on the lighter editor path, and the
+// server's reason codes become the on-screen messages that used to be inline.
+const EDITOR_REJECTION_TEXT = {
+    base_camp:          "Cannot change the terrain of a base camp tile.",
+    adjacent_to_enemy:  "Cannot be adjacent to enemy base.",
+    base_max_size:      "Base camp max size is 3 tiles.",
+    not_contiguous:     "Base tiles must be contiguous.",
+    inside_base:        "Cannot place units inside base camp.",
+    edge_not_placeable: "Cannot place a unit on this edge.",
+    enemy_occupied:     "Cannot place on an edge occupied by the enemy.",
+    edge_full:          "This edge is full.",
+};
+
+function ReportEditorOutcome(result) {
+    if (!result || result.reason === 'ok') return true;
+
+    if (result.reason === 'max_units') {
+        showInstruction(`Player has reached the maximum of ${result.limit} units.`, 2000);
+        return false;
+    }
+    if (result.reason === 'type_cap') {
+        showInstruction(`Cannot have more than ${result.limit} ${result.typeName}s.`, 2000);
+        return false;
+    }
+    const text = EDITOR_REJECTION_TEXT[result.reason];
+    if (text) showInstruction(text, 2000);
+    return false;
 }
 
 function applyMapMakerBrush(x, y) {
@@ -889,141 +905,29 @@ function applyMapMakerBrush(x, y) {
 
     if (hexKey === gameState.mapMakerLastPaintedHexKey && gameState.isDragging) return;
     gameState.mapMakerLastPaintedHexKey = hexKey;
-    
+
     const brush = gameState.mapMakerBrush;
+    let outcome = null;
 
-    // --- BASE CAMP BRUSH LOGIC ---
     if (brush.type === 'base_camp') {
-        if (engine.state.gridRadius !== 4) return; 
+        outcome = SendAction('toggle-base-camp', { player: brush.player, tileKey: hexKey });
 
-        if (!engine.state.tiles.has(hexKey)) return;
-
-        const player = brush.player;
-        const playerKey = `player${player}`;
-        const enemyPlayerKey = `player${player === 1 ? 2 : 1}`;
-        
-        const currentBase = Array.isArray(engine.state.baseCampPositions[playerKey]) 
-                            ? engine.state.baseCampPositions[playerKey] 
-                            : [];
-        
-        const enemyBase = Array.isArray(engine.state.baseCampPositions[enemyPlayerKey])
-                          ? new Set(engine.state.baseCampPositions[enemyPlayerKey])
-                          : new Set();
-
-        // Validation
-        const neighbors = getNeighbors(hexCoords.q, hexCoords.r);
-        for (let n of neighbors) {
-            if (enemyBase.has(getTileKey(n.q, n.r))) {
-                showInstruction("Cannot be adjacent to enemy base.", 1500);
-                return;
-            }
-        }
-
-        // Logic: Toggle or Add
-        let newBase = [...currentBase];
-        if (newBase.includes(hexKey)) {
-            // --- REMOVE FROM BASE ---
-            newBase = newBase.filter(k => k !== hexKey);
-            const tile = engine.state.tiles.get(hexKey);
-            if (tile) {
-                tile.isBaseCampTile = false; // Unlock the tile
-            }
-        } else {
-            // --- ADD TO BASE ---
-            if (newBase.length >= 3) {
-                showInstruction("Base camp max size is 3 tiles.", 1500);
-                return;
-            }
-            newBase.push(hexKey);
-            
-            if (!isSetContiguous(newBase)) {
-                showInstruction("Base tiles must be contiguous.", 1500);
-                return;
-            }
-            
-            const tile = engine.state.tiles.get(hexKey);
-            if (tile) {
-                tile.type = TILE_TYPES.PLAINS; // Force Plains
-                tile.isBaseCampTile = true;    // Lock the tile
-            }
-        }
-
-        // Apply
-        engine.state.baseCampPositions[playerKey] = newBase;
-
-    // --- TILE BRUSH LOGIC ---
     } else if (brush.type === 'tile') {
-        const tile = engine.state.tiles.get(hexKey);
-        if (tile) {
-            // --- PROPERTY CHECK ---
-            if (tile.isBaseCampTile) {
-                showInstruction("Cannot change the terrain of a base camp tile.", 2000);
-                return; // Block painting
-            }
+        outcome = SendAction('paint-tile', { tileKey: hexKey, tileTypeName: brush.value.name });
 
-            tile.type = brush.value;
-            // Remove invalid units on water
-            if (brush.value === TILE_TYPES.WATER) {
-                getEdgesOfTile(tile.q, tile.r).forEach(edgeKey => {
-                    const edge = engine.state.edges.get(edgeKey);
-                    if (edge && edge.units.length > 0) {
-                        const otherTileQ = (edge.q1 === tile.q && edge.r1 === tile.r) ? edge.q2 : edge.q1;
-                        const otherTileR = (edge.r1 === tile.r && edge.q1 === tile.q) ? edge.r2 : edge.r1;
-                        const otherTile = engine.state.tiles.get(getTileKey(otherTileQ, otherTileR));
-                        
-                        if (otherTile && otherTile.type === TILE_TYPES.WATER) {
-                            // Filter via master array, don't try to clear the getter array!
-                            const unitsToRemove = edge.units;
-                            engine.state.units = engine.state.units.filter(u => !unitsToRemove.some(rem => rem.id === u.id));
-                        }
-                    }
-                });
-            }
-        }
-
- // --- UNIT BRUSH LOGIC ---
     } else if (brush.type === 'unit') {
         const { key: closestEdgeKey } = findClosestEdgeToPoint(x, y);
         if (!closestEdgeKey) return;
-
-        if (isInternalBaseEdge(closestEdgeKey)) {
-            showInstruction("Cannot place units inside base camp.", 2000);
-            return;
-        }
-
-        if (!isEdgePlaceable(closestEdgeKey)) {
-            showInstruction("Cannot place a unit on this edge.", 1500);
-            return;
-        }
-
-        const edge = engine.state.edges.get(closestEdgeKey);
-        if (edge.units.length > 0 && edge.units[0].player !== brush.player) {
-            showInstruction("Cannot place on an edge occupied by the enemy.", 2000);
-            return;
-        }
-        if (edge.units.length >= 2) {
-            showInstruction("This edge is full.", 1500);
-            return;
-        }
-        
-        const totalPlayerUnits = engine.state.units.filter(u => u.player === brush.player).length;
-        const maxUnits = getMaxUnitsForCurrentMap(); 
-        if (totalPlayerUnits >= maxUnits) {
-            showInstruction(`P${brush.player} has reached the maximum of ${maxUnits} units.`, 2000);
-            return;
-        }
-        const playerUnitCounts = getUnitCountsForPlayer(brush.player);
-        const unitCap = UNIT_CAPS[brush.value.name];
-        if (playerUnitCounts[brush.value.name] >= unitCap) {
-            showInstruction(`P${brush.player} cannot have more than ${unitCap} ${brush.value.name}s.`, 2000);
-            return;
-        }
-
-        const newUnit = createUnit(brush.player, brush.value, closestEdgeKey);
-        engine.state.units.push(newUnit);
+        outcome = SendAction('place-unit', {
+            player: brush.player,
+            unitTypeName: brush.value.name,
+            edgeKey: closestEdgeKey
+        });
     }
-    
+
+    if (!outcome || !outcome.ok) return;
+    if (!ReportEditorOutcome(outcome.result)) return;
+
     autoSaveMap();
     gameState.needsRedraw = true;
 }
-

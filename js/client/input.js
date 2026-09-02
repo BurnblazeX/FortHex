@@ -659,34 +659,9 @@ function handleUnitSelectionClick(x, y) {
                 return; 
             }
 
-            const enemyPlayer = selectedUnit.player === 1 ? 2 : 1;
-            const enemyBaseData = engine.state.baseCampPositions[`player${enemyPlayer}`];
-            const enemyBaseTileKeys = new Set();
-            
-            if (Array.isArray(enemyBaseData)) {
-                enemyBaseData.forEach(k => enemyBaseTileKeys.add(k));
-            } else if (typeof enemyBaseData === 'string') {
-                const [h1, h2] = parseEdgeKey(enemyBaseData);
-                if (!isNaN(h1.q)) enemyBaseTileKeys.add(getTileKey(h1.q, h1.r));
-                if (!isNaN(h2.q)) enemyBaseTileKeys.add(getTileKey(h2.q, h2.r));
-            }
-
-            const myFlagTileKey = getFlagTileKey(selectedUnit.player);
-            const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
-
-            const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r); 
-            const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
-            const tile1 = engine.state.tiles.get(tile1Key); 
-            const tile2 = engine.state.tiles.get(tile2Key);
-            
-            gameState.validFortifyTargetTileKeys = [];
-
-            if (tile1 && canUnitFortifyOnTile(selectedUnit, tile1) && tile1.fortifiedByPlayer === null && (tile1Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile1Key) || tile1Key === enemyFlagTileKey)) {
-                gameState.validFortifyTargetTileKeys.push(tile1Key);
-            }
-            if (tile2 && canUnitFortifyOnTile(selectedUnit, tile2) && tile2.fortifiedByPlayer === null && (tile2Key !== myFlagTileKey || selectedUnit.isCarryingFlag) && (!enemyBaseTileKeys.has(tile2Key) || tile2Key === enemyFlagTileKey)) {
-                gameState.validFortifyTargetTileKeys.push(tile2Key);
-            }
+            // Same rule the server validates against - see GetValidFortifyTargets
+            // in js/server/rules.js. Do not reimplement it here.
+            gameState.validFortifyTargetTileKeys = GetValidFortifyTargets(selectedUnit);
 
             if (gameState.validFortifyTargetTileKeys.length === 0) { 
                 showInstruction("No valid adjacent tile to fortify.", 2000); 

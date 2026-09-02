@@ -657,3 +657,65 @@ function loadMapFromDataObject(mapData) {
     return true;
 }
 
+
+// === Reference match log capture ===
+//
+// Downloads the current match's action ledger with enough context that two
+// captures can be meaningfully diffed. The A1 handoff wants a before/after
+// reference set taken before Track C's fine-grid migration, and A2 touched the
+// whole action path, so the same trick catches drift there too.
+//
+// Console:  ExportMatchHistory('before-trackC')
+//
+// Play the same opening the same way twice - same map, same moves, same order -
+// and diff the two files. Divergence means a rule changed, not that the new
+// architecture is "differently correct".
+function ExportMatchHistory(label = 'reference') {
+    const capture = {
+        label,
+        capturedAt: new Date().toISOString(),
+        build: BUILD_VERSION,
+
+        // Context that changes what a legal move even is, so a diff can rule out
+        // "different map" before it starts blaming the code.
+        setup: {
+            gameMode: engine.state.gameMode,
+            playerSide: engine.state.playerSide,
+            gridRadius: engine.state.gridRadius,
+            fogOfWarEnabled: engine.settings.fogOfWarEnabled,
+            baseCampPositions: engine.state.baseCampPositions,
+        },
+
+        // Where the match ended up. A matching history with a different final
+        // board means a mutation changed without its ledger entry changing.
+        outcome: {
+            turn: engine.state.globalTurnNumber,
+            currentPlayer: engine.state.currentPlayer,
+            gameOver: engine.state.gameOver,
+            supplyPoints: engine.state.supplyPoints,
+            units: engine.state.units
+                .map(u => ({ id: u.id, player: u.player, type: u.type.name, hp: u.hp,
+                             pos: u.position, fortified: !!u.isFortified }))
+                .sort((a, b) => a.id - b.id),
+        },
+
+        entryCount: engine.state.matchHistory.length,
+        matchHistory: engine.state.matchHistory,
+    };
+
+    const safeLabel = String(label).replace(/[^A-Za-z0-9_-]/g, '-');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const blob = new Blob([JSON.stringify(capture, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `FortHex-${BUILD_VERSION}-matchlog-${safeLabel}-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log(`[Capture] ${capture.entryCount} ledger entries exported as "${safeLabel}".`);
+    showInstruction(`Match log exported (${capture.entryCount} entries).`, 2500);
+    return capture;
+}

@@ -107,7 +107,63 @@ class ActionManager {
         this.engine = engineInstance;
     }
 
-    SubmitAction(action) {
+    // The ONE path from a client-requested action to a mutation (A2 §3).
+    // Nothing else may call an Apply* function for something a client asked for;
+    // server-decided cascades (DestroyUnit, SeverSupplyLinesForPlayer, the
+    // turn-lifecycle sub-steps) are the deliberate carve-out and never came
+    // through here in the first place.
+    //
+    //   turn check -> id resolution -> rule legality -> Apply* -> history -> events
+    //
+    // A rejection at any step returns { ok:false, error } and writes NO history:
+    // an action that was refused did not happen, so it is not part of the match
+    // record. Returns a promise for the async (animation-delayed) actions.
+    SubmitAction(message) {
+        const spec = ACTION_SPECS[message.action];
+        if (!spec) {
+            return this.Reject(message, 'unknown_action');
+        }
+
+        const verdict = ValidateAction(spec, message);
+        if (!verdict.ok) {
+            return this.Reject(message, verdict.error, verdict.detail);
+        }
+
+        const outcome = spec.Apply(verdict.resolved);
+
+        if (outcome && typeof outcome.then === 'function') {
+            return outcome.then(result => {
+                this.RecordAccepted(message, verdict);
+                return { ok: true, result };
+            });
+        }
+        this.RecordAccepted(message, verdict);
+        return { ok: true, result: outcome };
+    }
+
+    // Hook for "a client asked for this and we allowed it". The detailed
+    // per-action ledger entries the Apply* functions write via RecordHistory
+    // are the actual match record today, so this is deliberately empty - it is
+    // where A6's consent-gated match archive attaches without having to find
+    // the dispatch point again.
+    RecordAccepted(message, verdict) {
+    }
+
+    Reject(message, error, detail) {
+        console.warn('[Server] Rejected ' + message.action + ': ' + error + (detail ? ' (' + detail + ')' : ''));
+        this.engine.Emit({
+            type: 'ACTION_REJECTED',
+            action: message.action,
+            error,
+            detail: detail || null,
+            player: this.engine.state.currentPlayer
+        });
+        return { ok: false, error, detail: detail || null };
+    }
+
+    // The A1-era job: append to matchHistory. Called from inside Apply* functions
+    // for the fine-grained ledger entries (MOVEMENT_ZOC_HIT, etc.).
+    RecordHistory(action) {
         const historyEntry = JSON.parse(JSON.stringify(action));
         this.engine.state.matchHistory.push(historyEntry);
     }

@@ -132,6 +132,26 @@ function DetermineVictoryText() {
 // the server unrunnable in a Worker. What this function returns instead is the
 // raw outcome - who won, whether it was a draw, which player the AI was - and
 // the client decides what to do with it.
+// Arcade's time-limit ending: whoever has more total HP when the turn cap is
+// reached wins. This lived entirely in js/client/game-flow.js until A2 - the
+// client summed the HP, decided the winner, and set engine.state.gameOver
+// itself, which is exactly the client-authoritative pattern A2 exists to close.
+// The client now renders what this returns.
+function CheckArcadeTimeLimitVictory() {
+    const p1HP = engine.state.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
+    const p2HP = engine.state.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
+
+    let victoryText;
+    let winner = null;
+    if (p1HP > p2HP)      { victoryText = "Time Limit! Player 1 Wins by Health!"; winner = 1; }
+    else if (p2HP > p1HP) { victoryText = "Time Limit! Player 2 Wins by Health!"; winner = 2; }
+    else                  { victoryText = "Time Limit! It's a Draw!"; }
+
+    engine.state.gameOver = true;
+
+    return { victory: true, victoryText, winner, isDraw: winner === null, p1HP, p2HP };
+}
+
 function CheckVictoryCondition() {
     if (engine.state.gameOver) return { victory: true, alreadyOver: true };
 
@@ -285,7 +305,7 @@ function ApplyStartOfTurnZoCDamage() {
     });
 
     if (zocEvents.length > 0 && typeof engine !== 'undefined') {
-        engine.actionManager.SubmitAction({
+        engine.actionManager.RecordHistory({
             type: "TURN_START_ZOC",
             turn: engine.state.globalTurnNumber,
             player: activePlayer,
@@ -337,7 +357,7 @@ function ApplyMountainAttrition() {
     });
 
     if (attritionEvents.length > 0 && typeof engine !== 'undefined') {
-        engine.actionManager.SubmitAction({
+        engine.actionManager.RecordHistory({
             type: "TURN_START_MOUNTAIN_ATTRITION",
             turn: engine.state.globalTurnNumber,
             player: activePlayer,
@@ -403,7 +423,7 @@ function ApplyStartOfTurnHealing() {
     });
 
     if (healingEvents.length > 0 && typeof engine !== 'undefined') {
-        engine.actionManager.SubmitAction({
+        engine.actionManager.RecordHistory({
             type: "TURN_START_HEAL",
             turn: engine.state.globalTurnNumber,
             player: engine.state.currentPlayer,

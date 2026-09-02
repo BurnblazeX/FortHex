@@ -23,6 +23,22 @@
 // ApplyMoveAction already calls the pure ApplyFortificationDamageOnMove
 // directly. Same for the pure-to-pure DestroyUnit calls inside actions.js.
 
+// Player-facing wording for a rejection. Codes come from ACTION_SPECS in
+// js/server/validation.js.
+const REJECTION_TEXT = {
+    not_your_turn:     "It's not your turn.",
+    unit_not_found:    "That unit is no longer there.",
+    tile_not_found:    "That tile doesn't exist.",
+    edge_not_found:    "That position doesn't exist.",
+    illegal_action:    "That move isn't allowed.",
+    malformed_payload: "That request was incomplete.",
+    unknown_action:    "Unrecognised action.",
+};
+
+function DescribeRejection(event) {
+    return REJECTION_TEXT[event.error] || "That action was rejected.";
+}
+
 function HandleActionEvent(event) {
     switch (event.type) {
         case 'LOG':
@@ -30,6 +46,13 @@ function HandleActionEvent(event) {
             break;
         case 'UNIT_DAMAGED':
             triggerDamageVisual(event.unit, event.attackStatus);
+            break;
+        case 'ACTION_REJECTED':
+            // The server refused the request. Say so rather than leaving the UI
+            // looking frozen, and keep it distinguishable from real game events.
+            console.warn(`[Client] Action '${event.action}' rejected: ${event.error}`,
+                         event.detail || '');
+            showInstruction(DescribeRejection(event), 2500);
             break;
         case 'SUPPLY_CHANGED':
             updateSupplyPointsDisplay();
@@ -94,11 +117,18 @@ function SendAction(action, payload) {
     return transport.Send(MakeActionMessage(action, payload));
 }
 
+// Payloads carry ids and keys only (A2 §4). The server resolves them against
+// its own engine.state, so nothing the client says about a unit's condition is
+// believed - only which unit it means. A rejected action returns
+// { ok:false, error } and changes nothing; wrappers must check before using
+// `result`, which is absent on rejection.
+
 // Thin wrapper over js/server/rules.js's SpawnUnit, so its callers in ai.js,
 // main.js and ui.js keep the original name/signature and still get the
 // respawn log lines that used to be a direct logAction() call inside it.
 function spawnUnit(player, unitType) {
-    return SendAction('spawn-unit', { player, unitType }).result;
+    const outcome = SendAction('spawn-unit', { player, unitTypeName: unitType.name });
+    return outcome.ok ? outcome.result : false;
 }
 
 function destroyUnit(unitToDestroy, reason = "destroyed") {
@@ -152,7 +182,9 @@ function attemptToResupplyForts(playerNum) {
 }
 
 function applyUnitUpgrade(unit, statType) {
-    const { result } = SendAction('upgrade-unit', { unit, statType });
+    const outcome = SendAction('upgrade-unit', { unitId: unit.id, statType });
+    if (!outcome.ok) return false;
+    const result = outcome.result;
     if (result.success) {
         updateSelectedUnitInfoPanel();
     }
@@ -160,7 +192,9 @@ function applyUnitUpgrade(unit, statType) {
 }
 
 function performSwap(unit, newType) {
-    const { result } = SendAction('swap-class', { unit, newType });
+    const outcome = SendAction('swap-class', { unitId: unit.id, newTypeName: newType.name });
+    if (!outcome.ok) return;
+    const result = outcome.result;
 
     gameState.swapState = 'complete';
     gameState.unitToSwap = null;
@@ -172,7 +206,11 @@ function performSwap(unit, newType) {
 function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
     engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
-    const { result } = SendAction('move', { unit: unitToMove, targetEdgeKey, cost: costToMove, path });
+    // cost and path are deliberately not sent - the server recomputes both from
+    // its own getPossibleMoves, which is also how it verifies the move is legal.
+    const outcome = SendAction('move', { unitId: unitToMove.id, targetEdgeKey });
+    if (!outcome.ok) return;
+    const result = outcome.result;
     if (!result.unitFound) {
         console.error("CRITICAL: Unit not found.");
         return;
@@ -233,7 +271,7 @@ async function completeBuildBridge(targetEdgeKey) {
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 
-    await SendAction('build-bridge', { unit: selectedUnit, targetEdgeKey, duration });
+    await SendAction('build-bridge', { unitId: selectedUnit.id, targetEdgeKey, duration });
     engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
@@ -271,7 +309,7 @@ async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 
-    await SendAction('unfortify', { unit: unitToUnfortify, targetEdgeKey, duration });
+    await SendAction('unfortify', { unitId: unitToUnfortify.id, targetEdgeKey, duration });
 
     engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
     gameState.mustUnfortify = false;
@@ -329,7 +367,7 @@ async function completeFortify(unitToFortify, targetTileKeyToFortify) {
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 
-    await SendAction('fortify', { unit: unitToFortify, targetTileKey: targetTileKeyToFortify, duration });
+    await SendAction('fortify', { unitId: unitToFortify.id, targetTileKey: targetTileKeyToFortify, duration });
 
     engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
@@ -419,7 +457,16 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         }
     }
 
-    const { result } = await SendAction('attack', { attackingUnit, targetUnitInfo, attackType, duration });
+    const outcome = await SendAction('attack', {
+        unitId: attackingUnit.id,
+        targetUnitId: targetUnitInfo.unit ? targetUnitInfo.unit.id : null,
+        targetEdgeKey: targetUnitInfo.edgeKey || null,
+        isBridgeTarget: !!targetUnitInfo.isBridgeTarget,
+        attackType,
+        duration
+    });
+    if (!outcome.ok) return;
+    const result = outcome.result;
 
     // Replicate original's post-mutation currentReachableMoves branching
     // (client-owned) — attackingUnit is the same object ApplyAttack just
