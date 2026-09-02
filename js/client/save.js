@@ -392,23 +392,44 @@ function rehydrateGameState() {
         gameState.isPassDeviceTransition = false;
 
         // 5. Restore Unit Logic (Getters & Stats)
+        //
+        // enumerable: true is LOAD-BEARING, not decoration. A live unit from
+        // createUnit carries type/hp/maxHp as ordinary enumerable properties, and
+        // the codebase spreads units freely — ai.js builds a `ghostUnit` as
+        // `{ ...unit, position }` to score a hypothetical move, then reads
+        // ghostUnit.type.attackType.
+        //
+        // Object.defineProperty only defaults an unspecified attribute to false
+        // when the property is NEW. Before A4 these three were always already
+        // present as enumerable data properties (the old save format stored them),
+        // so converting them to accessors silently KEPT enumerable:true and every
+        // spread still worked. A4's lean schema stopped saving them — correctly,
+        // they're derived — which made them new properties here, and non-enumerable
+        // by default. Spreading then dropped them, and the AI's first ghost unit
+        // died on `undefined.attackType`.
+        //
+        // So: say enumerable explicitly, and loaded units behave exactly like units
+        // that were never saved at all.
         engine.state.units.forEach(unit => {
             // Re-attach 'type' getter
             Object.defineProperty(unit, 'type', {
                 get: function() { return UNIT_TYPES[this.typeId]; },
-                configurable: true
+                configurable: true,
+                enumerable: true
             });
 
             // Re-attach legacy 'hp'/'maxHp' getters/setters for compatibility
             Object.defineProperty(unit, 'hp', {
                 get: function() { return this.stats.hp; },
                 set: function(val) { this.stats.hp = val; },
-                configurable: true
+                configurable: true,
+                enumerable: true
             });
             Object.defineProperty(unit, 'maxHp', {
                 get: function() { return this.stats.maxHp; },
                 set: function(val) { this.stats.maxHp = val; },
-                configurable: true
+                configurable: true,
+                enumerable: true
             });
 
             // Ensure Linkage

@@ -46,6 +46,7 @@ function NormalizeEdgeKeys(raw) {
 // `context`. In the browser both forms work; here only this one does.
 const CURRENT_SCHEMA_VERSION = vm.runInContext('CURRENT_SCHEMA_VERSION', context);
 const SAVE_UNIT_FIELDS = vm.runInContext('SAVE_UNIT_FIELDS', context);
+const UNIT_TYPES = vm.runInContext('UNIT_TYPES', context);
 
 // Warnings are expected output, not failures — the policy is warn-don't-refuse.
 // Silence them per-fixture and report the count instead.
@@ -201,6 +202,32 @@ files.sort().forEach(file => {
         if (JSON.stringify(releaned) !== JSON.stringify(stored)) {
             problems.push('unit ' + u.id + ' is not stable across lean/expand/lean');
         }
+    });
+
+    // REGRESSION GUARD (A4). A unit restored from a save must stay SPREADABLE.
+    // ai.js scores hypothetical moves by building `{ ...unit, position }` and then
+    // reading ghostUnit.type.attackType, so type/hp/maxHp have to survive a spread.
+    //
+    // They only do if rehydrateGameState defines them enumerable. That used to
+    // happen by accident — the old format stored them, so defineProperty was
+    // modifying an existing enumerable property and kept the flag. The lean schema
+    // stopped saving them, which made them new (and non-enumerable by default) and
+    // broke every ghost unit. This mirrors save.js:396 so the invariant is checked
+    // headlessly rather than only by playing a singleplayer save.
+    expanded.units.forEach(u => {
+        const unit = { ...u };
+        Object.defineProperty(unit, 'type', {
+            get() { return UNIT_TYPES[this.typeId]; }, configurable: true, enumerable: true });
+        Object.defineProperty(unit, 'hp', {
+            get() { return this.stats.hp; }, configurable: true, enumerable: true });
+        Object.defineProperty(unit, 'maxHp', {
+            get() { return this.stats.maxHp; }, configurable: true, enumerable: true });
+
+        const ghost = { ...unit, position: 'ghost' };
+        if (!ghost.type) problems.push('unit ' + u.id + ': type lost when spread (ghost units break)');
+        else if (ghost.type.attackType === undefined) problems.push('unit ' + u.id + ': type has no attackType');
+        if (ghost.hp === undefined) problems.push('unit ' + u.id + ': hp lost when spread');
+        if (ghost.maxHp === undefined) problems.push('unit ' + u.id + ': maxHp lost when spread');
     });
 
     // The action log is rebuilt from the ledger, not stored.

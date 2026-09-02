@@ -302,14 +302,22 @@ function MaybePromptForSide(onDone) {
     // Replace rather than add: this modal can open once per load, and stale
     // listeners from a previous load would fire again on the next one.
     const choose = (side) => {
-        overlay.style.display = 'none';
+        // Fade out the way every other modal does, but apply the choice straight
+        // away — the player shouldn't wait 300ms for the board to react.
+        overlay.classList.remove('modal-visible');
+        setTimeout(() => { overlay.style.display = 'none'; }, 300);
         ApplyChosenSide(side);
         finish();
     };
     p1.onclick = () => choose(1);
     p2.onclick = () => choose(2);
 
+    // .modal-overlay is display:none AND opacity:0/visibility:hidden (modals.css),
+    // so setting display alone shows nothing — the overlay is there and invisible.
+    // Every modal in the app sets display first and adds .modal-visible on a later
+    // frame, which is also what makes the fade transition run at all.
     overlay.style.display = 'flex';
+    setTimeout(() => overlay.classList.add('modal-visible'), 10);
 }
 
 function ApplyChosenSide(side) {
