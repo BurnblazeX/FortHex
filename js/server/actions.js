@@ -410,8 +410,24 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
             if (targetUnit.stats && typeof targetUnit.stats.defense === 'number') targetDefense = targetUnit.stats.defense;
             else targetDefense = targetUnit.type.defense || 0;
 
+            // Mountain peaks only. The FOREST half of this was removed 2026-09-03: it
+            // entered the game inside commit 9d1be7d ("Split monolithic file into
+            // parts", 24 Jun 2026) labelled `// Forest Penalty Logic (New)`, appears in
+            // no patch, balance or bug note, and was never designed. Forest does not
+            // inherently lower defense — combined arms is what strips defense there
+            // (Track C / C2 in the roadmap).
+            //
+            // The Mountain clause was appended later and is left standing: a peak is a
+            // deliberate archer-only position (canUnitFortifyOnTile, rules.js:489) whose
+            // tradeoffs are intentional. Whether -1 defense should be one of them is a
+            // separate open question, not something this removal decides.
+            //
+            // KNOWN MISMATCH: ai.js scoreMove predicts damage from raw stats.defense and
+            // never applied this modifier, so the AI under-predicts its own damage
+            // against a peak archer by 1. Untouched here rather than changing AI
+            // behaviour inside a balance fix.
             const fortTile = engine.state.tiles.get(targetUnit.position);
-            if (targetUnit.isFortified && fortTile && (fortTile.type.name === 'Forest' || fortTile.type.name === 'Mountain')) {
+            if (targetUnit.isFortified && fortTile && fortTile.type.name === 'Mountain') {
                 targetDefense -= 1;
             }
 
