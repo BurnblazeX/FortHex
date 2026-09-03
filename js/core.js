@@ -2213,7 +2213,7 @@ function getAttackRangeFineCells(unit) {
                     // zero negation on a peak without tripping the "a fortified unit needs
                     // defense > 0 to hold its position" invariant enforced elsewhere.
                     const fortTile = gameState.tiles.get(targetUnit.position);
-                    if (targetUnit.isFortified && fortTile && (fortTile.type.name === 'Forest' || fortTile.type.name === 'Mountain')) {
+                        if (targetUnit.isFortified && fortTile && fortTile.type.name === 'Mountain') {
                         targetDefense -= 1;
                     }
 
