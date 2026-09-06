@@ -1,4 +1,4 @@
-// FortHex — print the source fingerprint  (InDev)
+// FortHex - print the source fingerprint  (InDev)
 //
 //   node tools/build-hash.js            the short hash
 //   node tools/build-hash.js --files    every file's hash, for diffing two builds

@@ -1,17 +1,17 @@
-// FortHex — does a client rebuilt from a view actually match the server?  (B2)
+// FortHex - does a client rebuilt from a view actually match the server?  (B2)
 //
 //   node tools/state-parity.js            report differences
 //   node tools/state-parity.js --verbose  show the values too
 //
 // Written after the same bug arrived four times in a row: the board is transmitted,
 // the client draws something plausible, and then some query returns the wrong answer
-// because one field never made the trip. Attack range was the expensive one — the
+// because one field never made the trip. Attack range was the expensive one - the
 // fine-grid index was simply absent, so an enemy on the adjacent edge was unattackable
 // and the Attack button greyed itself out with no error anywhere.
 //
 // Spot-checking each field as its bug surfaced was the wrong method. This compares the
 // WHOLE of engine.state between a real server board and a client rebuilt from that
-// board's view, and reports everything that differs — including the fields nobody has
+// board's view, and reports everything that differs - including the fields nobody has
 // thought to look at yet.
 //
 // Fog is OFF here on purpose. Under fog the two are SUPPOSED to differ, and that is
@@ -32,7 +32,7 @@ const verbose = process.argv.includes('--verbose');
 // differs is a transmission gap.
 const EXPECTED = {
     matchHistory: 'the authoritative ledger stays on the host; A6 archives it there',
-    unitIdCounter: 'server-only bookkeeping — a client never mints unit ids',
+    unitIdCounter: 'server-only bookkeeping - a client never mints unit ids',
     gameMode: "the client deliberately sets 'online' to describe its own situation",
     playerSide: 'the client sets this to its seat; the host has no single side',
     isTrainingMode: 'training never runs in a hosted match',
@@ -69,7 +69,7 @@ function Canon(value) {
 
 // --- a server board with some history on it --------------------------------
 // A fresh board exercises almost nothing. Playing a few real actions populates the
-// fields that only appear once something has happened — supply lines, the action log,
+// fields that only appear once something has happened - supply lines, the action log,
 // playerActionTaken, the respawn queue.
 const server = Boot();
 vm.runInContext('globalThis.engine = CreateEngineInstance();'
@@ -151,7 +151,7 @@ questions.forEach(([label, expr]) => {
 
 // --- report -----------------------------------------------------------------
 if (gaps.length || behaviour.length) {
-    console.error('FAIL — the client does not match the server.');
+    console.error('FAIL - the client does not match the server.');
     console.error('');
 
     if (gaps.length) {
@@ -165,7 +165,7 @@ if (gaps.length || behaviour.length) {
         });
         console.error('');
         console.error('  Fix by carrying them in BuildResyncSnapshot (js/server/session.js)');
-        console.error('  and applying them in ApplyRemoteView (js/client/remote-state.js) —');
+        console.error('  and applying them in ApplyRemoteView (js/client/remote-state.js) -');
         console.error('  or, if derived, by rebuilding them there like buildFineGridIndex().');
         console.error('');
     }
@@ -183,7 +183,7 @@ if (gaps.length || behaviour.length) {
     process.exit(1);
 }
 
-console.log('PASS — server/client state parity');
+console.log('PASS - server/client state parity');
 console.log('  fields    : every engine.state field matches, or is listed as deliberately different');
 console.log('  explained : ' + explained.join(', '));
 console.log('  behaviour : moves, attack targets, fine grid and board size all agree');

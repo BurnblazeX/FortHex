@@ -20,7 +20,7 @@ export function SideSelectScreen({ onPick, onBack }) {
                 </MenuButton>
             </div>
 
-            <p className="fh-menu__note">Red moves second — the AI takes the opening turn.</p>
+            <p className="fh-menu__note">Red moves second - the AI takes the opening turn.</p>
 
             <MenuButton variant="cancel" className="fh-menu__back" onClick={onBack}>Back</MenuButton>
         </div>

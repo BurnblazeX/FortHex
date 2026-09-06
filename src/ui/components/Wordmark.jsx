@@ -3,7 +3,7 @@
 // Plain white, no outline. It stays SVG rather than reverting to styled text for
 // one reason: this way a single CSS rule (`.fh-wordmark text` in css/main.css)
 // paints both this component and the copy inlined in index.html, so they cannot
-// drift — and reinstating an outline later is a stroke plus stroke-linejoin: miter
+// drift - and reinstating an outline later is a stroke plus stroke-linejoin: miter
 // in that rule, not a change of approach. The viewBox also scales the lettering
 // with the element rather than needing a font-size clamp.
 //

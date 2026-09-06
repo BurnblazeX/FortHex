@@ -154,6 +154,26 @@ function ArchiveTransaction(mode, run) {
 function ArchiveMatchSnapshot(complete = false) {
     if (!ArchiveIsEnabled()) return Promise.resolve(null);
 
+    // A hosted match is NOT archived by its clients.
+    //
+    // The roadmap left this open - "with a real remote transport, decide whether each
+    // device archives its own view or only the host does" - and now that the transport
+    // exists the answer is forced. A client's engine.state during a hosted match is a
+    // filtered drawing surface: under fog it is missing every enemy unit, and it has no
+    // matchHistory at all, because the ledger is authoritative and stays on the host.
+    //
+    // Archiving it would write a record that LOOKS like a real one - same matchId,
+    // loadable save format - while holding half a board and no move history. D3's
+    // Gospel corpus is built from these records, and the roadmap is explicit that a gap
+    // there is permanent and unrecoverable. Silently filling it with unusable records
+    // would be worse than the gap.
+    //
+    // The host has the whole board and the whole ledger. Archiving belongs there;
+    // SyncArchiveToServer() is the seam A6 left for it.
+    if (typeof IsRemoteMatch === 'function' && IsRemoteMatch()) {
+        return Promise.resolve(null);
+    }
+
     const matchId = engine.state.matchId;
 
     // BuildSaveState, not a private serializer: byte-for-byte the same thing the

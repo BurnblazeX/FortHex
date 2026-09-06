@@ -6,7 +6,7 @@ import { CreateLocalProfile, GetAvatars, Instruct } from '../bridge.js';
 // B1 adds. The functional contract carried over unchanged:
 //
 //   - consent is captured AT CREATION, passed into GetOrCreateProfile, never set
-//     afterwards — so a profile is never briefly stored in an unconsented state;
+//     afterwards - so a profile is never briefly stored in an unconsented state;
 //   - declining creates NOTHING, not even a consent:false profile;
 //   - Continue is gated on the checkbox, and the write re-checks it rather than
 //     trusting the disabled attribute.
@@ -64,22 +64,22 @@ export function ProfileSetupScreen({ onDone, onBack }) {
                 </div>
 
                 <div className="fh-profile__terms">
-                    <p className="fh-profile__terms-warning">PLACEHOLDER — not final legal text.</p>
+                    <p className="fh-profile__terms-warning">PLACEHOLDER - not final legal text.</p>
                     <p>
                         Going online creates a profile on this device: a display name you choose and a
                         randomly generated identifier. It is not an account. There is no password, nothing
-                        is verified against a server, and it cannot be recovered — clearing your browser
+                        is verified against a server, and it cannot be recovered - clearing your browser
                         data or playing in a different browser produces a new profile.
                     </p>
                     <p>
                         <strong>Match archiving.</strong> With your agreement, matches you play that involve
-                        a human — against another player or against the AI — may be recorded as a log of the
+                        a human - against another player or against the AI - may be recorded as a log of the
                         moves made, tagged with your profile identifier. This is intended to power a future
                         replay feature and to study how the game is actually played.
                     </p>
                     <p>
                         <strong>Balance data.</strong> With the same agreement, aggregate information about
-                        matches — which units win, which upgrades get chosen, how long games run — may be
+                        matches - which units win, which upgrades get chosen, how long games run - may be
                         used to balance the game.
                     </p>
                     <p>

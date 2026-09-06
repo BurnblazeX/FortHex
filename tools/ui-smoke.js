@@ -1,4 +1,4 @@
-// FortHex — headless harness for the React UI bundle  (Track B1)
+// FortHex - headless harness for the React UI bundle  (Track B1)
 //
 //   node tools/ui-smoke.js
 //
@@ -54,7 +54,7 @@ function Walk(dir) {
     check('index.html loads dist/ui-bundle.js', html.includes('dist/ui-bundle.js'));
     check('index.html loads dist/ui-bundle.css', html.includes('dist/ui-bundle.css'));
     check('index.html has the #menuRoot mount point', html.includes('id="menuRoot"'));
-    // Compared as <script> tags, not raw substrings — both paths are also named in
+    // Compared as <script> tags, not raw substrings - both paths are also named in
     // comments elsewhere in the file, and the first mention is not the load order.
     const scripts = [...html.matchAll(/<script\s+src="([^"]+)"/g)].map(m => m[1]);
     check('the bundle is loaded after js/main.js',
@@ -69,7 +69,7 @@ function Walk(dir) {
 
 // --- 3. every game global the bundle calls still exists in js/ -------------
 // src/ui/bridge.js is the only file allowed to touch them, and it declares them in
-// its /* global */ block. This checks that block against reality — a renamed
+// its /* global */ block. This checks that block against reality - a renamed
 // function in js/ would otherwise fail at the click, not at the build.
 {
     const bridge = fs.readFileSync(path.join(ROOT, 'src/ui/bridge.js'), 'utf8');
@@ -86,17 +86,19 @@ function Walk(dir) {
 
         names.forEach(name => {
             const declaredInJs = new RegExp(
-                String.raw`(?:^|\n)\s*(?:function\s+${name}\b|(?:const|let|var)\s+${name}\b)`
+                // `async function` counts. Missing it reported InstallApp as undeclared
+                // when it was right there, which sent the search to the wrong place.
+                String.raw`(?:^|\n)\s*(?:(?:async\s+)?function\s*\*?\s*${name}\b|(?:const|let|var)\s+${name}\b)`
             ).test(source);
             check('js/ still declares `' + name + '`, which the menu calls', declaredInJs);
         });
     }
 
     // The rule the bridge exists to enforce. If a component reaches past it, the seam
-    // is decorative — so no other file under src/ui may name a game global directly.
+    // is decorative - so no other file under src/ui may name a game global directly.
     // Comments are stripped first. The rule is about what the CODE reaches for, and a
     // file that documents why the engine is off-limits should not be reported for
-    // saying so — which is exactly what happened the first time a screen explained the
+    // saying so - which is exactly what happened the first time a screen explained the
     // seam it was respecting.
     const StripComments = (source) => source
         .replace(/\/\*[\s\S]*?\*\//g, ' ')
@@ -114,11 +116,11 @@ function Walk(dir) {
 
 // --- report ----------------------------------------------------------------
 if (failures.length) {
-    console.error('FAIL — ' + failures.length + ' check(s)');
+    console.error('FAIL - ' + failures.length + ' check(s)');
     failures.forEach(f => console.error('  !! ' + f));
     process.exit(1);
 }
-console.log('PASS — src/ui + dist/ui-bundle.js');
+console.log('PASS - src/ui + dist/ui-bundle.js');
 console.log('  freshness : the bundle is newer than every source it was built from');
 console.log('  wiring    : index.html mounts #menuRoot and loads the bundle after main.js');
 console.log('  departure : none of the old menu markup survives');

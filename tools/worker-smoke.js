@@ -1,7 +1,7 @@
-// FortHex — headless acceptance harness for js/server/  (Track A1, guide §5.3 + §9)
+// FortHex - headless acceptance harness for js/server/  (Track A1, guide §5.3 + §9)
 //
-// Loads the shared + server modules inside a bare Node worker_thread — no
-// document, no window, no localStorage — and runs real game logic through them.
+// Loads the shared + server modules inside a bare Node worker_thread - no
+// document, no window, no localStorage - and runs real game logic through them.
 // This is the actual proof of "DOM-free": a visual code read is not sufficient,
 // because canvas/window references hide in rarely-hit branches.
 //
@@ -1066,7 +1066,7 @@ const source = SERVER_BUNDLE.map(f => fs.readFileSync(path.join(ROOT, f), 'utf8'
 const worker = new Worker(source, { eval: true });
 worker.on('message', (m) => {
     if (m.ok) {
-        console.log('PASS — js/server/ loads and runs with no DOM, no client globals');
+        console.log('PASS - js/server/ loads and runs with no DOM, no client globals');
         console.log('  steps run       :', m.steps);
         console.log('  unit moved      :', m.moved);
         console.log('  state-sync      : v' + m.stateSync.stateVersion, '[' + m.stateSync.eventTypes.join(', ') + ']');
@@ -1100,7 +1100,7 @@ worker.on('message', (m) => {
     process.exit(m.ok ? 0 : 1);
 });
 worker.on('error', (e) => {
-    console.error('WORKER LOAD ERROR — something in js/server/ throws at parse/load time');
+    console.error('WORKER LOAD ERROR - something in js/server/ throws at parse/load time');
     console.error(e.stack);
     process.exit(1);
 });

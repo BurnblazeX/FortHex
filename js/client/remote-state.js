@@ -7,7 +7,7 @@
 //
 // So this file does one thing: write a received view into the local engine.state, so
 // every existing renderer keeps working unchanged. render.js does not learn that the
-// match is remote, and it should not — a client drawing a board is the same job either
+// match is remote, and it should not - a client drawing a board is the same job either
 // way, and the alternative was a second renderer that would immediately drift.
 //
 // What this deliberately does NOT do is run rules. The local engine is a DRAWING
@@ -19,12 +19,21 @@
 let renderingRemoteMatch = false;
 let remoteSeat = null;
 
+// Host or guest, held explicitly rather than inferred. They are genuinely different
+// roles - the host owns the match (starting it, the map, the save) and a guest is a
+// participant in someone else's - and every rule that differs between them should read
+// from one place instead of each site working it out again.
+let remoteIsHost = false;
+
 function IsRemoteMatch() { return renderingRemoteMatch; }
 function RemoteSeat() { return remoteSeat; }
+function IsRemoteHost() { return renderingRemoteMatch && remoteIsHost; }
+function IsRemoteGuest() { return renderingRemoteMatch && !remoteIsHost; }
 
-function BeginRemoteMatch(seat) {
+function BeginRemoteMatch(seat, isHost = false) {
     renderingRemoteMatch = true;
     remoteSeat = seat;
+    remoteIsHost = !!isHost;
 
     // The player is one side of a two-player game they do not host, which is exactly
     // the shape singleplayer already describes to the rest of the client.
@@ -36,9 +45,19 @@ function BeginRemoteMatch(seat) {
 function EndRemoteMatch() {
     renderingRemoteMatch = false;
     remoteSeat = null;
+    remoteIsHost = false;
+    HideDisconnectCountdown();
+
+    // Hand the match-level controls back. They are disabled every frame while a guest
+    // is in a hosted match; without this they would stay dead in the local game the
+    // player returns to, because nothing else re-enables them.
+    ['newMapButton', 'saveGameButton', 'loadGameButton'].forEach(id => {
+        const button = document.getElementById(id);
+        if (button) button.disabled = false;
+    });
 }
 
-// Terrain arrives as a NAME, not the TILE_TYPES object — see BuildBoardView for why.
+// Terrain arrives as a NAME, not the TILE_TYPES object - see BuildBoardView for why.
 // Rebuilding from the name is what the save format does too.
 function TileTypeFromName(name) {
     if (!name) return TILE_TYPES.PLAINS;
@@ -70,7 +89,7 @@ function ApplyRemoteView(view) {
     // --- edges ---
     // The `units` accessor is rebuilt here rather than carried: it is a live view over
     // engine.state.units, so it cannot travel and must be re-attached on arrival.
-    // Non-enumerable for the same reason it is everywhere else — it must not end up
+    // Non-enumerable for the same reason it is everywhere else - it must not end up
     // serialized into a save or a subsequent payload.
     if (Array.isArray(view.edges)) {
         engine.state.edges.clear();
@@ -108,7 +127,7 @@ function ApplyRemoteView(view) {
             .map(({ hidden, ...unit }) => unit);
 
         // Every unit object was just REPLACED. Anything still pointing at one of the old
-        // ones is holding a stale copy with a stale position — which is how a swordsman
+        // ones is holding a stale copy with a stale position - which is how a swordsman
         // that had moved several edges away could still be offered Build Bridge against
         // the water it started next to. Re-link by id, or drop the selection if that
         // unit is no longer visible at all.
@@ -128,7 +147,7 @@ function ApplyRemoteView(view) {
 
     // --- derived indexes ---
     //
-    // The fine grid is not stored, it is DERIVED from tiles and edges — which is why
+    // The fine grid is not stored, it is DERIVED from tiles and edges - which is why
     // every other path that replaces a board rebuilds it (match-setup.js after
     // InitializeGrid, save.js after a load, map-generation.js after a resize). This path
     // replaced the board and did not, so engine.state.fineGrid stayed empty.
@@ -144,7 +163,18 @@ function ApplyRemoteView(view) {
     // Applied by name rather than by spreading the view: the view also carries things
     // that are NOT engine state (player, filtered, visibleTiles), and a blind copy
     // would push those onto engine.state and eventually into a save.
-    if (view.gridRadius !== undefined) engine.state.gridRadius = view.gridRadius;
+    if (view.gridRadius !== undefined) {
+        const changed = engine.state.gridRadius !== view.gridRadius;
+        engine.state.gridRadius = view.gridRadius;
+
+        // Camera framing is per DEVICE, not per match, so it does not travel with the
+        // board - and nothing else in the online path sets it. Until rooms could pick a
+        // map every hosted match was radius 3 and the default scale happened to be
+        // right; a radius-4 map drew at 1.0 and ran off the canvas, and a radius-2 one
+        // sat tiny in the middle. Lifted from resizeMapGrid, which owns this for local
+        // play.
+        if (changed) ApplyRemoteRenderScale(view.gridRadius);
+    }
     if (view.baseCampPositions !== undefined) engine.state.baseCampPositions = view.baseCampPositions;
     if (view.respawnQueue !== undefined) engine.state.respawnQueue = view.respawnQueue;
     if (view.unitCounts !== undefined) engine.state.unitCounts = view.unitCounts;
@@ -161,7 +191,7 @@ function ApplyRemoteView(view) {
 
     // Vision comes from the HOST, it is not recomputed here.
     //
-    // The client was deriving fog from its own copy of the board — a board it has only
+    // The client was deriving fog from its own copy of the board - a board it has only
     // been shown part of. That is the same mistake as adjudicating victory locally: the
     // server already decided what this player can see (it had to, in order to know what
     // to send), so recomputing could only ever agree by luck and disagree in the gaps.
@@ -185,7 +215,7 @@ function ApplyRemoteView(view) {
 
     // One line per board, so a match that stops updating is visible in the console as
     // a stream that stopped rather than as a canvas that looks frozen for no reason.
-    console.log('[Online] board applied — ' + engine.state.tiles.size + ' tiles, '
+    console.log('[Online] board applied - ' + engine.state.tiles.size + ' tiles, '
         + engine.state.edges.size + ' edges, ' + engine.state.units.length + ' units, '
         + 'P' + engine.state.currentPlayer + ' to move');
 }
@@ -198,7 +228,7 @@ function RefreshRemoteUi() {
     // Nothing was doing this online: the local turn lifecycle sets the button state in
     // finalizeVisuals, and that whole path is skipped in a hosted match. So End Turn sat
     // enabled for both players, and clicking it on your opponent's turn sent a request
-    // the server used to accept — it does not any more, but a button that is only
+    // the server used to accept - it does not any more, but a button that is only
     // stopped by the server is still a button that should have been greyed out.
     if (ui && ui.endTurnButton) {
         ui.endTurnButton.disabled = IsOpponentsTurn() || !!engine.state.gameOver;
@@ -210,9 +240,13 @@ function RefreshRemoteUi() {
     updateSupplyPointsDisplay();
     updateActionLogDisplay();
 
+    // The reinforcements panel reads engine.state.respawnQueue, which arrives with every
+    // view - but nothing here was redrawing it, so it sat empty for the whole match.
+    updateRespawnQueueDisplay();
+
     // checkVictoryCondition is DELIBERATELY not called here.
     //
-    // It runs the real rule against the local engine — and in a hosted match the local
+    // It runs the real rule against the local engine - and in a hosted match the local
     // engine is a drawing surface holding a FILTERED board. Under fog it contains no
     // enemy units at all, so the very first refresh saw an empty enemy army and handed
     // somebody an immediate win by annihilation.
@@ -220,4 +254,131 @@ function RefreshRemoteUi() {
     // The host decides the match is over and says so: `gameOver` rides in the view, and
     // the VICTORY event it emits is already handled by HandleActionEvent. Nothing here
     // needs to work it out, and nothing here is in a position to.
+}
+
+// === The disconnect countdown (B3) ===
+//
+// A3 built the deadline server-side and put it in the PLAYER_DISCONNECTED event, and
+// noted that DRAWING it was B3's job and was not built. This is that.
+//
+// The deadline is an absolute timestamp from the host, not a duration, which matters:
+// counting down from a duration would drift with every dropped frame and would restart
+// from full if the page were reloaded mid-window. Counting toward a fixed instant is
+// correct in both cases, and needs no further messages from the server to stay honest.
+let disconnectDeadline = null;
+let disconnectTicker = null;
+
+function ShowDisconnectCountdown(player, deadline) {
+    const banner = document.getElementById('disconnectBanner');
+    const text = document.getElementById('disconnectBannerText');
+    if (!banner || !text) return;
+
+    disconnectDeadline = deadline;
+
+    // "Your opponent" only if it is not us. A player watching their OWN slot count down
+    // is the reconnect case, and telling them their opponent left would be a lie.
+    const mine = (player === engine.state.playerSide);
+    text.textContent = mine
+        ? 'You are disconnected - reconnecting'
+        : 'Opponent disconnected - waiting for them to return';
+
+    banner.style.display = 'flex';
+
+    if (disconnectTicker) clearInterval(disconnectTicker);
+    TickDisconnectCountdown();
+    disconnectTicker = setInterval(TickDisconnectCountdown, 250);
+}
+
+function TickDisconnectCountdown() {
+    const banner = document.getElementById('disconnectBanner');
+    const clock = document.getElementById('disconnectBannerClock');
+    if (!banner || !clock || disconnectDeadline === null) return;
+
+    const remaining = Math.max(0, disconnectDeadline - Date.now());
+    clock.textContent = (remaining / 1000).toFixed(0) + 's';
+    banner.classList.toggle('is-urgent', remaining <= 10000);
+
+    // At zero the countdown stops but the banner STAYS. The host decides what happens
+    // next (DISCONNECT_RESOLUTION_NEEDED), and clearing the banner here would tell the
+    // player the situation had resolved itself when it has not.
+    if (remaining === 0 && disconnectTicker) {
+        clearInterval(disconnectTicker);
+        disconnectTicker = null;
+    }
+}
+
+function HideDisconnectCountdown() {
+    const banner = document.getElementById('disconnectBanner');
+    if (banner) banner.style.display = 'none';
+    if (disconnectTicker) clearInterval(disconnectTicker);
+    disconnectTicker = null;
+    disconnectDeadline = null;
+}
+
+// === Acting on a disconnect resolution (B3) ===
+//
+// A4 converts the live match into a save; this is what happens to it. Both branches end
+// the online match FIRST - the socket has to be released before anything is loaded, or
+// the host's next state-sync overwrites it, which is exactly how leaving-for-a-local-
+// game used to clobber the local board.
+function ApplyDisconnectResolution_Client(event) {
+    const save = event.outcome && event.outcome.save;
+
+    if (typeof EndOnlineMatch === 'function') EndOnlineMatch();
+    HideDisconnectCountdown();
+
+    if (!save) {
+        ShowAlert('The match could not be resolved - no save was produced.');
+        return;
+    }
+
+    if (event.choice === 'continue-locally') {
+        // Straight back onto this device, both sides local. ApplyLoadedState is the same
+        // path a loaded save file takes, so nothing here is a special case.
+        ApplyLoadedState(save);
+        rehydrateGameState();
+        EnsureGameLoopRunning();
+        UpdateStatusCorner();
+        ShowSuccess('Continuing locally. Both sides are on this device now.');
+        return;
+    }
+
+    // 'save' - hand the file over and step back to the menu. Written through the same
+    // serializer a manual save uses, so it loads like any other.
+    try {
+        const blob = new Blob([JSON.stringify(save, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'forthex-interrupted-' + (save.matchId || Date.now()) + '.fhsave';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        ShowSuccess('Match saved. Load it any time to pick it up.');
+    } catch (error) {
+        console.error('[B3] Could not write the save:', error);
+        ShowAlert('Could not write the save file. See console.');
+    }
+
+    ShowMainMenu('root');
+}
+
+// The client half of a resize, for a board this device did not build.
+//
+// resizeMapGrid (js/client/map-maker.js) does this for local play alongside a pile of
+// map-maker concerns that have no meaning here, so only the framing is lifted. Kept
+// beside ApplyRemoteView because the two have to agree about what a radius means.
+function ApplyRemoteRenderScale(radius) {
+    if (radius === 2) {
+        gameState.renderScale = 1.3;
+    } else if (radius === 4) {
+        const expansiveMapWidth = (2 * 4 + 1.5) * (HEX_SIZE * Math.sqrt(3));
+        gameState.renderScale = CANVAS_WIDTH_NORMAL / expansiveMapWidth;
+    } else {
+        gameState.renderScale = 1.0;
+    }
+
+    gameState.renderOffset = { x: 0, y: 0 };
+    gameState.needsRedraw = true;
 }

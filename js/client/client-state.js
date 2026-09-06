@@ -77,8 +77,8 @@ let fileLoadContext = 'game_save';
 //
 // Every one of these checks used to be written as `gameMode === 'singleplayer' &&
 // unit.player !== playerSide`, which was correct while singleplayer was the only mode
-// that bound a client to ONE side. Online does the same thing — the seat you took is
-// the side you play — but the mode string is different, so every one of those tests
+// that bound a client to ONE side. Online does the same thing - the seat you took is
+// the side you play - but the mode string is different, so every one of those tests
 // silently evaluated false and both players could drag both armies around. The server
 // refused the illegal ones, so nothing desynced; it just made the two sides pointless.
 //

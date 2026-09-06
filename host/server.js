@@ -3,14 +3,14 @@
 //   node host/server.js [--port 8080] [--no-static]
 //
 // One process. It owns the room registry, the worker pool, and every socket. It does
-// NOT own game rules — those live in the workers, one per live match, which is the
+// NOT own game rules - those live in the workers, one per live match, which is the
 // only place engine state is ever mutated.
 //
 // Two kinds of message arrive on a socket and they are handled in completely
 // different places, which is the main thing to understand about this file:
 //
 //   LOBBY   hello, list-rooms, create-room, join-room, leave-room, start-match
-//           Handled here. There is no engine yet — a room is not a match.
+//           Handled here. There is no engine yet - a room is not a match.
 //
 //   MATCH   connect, action, disconnect  (A1's four shapes)
 //           Forwarded verbatim to the room's worker. This process does not inspect,
@@ -18,7 +18,7 @@
 //           authority, exactly as it is for a browser running LocalTransport.
 //
 // Lobby messages deliberately do NOT route through SubmitAction. It is match-scoped
-// and has no meaning before a match exists — "create a room" is not a game action and
+// and has no meaning before a match exists - "create a room" is not a game action and
 // giving it an ACTION_SPEC would make the validation table lie about what it covers.
 
 const http = require('http');
@@ -29,7 +29,7 @@ const { Worker } = require('worker_threads');
 const { WebSocketServer } = require('ws');
 
 const { RoomRegistry } = require('./rooms.js');
-const { ComputeBuildHash, ComputeFileHashes } = require('./build-hash.js');
+const { ComputeBuildHash, ComputeFileHashes, ComputeClientHash } = require('./build-hash.js');
 const { BuildWorkerSource } = require('./server-bundle.js');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -47,12 +47,59 @@ const BUILD_VERSION = (() => {
     }
 })();
 
+// === Which builds may play through this server (B2 anti-cheat) ===
+//
+// Burn's rule: modding is fine, and it is only online-THROUGH-THE-SERVER that is
+// policed. Direct peer-to-peer connections are never checked - play modded with your
+// friends - so nothing in this section is reachable from the WebRTC path.
+//
+// OFF BY DEFAULT, and that is deliberate rather than a stub. The file lists the client
+// fingerprints of official releases; with no file, or an empty one, every build is
+// accepted and the server says so at boot. An InDev tree changes its fingerprint on
+// every edit, so a server that enforced by default would lock its own developer out
+// after one keystroke. Enforcement turns on by writing the file, which is a decision
+// somebody makes for a release, not a default anybody inherits by accident.
+//
+// The honest limits of this check are written out in js/client/build-fingerprint.js.
+// Short version: it stops a modified client from JOINING, not from cheating, because a
+// modified client already cannot cheat - SubmitAction adjudicates inside the worker.
+const ACCEPTED_BUILDS = (() => {
+    try {
+        const raw = fs.readFileSync(path.join(__dirname, 'official-builds.json'), 'utf8');
+        const parsed = JSON.parse(raw);
+        const list = Array.isArray(parsed) ? parsed : (parsed.builds || []);
+        return list.map(entry => (typeof entry === 'string' ? entry : entry.fingerprint))
+                   .filter(Boolean);
+    } catch (error) {
+        return [];
+    }
+})();
+
+const ENFORCE_BUILD_CHECK = ACCEPTED_BUILDS.length > 0;
+
+// The fingerprint of the tree THIS server is serving. Always accepted: a client that
+// loaded the page from here is by definition running what this server handed out, and
+// refusing it would mean a release server rejecting its own build the moment a file
+// was touched.
+function IsAcceptedBuild(fingerprint) {
+    if (!ENFORCE_BUILD_CHECK) return true;
+    if (!fingerprint) return false;
+    if (fingerprint === ComputeClientHash().hash) return true;
+    return ACCEPTED_BUILDS.indexOf(fingerprint) !== -1;
+}
+
 function Arg(name, fallback) {
     const index = process.argv.indexOf('--' + name);
     return index === -1 ? fallback : process.argv[index + 1];
 }
 
 const PORT = Number(Arg('port', process.env.PORT || 8080));
+
+// The reconnect window, in ms. Undefined means the engine's own 100-second default;
+// tests set it to something they can actually wait for.
+const DISCONNECT_TIMEOUT_MS_OVERRIDE = process.env.FORTHEX_DISCONNECT_MS
+    ? Number(process.env.FORTHEX_DISCONNECT_MS)
+    : undefined;
 const SERVE_STATIC = !process.argv.includes('--no-static');
 
 const registry = new RoomRegistry();
@@ -72,7 +119,7 @@ function Log(...parts) {
 // Real round-trip time, measured with the WebSocket protocol's own ping/pong rather
 // than an application-level message. Two reasons: it is answered by the browser's
 // socket implementation without waking the page, so it measures the LINK rather than
-// how busy the tab is, and it doubles as the dead-connection check — a socket that
+// how busy the tab is, and it doubles as the dead-connection check - a socket that
 // stops ponging is gone whether or not it managed to send a close frame.
 //
 // The room listing reports the HOST's number. Everyone connects to this process
@@ -80,6 +127,23 @@ function Log(...parts) {
 // about the rooms; the host's is what generalises when the roadmap's P2P adapter makes
 // the host peer the actual server.
 const PING_INTERVAL_MS = 5000;
+
+// The listing, annotated for one viewer.
+//
+// A match in progress is closed to strangers - but not to the player whose seat is
+// still being held for them. Without this a disconnected player had nowhere to go: the
+// room was still there, their seat was still theirs, and the lobby showed it as an
+// in-progress room they were not allowed to enter.
+function ListingFor(clientId) {
+    const client = clients.get(clientId);
+    return registry.PublicList(RttOf, IsConnected).map(row => {
+        const room = registry.Get(row.id);
+        const seat = room && client
+            ? registry.SeatOf(room, clientId, client.profileId)
+            : null;
+        return { ...row, yourSeat: seat, canRejoin: seat !== null };
+    });
+}
 
 function IsConnected(clientId) {
     const client = clients.get(clientId);
@@ -104,7 +168,7 @@ pingTimer.unref();
 //
 // Serving the game itself is a convenience for LAN testing so the host is useful with
 // nothing else installed. In the real deployment Caddy serves the files and this
-// process only terminates WebSockets — hence --no-static.
+// process only terminates WebSockets - hence --no-static.
 
 const MIME = {
     '.html': 'text/html; charset=utf-8',
@@ -140,7 +204,7 @@ function ServeStatic(request, response) {
 
             // Never cache. This server exists for development, and a cached
             // dist/ui-bundle.js or js/client/ws-transport.js means editing the game and
-            // reloading shows you the previous build — which looks exactly like a bug
+            // reloading shows you the previous build - which looks exactly like a bug
             // in the code you just changed, and cost an afternoon proving otherwise.
             // The real deployment is Caddy, which sets its own sensible caching.
             'Cache-Control': 'no-store, must-revalidate',
@@ -210,7 +274,7 @@ function Fail(clientId, error, detail) {
 // Everyone seated in a room, so a join or a leave updates both players' lobby view.
 function BroadcastRoom(room) {
     registry.Occupants(room).forEach(occupant => {
-        Send(occupant.clientId, { type: 'room-update', room: registry.RoomView(room, occupant.clientId) });
+        Send(occupant.clientId, { type: 'room-update', room: registry.RoomView(room, occupant.clientId, occupant.profileId) });
     });
 }
 
@@ -267,12 +331,13 @@ function Route(clientId, message) {
 
     switch (message.type) {
         case 'hello':        return HandleHello(clientId, message);
-        case 'list-rooms':   return Send(clientId, { type: 'room-list', rooms: registry.PublicList(RttOf, IsConnected) });
+        case 'list-rooms':   return Send(clientId, { type: 'room-list', rooms: ListingFor(clientId) });
         case 'create-room':  return HandleCreateRoom(clientId, message);
         case 'join-room':    return HandleJoinRoom(clientId, message);
         case 'leave-room':   return HandleLeaveRoom(clientId);
         case 'swap-seats':   return HandleSwapSeats(clientId);
         case 'start-match':  return HandleStartMatch(clientId);
+        case 'signal':       return HandleSignal(clientId, message);
         default:
             return Fail(clientId, 'unknown_message', message.type);
     }
@@ -283,21 +348,73 @@ function HandleHello(clientId, message) {
     if (!client) return;
 
     // A5's durable id. It is what lets a reconnecting player be recognised as the
-    // same person on a new socket, and it is the only identity this process has —
+    // same person on a new socket, and it is the only identity this process has -
     // there is no authentication here by design.
     client.profileId = message.profileId || null;
     client.name = String(message.name || 'Player').slice(0, 24);
     client.version = message.version ? String(message.version).slice(0, 24) : null;
 
-    Send(clientId, { type: 'hello-ok', clientId, rooms: registry.PublicList(RttOf, IsConnected) });
+    // B2 anti-cheat. Recorded here and consulted when a room is created or joined,
+    // rather than closing the socket outright: a player on an unrecognised build should
+    // still reach the lobby and be TOLD why they cannot play, instead of watching the
+    // connection drop with nothing said.
+    client.fingerprint = message.fingerprint ? String(message.fingerprint).slice(0, 64) : null;
+    client.buildOk = IsAcceptedBuild(client.fingerprint);
+    if (!client.buildOk) {
+        Log('unrecognised build from client', clientId, '-', client.fingerprint || '(none sent)');
+    }
+
+    Send(clientId, {
+        type: 'hello-ok',
+        clientId,
+        rooms: ListingFor(clientId),
+        buildAccepted: client.buildOk,
+        buildEnforced: ENFORCE_BUILD_CHECK,
+    });
+}
+
+// === Brokering a DIRECT connection (B2) ===
+//
+// Two peers cannot start a WebRTC connection without each seeing the other's session
+// description first, and they have no way to exchange them until they are connected -
+// which is the thing they are trying to arrange. This relays those two blobs and
+// nothing else.
+//
+// It is worth being precise about what this does NOT make the server: a participant.
+// The payload is opaque here and never inspected, exactly two of them cross per match,
+// and once the channel is open this process can be switched off without the match
+// noticing. That is the entire difference between a direct match and a hosted one, and
+// it is why the signalling living on the server does not undo it.
+//
+// A peer that cannot reach the server at all uses the manual code path instead
+// (js/client/signalling.js), which needs no relay and no server.
+function HandleSignal(clientId, message) {
+    const client = clients.get(clientId);
+    if (!client || !client.roomId) return Fail(clientId, 'not_in_room');
+
+    const room = registry.Get(client.roomId);
+    if (!room) return Fail(clientId, 'no_such_room');
+
+    // Addressed by ROOM OCCUPANCY, never by anything the sender says. A client cannot
+    // name its recipient, so this cannot be used to push a connection offer at someone
+    // who is not sitting across the board from the sender.
+    const others = registry.Occupants(room).filter(occupant => occupant.clientId !== clientId);
+    if (others.length === 0) return;
+
+    others.forEach(occupant => Send(occupant.clientId, {
+        type: 'signal',
+        payload: message.payload,
+        from: clientId,
+    }));
 }
 
 function HandleCreateRoom(clientId, message) {
     const client = clients.get(clientId);
     if (!client) return;
     if (client.roomId) return Fail(clientId, 'already_in_room');
+    if (!client.buildOk) return Fail(clientId, 'build_not_recognised');
 
-    // Create seats the host as part of creating — see host/rooms.js for why that is
+    // Create seats the host as part of creating - see host/rooms.js for why that is
     // not a follow-up Join.
     const room = registry.Create({
         name: message.name,
@@ -307,6 +424,7 @@ function HandleCreateRoom(clientId, message) {
         hostName: client.name,
         hostProfileId: client.profileId,
         hostVersion: client.version,
+        hosting: message.hosting === 'direct' ? 'direct' : 'server',
         settings: message.settings || {},
     });
 
@@ -314,13 +432,13 @@ function HandleCreateRoom(clientId, message) {
 
     Send(clientId, {
         type: 'room-joined',
-        room: registry.RoomView(room, clientId),
+        room: registry.RoomView(room, clientId, client.profileId),
         seat: registry.SeatOf(room, clientId, client.profileId),
     });
     Log('room created:', room.name, room.id, '(' + room.visibility + ', code ' + room.joinCode + ')');
 }
 
-// Private rooms are visible in the listing (Burn's call — with two seats, a room
+// Private rooms are visible in the listing (Burn's call - with two seats, a room
 // someone is in is not joinable anyway). That trades away obscurity, so the code has
 // to stand on its own: 6 characters from a 31-symbol alphabet is ~887 million
 // combinations, which is only out of reach if guesses are RATE-LIMITED.
@@ -348,6 +466,7 @@ function HandleJoinRoom(clientId, message) {
     const client = clients.get(clientId);
     if (!client) return;
     if (client.roomId) return Fail(clientId, 'already_in_room');
+    if (!client.buildOk) return Fail(clientId, 'build_not_recognised');
 
     if (IsJoinThrottled(client)) {
         Log('join throttled for client', clientId);
@@ -376,9 +495,27 @@ function HandleJoinRoom(clientId, message) {
     // what stops the abandonment sweep counting them as gone.
     if (result.rejoined) registry.MarkConnected(result.room, clientId, client.profileId);
 
+    // Walking back into a match that is still running: tell the engine the player is
+    // back (which stops the countdown for everyone) and push them a full board, since
+    // they have missed everything that happened while they were away.
+    const live = matches.get(result.room.id);
+    if (live && result.room.state === 'in-progress') {
+        live.worker.postMessage({
+            kind: 'client-message',
+            requestId: clientId + ':reconnect',
+            message: { type: 'connect', profileId: client.profileId, player: result.seat },
+        });
+        Send(clientId, {
+            type: 'match-started',
+            room: registry.RoomView(result.room, clientId, client.profileId),
+            seat: result.seat,
+        });
+        live.worker.postMessage({ kind: 'resync' });
+    }
+
     Send(clientId, {
         type: 'room-joined',
-        room: registry.RoomView(result.room, clientId),
+        room: registry.RoomView(result.room, clientId, client.profileId),
         seat: result.seat,
     });
     BroadcastRoom(result.room);
@@ -389,24 +526,38 @@ function HandleLeaveRoom(clientId) {
     if (!client || !client.roomId) return;
 
     const room = registry.Get(client.roomId);
+    const wasLive = !!(room && room.state === 'in-progress');
     const left = registry.Leave(clientId, { deliberate: true });
     client.roomId = null;
 
+    // Walking out of a LIVE match starts the same 100-second window a dropped socket
+    // would, rather than ending the match on the spot. Burn's call: someone leaving to
+    // play a local game may be back in twenty seconds, and the other player should be
+    // watching a countdown, not staring at a room that vanished.
+    //
+    // It also means the room survives for them to walk back into - the "hot join" case.
+    if (wasLive && left && left.seat !== null) {
+        const live = matches.get(room.id);
+        if (live) {
+            live.worker.postMessage({
+                kind: 'client-message',
+                requestId: clientId + ':left',
+                message: { type: 'disconnect', reason: 'player_left', player: left.seat, profileId: client.profileId },
+            });
+        }
+    }
+
     // The list goes back with the confirmation, so the leaver lands on a lobby that
-    // already reflects the seat they just gave up — including being able to walk
+    // already reflects the seat they just gave up - including being able to walk
     // straight back into the room they just left.
-    Send(clientId, { type: 'room-left', rooms: registry.PublicList(RttOf, IsConnected) });
+    Send(clientId, { type: 'room-left', rooms: ListingFor(clientId) });
 
     if (room) {
         BroadcastRoom(room);
 
-        // A match somebody walked out of has no second player and nothing to resume.
-        // Tearing it down here is also what returns its worker's ~12.4 MB, rather than
-        // waiting out the abandonment sweep for a room already known to be finished.
-        if (room.state === 'in-progress' && registry.Occupants(room).length < 2) {
-            Log('match ended early — a player left:', room.name);
-            EndMatch(room, 'opponent_left');
-        }
+        // Deliberately NOT ending the match here any more. The room stays up for the
+        // reconnect window so the leaver can come back and the other player can watch
+        // the countdown; the abandonment sweep tears it down if nobody returns.
         ReapIfEmpty(room);
     }
     return left;
@@ -423,7 +574,7 @@ function HandleSwapSeats(clientId) {
     const result = registry.SwapSeats(room);
     if (!result.ok) return Fail(clientId, result.error);
 
-    // Both occupants need telling — their own seat changed, not just the host's.
+    // Both occupants need telling - their own seat changed, not just the host's.
     BroadcastRoom(room);
 }
 
@@ -439,11 +590,57 @@ function HandleStartMatch(clientId) {
     if (room.state === 'in-progress') return Fail(clientId, 'already_started');
     if (!registry.IsReady(room)) return Fail(clientId, 'room_not_full');
 
+    // A direct match costs this process nothing - no worker, no engine, no memory
+    // ceiling to check, because the match is about to run in the host player's
+    // browser. All this does is tell the two of them to go and find each other.
+    if (room.hosting === 'direct') return StartDirectMatch(room);
+
     // The memory ceiling, enforced at the only moment it can be: a room costs a few
     // hundred bytes, a worker costs ~12.4 MB, and this is where one becomes the other.
     if (!registry.CanStartMatch()) return Fail(clientId, 'server_at_capacity');
 
     SpawnMatch(room);
+}
+
+// The direct case. This process does NOT become a participant - it marks the room
+// busy, names who is hosting, and steps back. Everything after this crosses the
+// data channel; the only further traffic here is the two signalling blobs, which
+// HandleSignal relays without reading.
+//
+// Consequence worth being explicit about: the host player's browser is now the
+// authority, and an authoritative peer can cheat if they modify their client. That
+// is accepted policy (Burn, 2026-09-06) - modding is fine off the server - but it
+// is the reason ranked play and the Gospel corpus must stay on SERVER rooms only.
+// Do not archive a direct match into anything that claims to be a record.
+function StartDirectMatch(room) {
+    room.state = 'in-progress';
+    room.matchId = room.id;
+
+    const hostSeat = registry.SeatOfHost(room);
+
+    registry.Occupants(room).forEach(occupant => {
+        const seat = registry.SeatOf(room, occupant.clientId, occupant.profileId);
+        const isHost = registry.IsHost(room, occupant.clientId, occupant.profileId);
+        Send(occupant.clientId, {
+            type: 'match-direct',
+            room: registry.RoomView(room, occupant.clientId, occupant.profileId),
+            seat,
+            isHost,
+            hostSeat,
+            // Only the host builds a board, and only the host is handed the map to
+            // build it from. It is their own upload coming back to them: this process
+            // held it between Create and Start and never looked inside.
+            map: isHost
+                ? {
+                    mapName: room.settings.mapName || null,
+                    customMap: room.settings.customMap || null,
+                    resumeSave: room.settings.resumeSave || null,
+                }
+                : null,
+        });
+    });
+
+    Log('direct match starting in room', room.name, '- this process is out of it now');
 }
 
 function SpawnMatch(room) {
@@ -456,7 +653,11 @@ function SpawnMatch(room) {
         workerData: {
             matchId: room.id,
             players,
-            settings: { fogOfWarEnabled: !!room.settings.fogOfWarEnabled },
+            settings: {
+                fogOfWarEnabled: !!room.settings.fogOfWarEnabled,
+                // Shortened by tests; the engine's own 100s default otherwise.
+                disconnectTimeoutMs: DISCONNECT_TIMEOUT_MS_OVERRIDE,
+            },
         },
     });
 
@@ -472,7 +673,14 @@ function SpawnMatch(room) {
     });
     worker.on('exit', () => { matches.delete(room.id); });
 
-    worker.postMessage({ kind: 'start-match' });
+    // The map the room was created with. A preset is a name the worker resolves
+    // itself; a loaded file is the only thing that has to be posted in full.
+    worker.postMessage({
+        kind: 'start-match',
+        mapName: room.settings.mapName || null,
+        customMap: room.settings.customMap || null,
+        resumeSave: room.settings.resumeSave || null,
+    });
     Log('match started in room', room.name, '(' + registry.LiveMatchCount() + ' live)');
 }
 
@@ -485,12 +693,12 @@ function HandleWorkerMessage(room, m) {
             registry.Occupants(room).forEach(occupant => {
                 Send(occupant.clientId, {
                     type: 'match-started',
-                    room: registry.RoomView(room, occupant.clientId),
+                    room: registry.RoomView(room, occupant.clientId, occupant.profileId),
                     seat: registry.SeatOf(room, occupant.clientId, occupant.profileId),
                 });
             });
 
-            // Only now is anyone listening for match traffic — match-started is what
+            // Only now is anyone listening for match traffic - match-started is what
             // makes a client subscribe. Asking for the board after that, rather than
             // relying on the flush that already happened during start-match, is what
             // stops players opening onto a blank canvas.
@@ -502,7 +710,7 @@ function HandleWorkerMessage(room, m) {
         case 'wire': {
             // Already JSON, already addressed. The worker stringifies inside the match
             // that produced it (so an unserializable payload names itself there), and
-            // tags each copy with the player it was filtered for — this process only
+            // tags each copy with the player it was filtered for - this process only
             // has to find that player's socket and put the bytes on it.
             //
             // A null player is the omniscient stream, which a hosted match never
@@ -518,6 +726,56 @@ function HandleWorkerMessage(room, m) {
         case 'ack': {
             const target = m.requestId && String(m.requestId).split(':')[0];
             if (target) Send(target, { type: 'ack', requestId: m.requestId, outcome: m.outcome });
+            break;
+        }
+
+        case 'resolution-needed': {
+            // The window closed. Whoever is left is taken out of the match - the modal
+            // asking what to do with it is already on their screen - and the room's fate
+            // follows the ABSENT player's role, because the room belongs to its host.
+            const absentSeat = m.player;
+            const absent = room.seats.get(absentSeat);
+            const absentWasHost = absent
+                ? registry.IsHost(room, absent.clientId, absent.profileId)
+                : false;
+
+            const remaining = registry.Occupants(room)
+                .filter(o => o.clientId !== (absent && absent.clientId));
+
+            const match = matches.get(room.id);
+            if (match) match.worker.terminate();
+            matches.delete(room.id);
+
+            if (absentWasHost) {
+                // No host, no room. Whoever is left goes back to the room list.
+                remaining.forEach(o => Send(o.clientId, {
+                    type: 'match-ended',
+                    reason: 'host_gone',
+                    returnTo: 'lobby',
+                    rooms: ListingFor(o.clientId),
+                }));
+                remaining.forEach(o => {
+                    const client = clients.get(o.clientId);
+                    if (client) client.roomId = null;
+                });
+                registry.Destroy(room.id);
+                Log('room closed - the host did not return:', room.name);
+            } else {
+                // The guest gave up. The host keeps their room; it goes back to waiting
+                // so somebody else can take the empty seat.
+                room.seats.set(absentSeat, null);
+                room.state = 'waiting';
+                room.matchId = null;
+
+                remaining.forEach(o => Send(o.clientId, {
+                    type: 'match-ended',
+                    reason: 'guest_gone',
+                    returnTo: 'room',
+                    room: registry.RoomView(room, o.clientId, o.profileId),
+                    seat: registry.SeatOf(room, o.clientId, o.profileId),
+                }));
+                Log('room reopened - the guest did not return:', room.name);
+            }
             break;
         }
 
@@ -539,7 +797,7 @@ function ForwardToMatch(clientId, message) {
     if (seat === null) return Fail(clientId, 'not_seated');
 
     // The client does not get to say which player it is. Its seat is what this process
-    // recorded when it joined, and that is what goes to the engine — a client that
+    // recorded when it joined, and that is what goes to the engine - a client that
     // claims `player: 2` while sitting in seat 1 is asking to move someone else's
     // units, and A2's whole model depends on that not being taken at face value.
     const stamped = { ...message, player: seat, profileId: client.profileId };
@@ -592,6 +850,17 @@ function HandleSocketClose(clientId) {
 // to come back, and the room has to outlive them by at least as much.
 const ABANDON_GRACE_MS = 100000;
 const ABANDON_SWEEP_MS = 15000;
+
+// Drives every live match's clock. Without this nothing ever looks at a disconnect
+// deadline in a hosted match - see the 'tick' case in host/match-worker.js.
+const DEADLINE_TICK_MS = 1000;
+
+const deadlineTimer = setInterval(() => {
+    matches.forEach(match => {
+        try { match.worker.postMessage({ kind: 'tick' }); } catch (error) { /* worker gone */ }
+    });
+}, DEADLINE_TICK_MS);
+deadlineTimer.unref();
 
 const abandonTimer = setInterval(() => {
     registry.FindAbandoned(IsConnected, ABANDON_GRACE_MS).forEach(room => {
@@ -646,7 +915,11 @@ if (require.main === module) {
         Log('websocket endpoint: ws://0.0.0.0:' + PORT + '/ws');
 
         const build = ComputeBuildHash();
-        Log('build ' + BUILD_VERSION + ' — source hash ' + build.hash + ' over ' + build.files + ' files');
+        Log('build ' + BUILD_VERSION + ' - source hash ' + build.hash + ' over ' + build.files + ' files');
+        Log(ENFORCE_BUILD_CHECK
+            ? 'build check ON - ' + ACCEPTED_BUILDS.length + ' accepted release(s), plus this tree ('
+              + ComputeClientHash().hash + ')'
+            : 'build check OFF - no host/official-builds.json, every client accepted');
     });
 }
 

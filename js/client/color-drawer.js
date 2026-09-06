@@ -1,4 +1,4 @@
-// === Colour picker drawer wiring (moved from main.js — A1 step 12) ===
+// === Colour picker drawer wiring (moved from main.js - A1 step 12) ===
 //
 // The team-colour drawer and the action log's scroll fade. populateColorPickers
 // and friends are the copies from js/client/ui.js - the old window.onload had its own

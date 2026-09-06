@@ -1,4 +1,4 @@
-// === AI Training Simulator (moved from main.js — A1 step 12) ===
+// === AI Training Simulator (moved from main.js - A1 step 12) ===
 //
 // The headless AI-vs-AI training loop. Client-side for A1 on purpose: it drives
 // the population machinery in ai.js, which is localStorage-backed (guide §7),

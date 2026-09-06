@@ -1,4 +1,4 @@
-// FortHex — Testament fixture harness (Track A4, guide §11)
+// FortHex - Testament fixture harness (Track A4, guide §11)
 //
 // Drives every archived save file through the real migration chain and checks the
 // result, rather than checking that nothing threw. Real fixtures are the primary
@@ -42,13 +42,13 @@ function NormalizeEdgeKeys(raw) {
 }
 
 // A top-level `const` in a classic script is a global lexical binding, not a
-// property of the context object — so it has to be evaluated rather than read off
+// property of the context object - so it has to be evaluated rather than read off
 // `context`. In the browser both forms work; here only this one does.
 const CURRENT_SCHEMA_VERSION = vm.runInContext('CURRENT_SCHEMA_VERSION', context);
 const SAVE_UNIT_FIELDS = vm.runInContext('SAVE_UNIT_FIELDS', context);
 const UNIT_TYPES = vm.runInContext('UNIT_TYPES', context);
 
-// Warnings are expected output, not failures — the policy is warn-don't-refuse.
+// Warnings are expected output, not failures - the policy is warn-don't-refuse.
 // Silence them per-fixture and report the count instead.
 const realWarn = console.warn;
 
@@ -59,7 +59,7 @@ function CountEntries(collection) {
 }
 
 // Anything a JSON round trip would silently destroy. A Map becomes {} and a Set
-// becomes {} — both look like "empty object" on the far side, which is exactly
+// becomes {} - both look like "empty object" on the far side, which is exactly
 // the class of bug that made rehydrateGameState rebuild the fine grid by hand.
 function FindUnserializable(value, trail, found) {
     if (value === null || typeof value !== 'object') return found;
@@ -82,7 +82,7 @@ if (files.length === 0) {
     process.exit(1);
 }
 
-console.log('Testament — ' + files.length + ' fixtures, target schema v' + CURRENT_SCHEMA_VERSION);
+console.log('Testament - ' + files.length + ' fixtures, target schema v' + CURRENT_SCHEMA_VERSION);
 console.log('');
 
 const failures = [];
@@ -100,7 +100,7 @@ files.sort().forEach(file => {
     try {
         raw = JSON.parse(rawText);
     } catch (err) {
-        failures.push(file + ': not valid JSON — ' + err.message);
+        failures.push(file + ': not valid JSON - ' + err.message);
         return;
     }
 
@@ -119,7 +119,7 @@ files.sort().forEach(file => {
         result = MigrateSave(raw);
     } catch (err) {
         console.warn = realWarn;
-        failures.push(file + ': MigrateSave THREW — ' + err.message);
+        failures.push(file + ': MigrateSave THREW - ' + err.message);
         return;
     }
     console.warn = realWarn;
@@ -144,7 +144,7 @@ files.sort().forEach(file => {
     // These two are about MIGRATION not inventing things, so they only apply to a file
     // that was actually migrated. A save written by the current build legitimately
     // carries both fields, and reading its presence as "invented" would report every
-    // fresh save as a failure — which is exactly what happened the first time a B30
+    // fresh save as a failure - which is exactly what happened the first time a B30
     // save landed in the fixtures folder.
     const sourceVersion = detected;
     const wasMigrated = report.steps.length > 0;
@@ -175,7 +175,7 @@ files.sort().forEach(file => {
     });
 
     // NO BACKPORTING (guide §5). A stat the old file recorded must survive, even
-    // where the current template disagrees — migration reshapes data, it does not
+    // where the current template disagrees - migration reshapes data, it does not
     // re-judge it. Real case: every Archer B20-B28 carried attack:3, while today's
     // ARCHER template says damage:2. Migrating to 2 would be rewriting history.
     let preserved = 0;
@@ -192,7 +192,7 @@ files.sort().forEach(file => {
         }
     });
 
-    // The edge set is no longer saved — it is regenerated from the tiles. That is
+    // The edge set is no longer saved - it is regenerated from the tiles. That is
     // only safe if the regenerated set is IDENTICAL to what the file recorded, and
     // if every unit standing on an edge still finds one.
     if (data.edges !== undefined) problems.push('lean save still stores an edge list');
@@ -202,7 +202,7 @@ files.sort().forEach(file => {
 
     // Only meaningful against a file that RECORDED edges. A lean save deliberately
     // stores none and rebuilds them from the tiles, so comparing against its zero
-    // would assert that regeneration produces nothing — the opposite of the property
+    // would assert that regeneration produces nothing - the opposite of the property
     // this check exists to defend. For those files the real test is the one below:
     // every edge the file references must exist in the rebuilt set.
     if (before.edges > 0 && rebuiltKeys.size !== before.edges) {
@@ -245,7 +245,7 @@ files.sort().forEach(file => {
     // reading ghostUnit.type.attackType, so type/hp/maxHp have to survive a spread.
     //
     // They only do if rehydrateGameState defines them enumerable. That used to
-    // happen by accident — the old format stored them, so defineProperty was
+    // happen by accident - the old format stored them, so defineProperty was
     // modifying an existing enumerable property and kept the flag. The lean schema
     // stopped saving them, which made them new (and non-enumerable by default) and
     // broke every ghost unit. This mirrors save.js:396 so the invariant is checked
@@ -317,7 +317,7 @@ files.sort().forEach(file => {
 
 // --- A5: the with-profile and without-profile cases -------------------------
 //
-// Every archived fixture above is the without-profile case and always will be —
+// Every archived fixture above is the without-profile case and always will be -
 // they were all written before a profile could exist. So the with-profile case
 // needs a v9 file, and there is no such thing in the archive to load. Rather than
 // invent a save shape by hand (which would test the harness's idea of the format
@@ -370,8 +370,8 @@ if (lastMigrated) {
     if (expandedBare.profile !== undefined) a5.push('expansion invented a profile');
 
     // Detection: a v9 file that names its author can be told apart by shape; one
-    // that does not cannot, and reports v8. That is by design — see
-    // MigrateAddProfile — and is asserted so it is a decision, not a surprise.
+    // that does not cannot, and reports v8. That is by design - see
+    // MigrateAddProfile - and is asserted so it is a decision, not a surprise.
     const strip = (o) => { const c = { ...o }; delete c.schemaVersion; delete c.saveVersion; return c; };
     if (DetectVersion(strip(tagged.data)) !== 9) a5.push('an unlabelled file with a profile did not infer as v9');
     if (DetectVersion(strip(bare.data)) !== 8) a5.push('an unlabelled file without a profile did not infer as v8');
@@ -392,7 +392,7 @@ console.log('total ' + Math.round(totalBefore / 1024) + 'K -> ' + Math.round(tot
 
 if (failures.length) {
     console.log('');
-    console.error('FAIL — ' + failures.length + ' problem(s)');
+    console.error('FAIL - ' + failures.length + ' problem(s)');
     process.exit(1);
 }
-console.log('PASS — every fixture migrated to v' + CURRENT_SCHEMA_VERSION);
+console.log('PASS - every fixture migrated to v' + CURRENT_SCHEMA_VERSION);

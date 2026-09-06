@@ -12,7 +12,7 @@ export function PlayScreen({ onGoTo, onBack, onClose }) {
 
                 {/* Training was a hidden button inside the old Singleplayer submenu,
                     revealed only by Debug Mode (js/client/settings-panel.js). It keeps
-                    exactly that gate — it is a dev entry point, not a game mode. */}
+                    exactly that gate - it is a dev entry point, not a game mode. */}
                 {IsDebugMode() && (
                     <MenuButton
                         style={{ backgroundColor: '#F0A010', boxShadow: '0 3px #D05000' }}

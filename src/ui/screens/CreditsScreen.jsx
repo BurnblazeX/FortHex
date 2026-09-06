@@ -1,6 +1,6 @@
 import { MenuButton } from '../components/MenuButton.jsx';
 
-// B1b. The roadmap calls this "a real deliverable, not boilerplate" — a statement
+// B1b. The roadmap calls this "a real deliverable, not boilerplate" - a statement
 // in the author's own words about AI's role in the project, on record before anyone
 // asks rather than explained defensively afterwards.
 //

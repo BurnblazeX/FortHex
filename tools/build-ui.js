@@ -3,7 +3,7 @@
 //
 // FortHex is otherwise a no-build project: js/ is a list of plain <script> tags
 // in dependency order, and that stays true. This script exists for exactly one
-// reason — Track B1 adopts React, JSX is not something a browser runs, and
+// reason - Track B1 adopts React, JSX is not something a browser runs, and
 // Candidates F1 plans to migrate nearly every existing screen onto it. Writing
 // that much UI without JSX was the alternative, and it was judged the worse cost.
 //
@@ -16,7 +16,7 @@
 //
 // The bundle is an IIFE, not a module, so it lives in the same global scope as
 // everything else. That is what lets React components call StartSingleplayerGame
-// or read `engine` as plain free identifiers — a top-level `const` in a classic
+// or read `engine` as plain free identifiers - a top-level `const` in a classic
 // script is a global lexical binding, visible to every script that runs after it.
 // Going the other way, the bundle publishes window.FortHexUI; see src/ui/main.jsx.
 //
@@ -37,7 +37,7 @@ const options = {
     outfile: path.join(root, 'dist/ui-bundle.js'),
     bundle: true,
 
-    // IIFE, deliberately — see the header. A module would get its own scope and
+    // IIFE, deliberately - see the header. A module would get its own scope and
     // lose the free-identifier access to the game's globals that every screen needs.
     format: 'iife',
 
@@ -45,14 +45,14 @@ const options = {
     jsx: 'automatic',
 
     // React ships both builds behind this check. Without the define, esbuild keeps
-    // the development build — a megabyte of it, plus every dev-only warning.
+    // the development build - a megabyte of it, plus every dev-only warning.
     define: { 'process.env.NODE_ENV': dev ? '"development"' : '"production"' },
 
     minify: !dev,
     sourcemap: true,
 
     // Without this, esbuild writes ABSOLUTE paths into the sourcemap (D:\...), and the
-    // browser tries to resolve them as file:/// — which a page served over http is not
+    // browser tries to resolve them as file:/// - which a page served over http is not
     // allowed to touch. It is harmless, but it prints a security error on every load
     // and buries the console output that actually matters.
     absWorkingDir: root,
@@ -65,7 +65,7 @@ async function Main() {
     if (watch) {
         const context = await esbuild.context(options);
         await context.watch();
-        console.log('[build-ui] watching src/ui/ — ctrl-c to stop.');
+        console.log('[build-ui] watching src/ui/ - ctrl-c to stop.');
         return;
     }
 

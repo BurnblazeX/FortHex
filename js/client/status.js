@@ -6,8 +6,8 @@
 //     H8YGSH - Blaze
 //
 // The first line always shows; the second only exists during an online match. That
-// asymmetry is the point. Singleplayer and Local explain themselves in play — the AI
-// moves on its own, or the pass-device overlay appears — so they need an answer that
+// asymmetry is the point. Singleplayer and Local explain themselves in play - the AI
+// moves on its own, or the pass-device overlay appears - so they need an answer that
 // is FINDABLE, not one that is constantly in the way. Online is the mode with an
 // opponent who can leave and a connection that can drop, so it earns the extra line.
 //
@@ -17,13 +17,13 @@
 // screen shows.
 
 // Set when an online match starts, cleared when it ends. Held here rather than read
-// out of the engine because it is lobby knowledge — the engine has no idea what a
+// out of the engine because it is lobby knowledge - the engine has no idea what a
 // room is, and should not learn.
 let onlineContext = null;
 
 // The source fingerprint, fetched from the host. Null until it arrives, and null
 // forever when the page is served by something that does not provide it (a plain
-// static host, or opened straight off disk) — in which case the line simply omits it
+// static host, or opened straight off disk) - in which case the line simply omits it
 // rather than showing a placeholder that looks like a real value.
 let buildHash = null;
 
@@ -44,7 +44,7 @@ function FetchBuildHash() {
             if (!build || !build.hash) return;
             buildHash = build.hash;
             UpdateStatusCorner();
-            console.log('[Build] ' + build.version + ' — source hash ' + build.hash
+            console.log('[Build] ' + build.version + ' - source hash ' + build.hash
                 + ' over ' + build.files + ' files, newest edit '
                 + new Date(build.newestMtime).toLocaleTimeString()
                 + '  |  corner now reads: "' + document.getElementById('buildVersionDisplay').textContent + '"'
@@ -71,13 +71,13 @@ function ClearOnlineContext() {
 }
 
 function DescribeMode() {
-    // A fresh engine reports gameMode 'local' before anything has been played — that is
+    // A fresh engine reports gameMode 'local' before anything has been played - that is
     // the field's default, not a statement about what the player is doing. Menu-first
     // boot therefore opened onto a clean menu with "- Local" already claiming a match
     // existed. So the board is what decides: no tiles, no mode.
     //
     // Same test as IsMatchInProgress (src/ui/bridge.js, js/client/menu.js), which is
-    // what the root menu uses to decide whether to offer "Back to Match" — the two
+    // what the root menu uses to decide whether to offer "Back to Match" - the two
     // answers should never disagree about whether a match exists.
     if (!engine.state.tiles || engine.state.tiles.size === 0) return null;
 
@@ -88,7 +88,7 @@ function DescribeMode() {
 
 // Type FhStatus() in the console to see exactly what the corner decided and why.
 // Added because this line failed to show the build hash twice in a row and reasoning
-// about it from the outside got the wrong answer both times — a display that cannot
+// about it from the outside got the wrong answer both times - a display that cannot
 // explain itself costs more to debug than it costs to make it explain itself.
 function FhStatus() {
     const line = document.getElementById('buildVersionDisplay');
@@ -110,7 +110,7 @@ function UpdateStatusCorner() {
     const versionLine = document.getElementById('buildVersionDisplay');
     const contextLine = document.getElementById('matchContextDisplay');
     if (!versionLine) {
-        console.warn('[Status] #buildVersionDisplay is missing — nothing to write to.');
+        console.warn('[Status] #buildVersionDisplay is missing - nothing to write to.');
         return;
     }
 
@@ -119,7 +119,7 @@ function UpdateStatusCorner() {
     // whether a board exists.
     //
     // The first attempt keyed off "is there a match", which is true forever once you
-    // have played one — so after the first game the mode took the slot permanently and
+    // have played one - so after the first game the mode took the slot permanently and
     // the hash was only visible in the few seconds between page load and starting to
     // play. Which is to say: never, in practice.
     //
@@ -132,7 +132,7 @@ function UpdateStatusCorner() {
 
     if (!contextLine) return;
 
-    // No room, no second line — an empty element would still take vertical space and
+    // No room, no second line - an empty element would still take vertical space and
     // shove the version line up for no reason.
     if (!onlineContext || engine.state.gameMode !== 'online') {
         contextLine.textContent = '';

@@ -1,4 +1,4 @@
-// === Player session tracking — disconnect / reconnect (A3) ===
+// === Player session tracking - disconnect / reconnect (A3) ===
 //
 // Nothing in engine.state models "a player is gone", and deliberately still
 // doesn't. Absence is session truth, not match truth: it describes a connection,
@@ -7,12 +7,12 @@
 //
 //   NOTE FOR A4 (Testament): keep engine.playerSessions out of whatever becomes
 //   ENGINE_SAVE_FIELDS. A save written mid-disconnect should not remember that
-//   player 2 had 43 seconds left — reloading it later starts a fresh session with
+//   player 2 had 43 seconds left - reloading it later starts a fresh session with
 //   no live opponent connection either way. Same known-gap shape as
 //   pendingVictory, and intentional rather than an oversight to fix.
 //
 // Tracking is PER-PLAYER (Burn's call). A single "match is degraded" flag can't
-// represent both sides being briefly absent at once — rare, but real for a P2P
+// represent both sides being briefly absent at once - rare, but real for a P2P
 // match where neither end keeps the other's clock.
 //
 // What this file does NOT do, by track boundary:
@@ -64,7 +64,14 @@ function DisconnectPlayer(player, reason = 'client_closed', profileId = null) {
     session.connected = false;
     session.reason = reason;
     session.absentSince = now;
-    session.deadline = now + DISCONNECT_TIMEOUT_MS;
+    // The window is a property of the MATCH, so a host may set it - and a test may
+    // shorten it. Without that, exercising the lapse path meant waiting 100 real
+    // seconds, which is why nothing covered it.
+    const windowMs = Number.isFinite(engine.settings.disconnectTimeoutMs)
+        ? engine.settings.disconnectTimeoutMs
+        : DISCONNECT_TIMEOUT_MS;
+
+    session.deadline = now + windowMs;
     session.resolutionState = 'none';
     session.resolution = null;
     if (profileId !== null && profileId !== undefined) session.profileId = profileId;
@@ -97,7 +104,7 @@ function DisconnectPlayer(player, reason = 'client_closed', profileId = null) {
 //
 // Today's stopgap: compare the profileId the client connected with against the
 // one recorded when the slot went absent. That value has no durability guarantee
-// behind it yet — A5 is the track that gives it one — and local pass-device play
+// behind it yet - A5 is the track that gives it one - and local pass-device play
 // has a single client with no per-slot identity at all, which is why an absent
 // slot that never recorded a profileId matches any returning client.
 function IsReturningPlayer(profileId, playerSlot) {
@@ -150,7 +157,7 @@ function ReconnectPlayer(player, profileId = null) {
 }
 
 // A returning client missed whatever happened while it was away, and the event
-// queue can't tell it — that queue is "since the last flush", not a history log.
+// queue can't tell it - that queue is "since the last flush", not a history log.
 // So rebuild its whole view from current state instead of replaying anything.
 //
 // This is a SCOPED use of FilterStateForPlayer: one player, one occasion. It is
@@ -191,7 +198,7 @@ function BuildResyncSnapshot(player) {
         //
         //   gridRadius            board extent and render scale
         //   baseCampPositions     base camps, flag homes, and the fortify rules that
-        //                         refuse enemy base tiles — a rule, not decoration
+        //                         refuse enemy base tiles - a rule, not decoration
         //   respawnQueue          the respawn panel and its countdown
         //   unitCounts            what the recruit UI is allowed to offer
         //   playerActionTaken     gates whether a turn may be ended
@@ -213,14 +220,14 @@ function BuildResyncSnapshot(player) {
 // --- the deadline ----------------------------------------------------------
 
 // PROVISIONAL MECHANISM (Burn's §7 call, flagged for Track B to revisit).
-// The engine has no way to speak unprompted — Flush() only ever runs after an
-// inbound message — so a genuine server-side timer would need a transport
+// The engine has no way to speak unprompted - Flush() only ever runs after an
+// inbound message - so a genuine server-side timer would need a transport
 // capability that doesn't exist yet. Instead a connected client sends the
 // 'heartbeat' action, and that prompts this check.
 //
 // The heartbeat is ONLY a trigger to look. It carries no timing claim: what gets
 // compared is the server's own stored deadline against the server's own clock.
-// Same principle as A2's id resolution — never trust a client for something the
+// Same principle as A2's id resolution - never trust a client for something the
 // server can determine itself.
 //
 // Once Track B has real transports (which will want server-initiated events for
@@ -282,13 +289,27 @@ function ApplyDisconnectResolution(requester, absentPlayer, choice) {
         payload: { absentPlayer, choice },
     });
 
-    return { absentPlayer, choice, outcome: ResolveDisconnectOutcome(choice, absentPlayer) };
+    const outcome = ResolveDisconnectOutcome(choice, absentPlayer);
+
+    // Emitted, not only returned. The return value reaches whoever called SubmitAction,
+    // which in a hosted match is an ack the client is not supposed to read state from -
+    // and the OTHER player needs to hear about this too. Sending it through the event
+    // stream is the same path every other consequence takes.
+    engine.Emit({
+        type: 'DISCONNECT_RESOLVED',
+        player: requester,
+        absentPlayer,
+        choice,
+        outcome,
+    });
+
+    return { absentPlayer, choice, outcome };
 }
 
 // FILLED IN BY A4 (Testament). Was an intentionally empty hook through A3.
 //
 // Both choices serialize the live match through exactly the same canonical path a
-// manual save uses — BuildSaveObject in js/testament.js, called directly and
+// manual save uses - BuildSaveObject in js/testament.js, called directly and
 // in-process, no message round trip. That directness is why Testament's pure logic
 // is a shared root module rather than client-side code.
 //

@@ -6,7 +6,7 @@
 //
 // getEdgesOfTile is the one function here that isn't actually zero-dependency
 // (it reads engine.state.tiles) despite the guide listing it alongside the pure
-// ones — flagging rather than silently "fixing" it, see chat.
+// ones - flagging rather than silently "fixing" it, see chat.
 
 function roundAxial({ q, r }) {
     const s = -q - r;

@@ -1,7 +1,7 @@
 // === WebSocket transport adapter (B2) ===
 //
 // The second adapter behind A1's transport interface. It exposes the SAME two methods
-// the client already uses — Send(message) and OnMessage(handler) — so js/main.js and
+// the client already uses - Send(message) and OnMessage(handler) - so js/main.js and
 // every call site downstream cannot tell which one it is talking to. That was the
 // point of defining the interface in A1; this is the first thing to prove it.
 //
@@ -10,7 +10,7 @@
 //   LocalTransport.Send() returns the outcome SYNCHRONOUSLY, because the engine is in
 //   the same process and SubmitAction has already run by the time it returns. Over a
 //   socket nothing can be known synchronously. Send() therefore returns a Promise that
-//   settles when the host acks — and callers that ignore the return value (most of
+//   settles when the host acks - and callers that ignore the return value (most of
 //   them) keep working unchanged, because the authoritative answer was never the
 //   return value. It is the state-sync that follows.
 //
@@ -18,7 +18,7 @@
 //   worker that owns the engine. A client has no queue to drain.
 //
 // This file is CLIENT-side: it uses `WebSocket`, which is a browser global. It must
-// never be loaded by js/server/ or by the host — worker-smoke.js asserts the server
+// never be loaded by js/server/ or by the host - worker-smoke.js asserts the server
 // module is free of exactly this kind of thing.
 
 const WS_ACK_TIMEOUT_MS = 10000;
@@ -41,12 +41,21 @@ class WebSocketTransport {
         this.playerName = options.name || 'Player';
         this.buildVersion = options.version || null;
 
+        // B2 anti-cheat. A promise, because computing it means reading every file the
+        // page loaded; `hello` waits on it rather than racing it. What it is for and
+        // what it cannot do are both written out in js/client/build-fingerprint.js.
+        this.fingerprint = options.fingerprint || null;
+
         // Assigned by the host when this client takes a seat. The client does not get
-        // to choose it and does not send it with actions — the host stamps every
+        // to choose it and does not send it with actions - the host stamps every
         // forwarded message with the seat it recorded at join time. Held here only so
         // the renderer knows which side it is drawing for.
         this.seat = null;
         this.room = null;
+
+        // Set by Close(). A socket that shuts because the player pressed Back is not a
+        // socket that dropped, and onclose cannot tell the difference on its own.
+        this.closingDeliberately = false;
     }
 
     // --- connection ---------------------------------------------------------
@@ -72,6 +81,7 @@ class WebSocketTransport {
                     profileId: this.profileId,
                     name: this.playerName,
                     version: this.buildVersion,
+                    fingerprint: this.fingerprint,
                 });
             };
 
@@ -100,12 +110,18 @@ class WebSocketTransport {
             this.socket.onclose = () => {
                 this.connected = false;
                 this.RejectAllPending('socket_closed');
+
+                // Announced only when it was NOT asked for. Reporting a deliberate
+                // close as a lost connection put an error toast in front of a player
+                // who had simply pressed Back, and bounced them to the root menu.
+                if (this.closingDeliberately) return;
                 this.Receive({ type: 'host-disconnected' });
             };
         });
     }
 
     Close() {
+        this.closingDeliberately = true;
         if (this.socket) this.socket.close();
     }
 
@@ -140,7 +156,7 @@ class WebSocketTransport {
     // queue because the engine is in the same process; here the engine is a worker on
     // the host, and it drains itself after every action it applies.
     //
-    // So this is a no-op — but it has to EXIST. HandleActionEvents (js/client/actions.js)
+    // So this is a no-op - but it has to EXIST. HandleActionEvents (js/client/actions.js)
     // calls it as the single drain point after any engine function, and that call site
     // has no business knowing which transport is underneath. Leaving it undefined threw
     // mid-match, and because the throw happened inside a socket callback it killed the
@@ -207,11 +223,16 @@ class WebSocketTransport {
             case 'match-ended':
             case 'match-error':
             case 'host-disconnected':
+            // A WebRTC offer or answer on its way to the other seat. It rides the lobby
+            // stream because it belongs to setting a match up, not to playing one - and
+            // because the default branch below hands everything else to the RENDERER,
+            // which would try to draw it as a board update.
+            case 'signal':
                 this.lobbySubscribers.forEach(handler => handler(message));
                 return;
 
             default:
-                // state-sync and state-resync — the match stream the renderer wants.
+                // state-sync and state-resync - the match stream the renderer wants.
                 this.subscribers.forEach(handler => handler(message));
         }
     }

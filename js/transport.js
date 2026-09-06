@@ -42,7 +42,7 @@ function MakeStateSyncMessage(events, stateVersion) {
     return { type: 'state-sync', events, stateVersion };
 }
 
-// A returning client can't be caught up from the event queue — that queue holds
+// A returning client can't be caught up from the event queue - that queue holds
 // "since the last flush", not "everything since you left". This carries a whole
 // filtered view instead, built by BuildResyncSnapshot (js/server/session.js).
 function MakeResyncMessage(player, snapshot, stateVersion) {
@@ -64,7 +64,7 @@ class LocalTransport {
 
     // Client side: listen for server -> client messages.
     //
-    // An OnMessage subscriber is OMNISCIENT — it receives the unfiltered event
+    // An OnMessage subscriber is OMNISCIENT - it receives the unfiltered event
     // stream. That is correct for the one case it serves: local pass-device play,
     // where a single browser draws the board for both humans and the handover is
     // covered by showPassDeviceOverlay. Filtering here would blank out the player
@@ -89,7 +89,7 @@ class LocalTransport {
         };
     }
 
-    // Unconditional fan-out, for messages that are already addressed — a resync is
+    // Unconditional fan-out, for messages that are already addressed - a resync is
     // built for one player and delivered as-is. Per-recipient work happens in Flush.
     Deliver(message) {
         this.connections.forEach(connection => connection.handler(message));
@@ -153,7 +153,7 @@ class LocalTransport {
             return { ok: true, connected: false, reason: message.reason };
         }
 
-        // One player dropped. The transport itself stays up — the other client
+        // One player dropped. The transport itself stays up - the other client
         // is still here, and per §6 keeps playing until the turn reaches the
         // absent player.
         const outcome = DisconnectPlayer(message.player, message.reason, message.profileId);
@@ -201,7 +201,7 @@ class LocalTransport {
 
             // The renderable half. Events say what happened; this says what the board
             // now looks like from where this player is standing. A remote client that
-            // received only events could not draw a move — ApplyMoveAction emits LOG
+            // received only events could not draw a move - ApplyMoveAction emits LOG
             // lines and nothing positional.
             //
             // A whole filtered view per action rather than a true diff: the board is

@@ -1,7 +1,7 @@
 /* === Main menu (B1) ===
  *
  * Built on the CSS custom properties already declared in css/main.css rather than
- * fresh literals — Candidates Track E is going to make colour a single swappable
+ * fresh literals - Candidates Track E is going to make colour a single swappable
  * source of truth, and there is no reason for a brand-new file to add to the pile
  * it will have to clean up.
  *
@@ -47,7 +47,7 @@
 }
 
 .fh-menu__title {
-    font-family: 'Geostar', cursive;
+    font-family: 'Lexend Deca', 'Exo 2', sans-serif;
     color: var(--color-warning);
     font-size: 1.8em;
     margin: 0 0 22px;
@@ -59,7 +59,7 @@
     margin: 0 0 26px;
 }
 
-/* One column, uniform width — the old menu let each button size to its label,
+/* One column, uniform width - the old menu let each button size to its label,
  * which read as a list of unrelated controls rather than a set of choices. */
 .fh-menu__options {
     display: flex;
@@ -309,7 +309,7 @@
     border-left: 5px solid #8E2418;
 }
 
-/* Yellow needs dark text — white on gold is unreadable, and this is the severity
+/* Yellow needs dark text - white on gold is unreadable, and this is the severity
  * most likely to appear mid-action when the player is looking elsewhere. */
 .fh-toast--warn {
     background-color: var(--color-warning);
@@ -317,7 +317,7 @@
     border-left: 5px solid #A87A00;
 }
 
-/* Green reads as a confirmation the player asked for — save succeeded, game loaded.
+/* Green reads as a confirmation the player asked for - save succeeded, game loaded.
  * Short-lived by design; it is an acknowledgement, not information. */
 .fh-toast--ok {
     background-color: var(--color-confirm);
@@ -370,7 +370,16 @@
     padding: 10px;
 }
 
-.fh-modal__body--form { display: flex; flex-direction: column; gap: 4px; padding: 18px; }
+.fh-modal__body--form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 18px;
+
+    /* See above: the 46vh cap belongs to the room list, not to a form. */
+    max-height: none;
+    overflow: visible;
+}
 
 .fh-modal__foot {
     padding: 14px 18px;
@@ -383,7 +392,7 @@
  *
  * Fixed columns rather than flex-grow on each: name | count | privacy | build | bars.
  * A grid keeps the columns aligned down the list, which is the whole point of a
- * tabular row — with flex, a long room name would shove everything else out of line. */
+ * tabular row - with flex, a long room name would shove everything else out of line. */
 .fh-room {
     display: grid;
     grid-template-columns: 1fr auto 72px 96px auto;
@@ -498,7 +507,7 @@
 .fh-seat__pip--p1 { background: var(--p1-color-primary); }
 .fh-seat__pip--p2 { background: var(--p2-color-primary); }
 
-/* A seat the host can move into. Not styled as a button — it is a row you can click,
+/* A seat the host can move into. Not styled as a button - it is a row you can click,
  * and dressing it up as a control would fight the list it sits in. */
 .fh-seat--pickable {
     cursor: pointer;
@@ -593,4 +602,570 @@
 
 @media (prefers-reduced-motion: reduce) {
     .fh-refresh--spinning svg { animation: none; }
+}
+
+/* A room holding a seat for you. Marked out because it is the one row in the list
+ * that is not a new game - it is the match you were already in. */
+.fh-room--rejoin {
+    border-color: var(--color-warning);
+    background: rgba(255, 192, 32, 0.1);
+}
+
+.fh-room--rejoin .fh-room__privacy { color: var(--color-warning); font-weight: bold; }
+
+/* === Disconnect resolution (B3) ===
+ *
+ * Centred, above everything including the toasts: the match cannot advance until it is
+ * answered, so nothing should be able to sit on top of it. Same white rounded border as
+ * the rest of the screens. */
+
+.fh-resolve {
+    position: fixed;
+    inset: 0;
+    z-index: 3200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(20, 28, 36, 0.72);
+    backdrop-filter: blur(3px);
+    font-family: 'Exo 2', sans-serif;
+}
+
+.fh-resolve__panel {
+    width: 100%;
+    max-width: 520px;
+    padding: 26px 28px;
+    border: var(--fh-panel-border);
+    border-radius: var(--fh-panel-radius);
+    background: var(--bg-color);
+    color: var(--color-text-main);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.fh-resolve__title {
+    margin: 0 0 12px;
+    font-family: 'Lexend Deca', 'Exo 2', sans-serif;
+    font-size: 1.5em;
+    color: var(--color-warning);
+    text-align: center;
+}
+
+.fh-resolve__body {
+    margin: 0 0 22px;
+    text-align: center;
+    line-height: 1.55;
+    color: var(--color-text-muted);
+}
+
+.fh-resolve__choices { display: flex; flex-direction: column; gap: 12px; }
+
+.fh-resolve__choice {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 14px 16px;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    border-radius: 10px;
+    color: var(--color-text-main);
+    font: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.fh-resolve__choice:hover:not(:disabled),
+.fh-resolve__choice:focus-visible:not(:disabled) {
+    border-color: var(--color-warning);
+    background: rgba(255, 192, 32, 0.1);
+    outline: none;
+}
+
+.fh-resolve__choice:disabled { opacity: 0.5; cursor: wait; }
+
+.fh-resolve__choice-label { font-weight: bold; }
+.fh-resolve__choice-detail { font-size: 0.85em; color: var(--color-text-muted); line-height: 1.45; }
+
+.fh-resolve__working {
+    margin: 16px 0 0;
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 0.9em;
+}
+
+/* The modernisation prompt reuses the resolution panel; only the change list is new. */
+.fh-migrate { max-width: 580px; }
+
+.fh-migrate__changes {
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 12px 14px;
+    max-height: 34vh;
+    overflow-y: auto;
+}
+
+.fh-migrate__changes-head {
+    font-weight: bold;
+    color: var(--color-warning);
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.fh-migrate__changes ul { margin: 0; padding-left: 18px; }
+
+.fh-migrate__changes li {
+    font-size: 0.84em;
+    line-height: 1.55;
+    color: var(--color-text-muted);
+    font-family: 'Courier New', monospace;
+}
+
+/* === Where the match runs (B2) ===
+   Two radio options, the second of which is often unavailable - Burn's own connection
+   is CGNAT and cannot host directly - so the disabled state has to read as "your
+   network will not do this", not as a broken control. Hence the reason line stays at
+   full contrast while the label above it dims: the explanation is the useful part. */
+.fh-host-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.fh-host-choice__option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.fh-host-choice__option:hover {
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+.fh-host-choice__option input {
+    margin-top: 3px;
+    flex: 0 0 auto;
+}
+
+.fh-host-choice__option span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.fh-host-choice__option strong {
+    font-weight: 600;
+}
+
+.fh-host-choice__option em {
+    font-style: normal;
+    font-size: 0.85em;
+    opacity: 0.72;
+}
+
+.fh-host-choice__option--off {
+    cursor: not-allowed;
+}
+
+.fh-host-choice__option--off strong {
+    opacity: 0.45;
+}
+
+/* === Direct Connect (B2) ===
+   One box holds the whole step: explanation, inputs, and the buttons that act on them.
+   An earlier version left the buttons floating below the bordered card, which read as
+   page furniture rather than as part of the thing above them.
+
+   The numbered steps are separated by real space and a hairline rule. They are two
+   different actions taken minutes apart, with a trip to a chat window in between, and
+   packing them together made the screen look like one dense form rather than a sequence.
+
+   Codes sit in a real textarea rather than a styled div so the browser's own select-all
+   and copy keep working when the clipboard API is refused, which is exactly the
+   locked-down environment this screen is most likely to be reached from. */
+.fh-direct__body {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    padding: 22px;
+
+    /* .fh-modal__body caps itself at 46vh and scrolls, which is right for a room list
+       of unknown length. This box has a known, short amount in it and there is nothing
+       below it competing for the space, so it grows and lets the page scroll if it ever
+       needs to. An inner scrollbar on four fixed elements is just a smaller window. */
+    max-height: none;
+    overflow: visible;
+}
+
+.fh-direct__blurb {
+    margin: 0;
+    opacity: 0.82;
+    line-height: 1.55;
+}
+
+.fh-direct__warning {
+    margin: -10px 0 0;
+    padding: 9px 12px;
+    border-radius: 6px;
+    border-left: 3px solid #e0a83c;
+    background: rgba(224, 168, 60, 0.1);
+    font-size: 0.86em;
+    line-height: 1.45;
+    opacity: 0.9;
+}
+
+.fh-direct__note {
+    margin: 0;
+    font-size: 0.86em;
+    opacity: 0.62;
+    line-height: 1.5;
+}
+
+.fh-direct__error {
+    margin: 0;
+    padding: 9px 12px;
+    border-radius: 6px;
+    border-left: 3px solid #ff8a80;
+    background: rgba(255, 138, 128, 0.09);
+    color: #ff9d94;
+    font-size: 0.88em;
+    line-height: 1.45;
+}
+
+/* One numbered step. */
+.fh-direct__block {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+/* The second step onward gets a rule above it, so the sequence reads as steps rather
+   than as a stack of fields. */
+.fh-direct__block + .fh-direct__block {
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.fh-direct__block .fh-profile__label {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.fh-direct__code {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 68px;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78em;
+    line-height: 1.5;
+    word-break: break-all;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(0, 0, 0, 0.28);
+    color: inherit;
+}
+
+.fh-direct__code:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.34);
+}
+
+.fh-direct__row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 2px;
+}
+
+/* Sized down on purpose: it belongs to the code above it and is not one of the choices
+   being offered at the bottom of the box. */
+.fh-direct__copy {
+    flex: 0 0 auto;
+    padding: 5px 18px;
+    font-size: 0.85em;
+}
+
+.fh-direct__hint {
+    font-size: 0.83em;
+    opacity: 0.58;
+}
+
+.fh-direct__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 2px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* === Direct Connect, as reached from the lobby ===
+   Sits under the room list and the Create Room row. Quieter than both, because it is the
+   way out when the list is empty rather than a third option to weigh against them. */
+.fh-lobby__fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fh-lobby__direct {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    padding: 7px 22px;
+    font-size: 0.9em;
+
+    /* .action-button carries a solid blue drop shadow that reads as the bottom edge of
+       a raised key. Under a TRANSPARENT face it is just a blue smear with nothing above
+       it, which is why this looked wrong at rest and fine on hover. The press effect
+       goes with it: there is no raised edge left to travel down. */
+    box-shadow: none;
+}
+
+.fh-lobby__direct:active:not(:disabled) {
+    transform: none;
+}
+
+.fh-lobby__direct:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.45);
+}
+
+.fh-lobby__disclaimer {
+    margin: 0;
+    text-align: center;
+    font-size: 0.82em;
+    line-height: 1.45;
+    opacity: 0.6;
+    max-width: 34em;
+}
+
+/* The gear sits on the same line as the label, centred with it. */
+.fh-menu__settings {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* === Install FortHex (the corner "Download Game" button) ===
+   The green square that used to live in index.html as #downloadButton, restored to the
+   same corner and the same size. It renders inside the React menu tree now, so it exists
+   only while the menu is up - which is the whole change: as a plain fixed element it also
+   sat over the board for the entire match.
+
+   Disabled rather than hidden when the browser has not offered an install, because it did
+   the opposite before (always enabled, always there) and answered most clicks with
+   "cannot be installed right now". */
+.fh-install {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background-color: #27B060;
+    color: white;
+    box-shadow: 0 4px #208050;
+    cursor: pointer;
+    font-family: 'Exo 2', sans-serif;
+    transition: background-color 0.3s, box-shadow 0.3s, transform 0.1s, opacity 0.2s;
+    z-index: 1001;
+}
+
+.fh-install svg {
+    width: 28px;
+    height: 28px;
+}
+
+/* The label is for screen readers and for anyone browsing with images or icon fonts
+   off. The button is 60px square and the icon says the rest. */
+.fh-install__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.fh-install:hover:not(:disabled) {
+    background-color: #208050;
+    box-shadow: 0 4px #207040;
+}
+
+.fh-install:active:not(:disabled) {
+    box-shadow: 0 1px #207040;
+    transform: translateY(3px);
+}
+
+.fh-install:disabled {
+    background-color: #4A6A58;
+    box-shadow: 0 4px #3A5446;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* === Room search ===
+   Sits between the header and the list, inside the same box. Deliberately plain: it is a
+   filter over a short list, not a feature, and anything with more presence than this
+   would outweigh the rooms it is meant to help you find. */
+.fh-lobby__search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--color-text-muted);
+}
+
+.fh-lobby__searchinput {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-main);
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.92em;
+    padding: 2px 0;
+}
+
+.fh-lobby__searchinput:focus {
+    outline: none;
+}
+
+.fh-lobby__searchinput::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.75;
+}
+
+.fh-lobby__searchclear {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--color-text-main);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.fh-lobby__searchclear:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+/* === Map choice in Create Room === */
+.fh-room__map {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.fh-room__mapselect {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 11px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(0, 0, 0, 0.28);
+    color: var(--color-text-main);
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.95em;
+}
+
+.fh-room__mapselect:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.34);
+}
+
+/* A file input styled as a link rather than a button: it is the exception, not the
+   ordinary way to pick a map, and a second full-width control here would read as an
+   equal alternative to the list above it. */
+.fh-room__mapfile {
+    align-self: flex-start;
+    cursor: pointer;
+    font-size: 0.86em;
+    opacity: 0.72;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.fh-room__mapfile:hover {
+    opacity: 1;
+}
+
+.fh-room__mapfile input {
+    display: none;
+}
+
+/* === Resuming a saved match in Create Room ===
+   Replaces the map in meaning, not in position: a save carries its own board, so this
+   sits below the map controls and says what it is doing instead of them. */
+.fh-room__resume {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border-left: 3px solid #20B060;
+    background: rgba(32, 176, 96, 0.1);
+}
+
+.fh-room__resumehead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.fh-room__resumenote {
+    font-size: 0.84em;
+    opacity: 0.72;
+}
+
+.fh-room__resumeclear {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--color-text-main);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.fh-room__resumeclear:hover {
+    background: rgba(255, 255, 255, 0.22);
 }

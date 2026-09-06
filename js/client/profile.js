@@ -1,7 +1,7 @@
 // === Local player profile (A5) ===
 //
 // A name, a stable id, and one consent flag. That is the whole of it. There is
-// no authentication, no password, and no server-verified identity — deliberately,
+// no authentication, no password, and no server-verified identity - deliberately,
 // per the roadmap. This is device/browser-scoped: a cleared cache or a different
 // browser is a different profile, and that is an accepted limitation rather than
 // a gap to close here.
@@ -9,7 +9,7 @@
 // Why this is client-side rather than shared: it is bound to browser storage APIs
 // (localStorage, navigator.storage.persist), which a Worker does not have. Same
 // reasoning A1 used to keep ai.js's population code client-side. The engine never
-// needs to know how a profile is stored — only what its `id` is, as a string,
+// needs to know how a profile is stored - only what its `id` is, as a string,
 // which is exactly how it has treated `profileId` since A1.
 //
 // Created LAZILY. Nothing here runs at startup: the only things that create a
@@ -27,10 +27,10 @@
 // per-purpose flags (Burn's call, guide §6.1): one blanket agreement covers both
 // match archiving and balance telemetry. If those ever need separating, that is a
 // future field plus a second checkbox, not something to build defensively now.
-// Bumped to 2 by B1, which added `avatar` — a preset portrait key, chosen on the
+// Bumped to 2 by B1, which added `avatar` - a preset portrait key, chosen on the
 // profile-setup screen. No migration function is needed for it: an absent avatar
 // reads as null and the UI falls back to a default, which is exactly what a v1
-// profile produces. Nor does it reach Testament — ProfileForSave still strips a
+// profile produces. Nor does it reach Testament - ProfileForSave still strips a
 // profile down to { id, name }, so the save schema is untouched by this.
 const PROFILE_VERSION = 2;
 
@@ -57,14 +57,14 @@ function GetAvatarSrc(key) {
 }
 
 // Cached so repeated GetProfile() calls in a frame don't re-parse JSON. Set to
-// undefined (not null) to mean "not read yet" — null is a real answer here, and
+// undefined (not null) to mean "not read yet" - null is a real answer here, and
 // the common one.
 let cachedProfile = undefined;
 
 // --- reads ------------------------------------------------------------------
 
 // Returns the stored profile, or null if none exists. "No profile" is a normal,
-// expected state — the majority state, in fact — and never an error.
+// expected state - the majority state, in fact - and never an error.
 function GetProfile() {
     if (cachedProfile !== undefined) return cachedProfile;
 
@@ -120,7 +120,7 @@ function ReadProfileFromStorage() {
 // --- writes -----------------------------------------------------------------
 
 // Creates and stores a new profile, replacing any existing one. Callers that want
-// "create only if absent" want GetOrCreateProfile instead — this one is the
+// "create only if absent" want GetOrCreateProfile instead - this one is the
 // unconditional form, and the console command that exposes it says so.
 //
 // `consent` is captured HERE rather than set afterwards (guide §6.2): the consent
@@ -143,20 +143,20 @@ function CreateProfile(name, consent = false, avatar = null) {
 
 // The function the real Menu > Multiplayer > Online handler calls. First call
 // creates; every call after returns what is already there. It does NOT rename or
-// re-consent an existing profile — a returning player's stored answers stand.
+// re-consent an existing profile - a returning player's stored answers stand.
 function GetOrCreateProfile(name, consent = false, avatar = null) {
     const existing = GetProfile();
     if (existing) return existing;
     return CreateProfile(name, consent, avatar);
 }
 
-// Changes the stored flag. No archive logic here — A6 is what reads it and acts.
+// Changes the stored flag. No archive logic here - A6 is what reads it and acts.
 // Returns the updated profile, or null if there is no profile to update (which is
 // not an error: nothing has consented because nothing exists).
 function SetConsent(value) {
     const profile = GetProfile();
     if (!profile) {
-        console.warn('[Profile] SetConsent called with no profile — nothing to update.');
+        console.warn('[Profile] SetConsent called with no profile - nothing to update.');
         return null;
     }
 
@@ -203,12 +203,12 @@ function ProfileForSave(profile) {
 
 // crypto.randomUUID is the right generator: collision-safe, standard, and not
 // something worth hand-rolling. It is only defined in a SECURE CONTEXT, though,
-// and FortHex is reachable over plain http on a LAN — where the property is simply
+// and FortHex is reachable over plain http on a LAN - where the property is simply
 // undefined and calling it would throw mid-creation.
 //
 // So: the standard API when it exists, and the same v4 layout assembled from
 // crypto.getRandomValues (available in insecure contexts too) when it doesn't.
-// That is not a custom generator — same CSPRNG, same shape, same guarantees.
+// That is not a custom generator - same CSPRNG, same shape, same guarantees.
 function NewProfileId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
@@ -225,14 +225,14 @@ function NewProfileId() {
 
     // No crypto at all is not a browser this game runs in, but an id is the one
     // thing a profile cannot be created without, so it does not get to be absent.
-    console.warn('[Profile] No crypto API — falling back to a non-cryptographic id.');
+    console.warn('[Profile] No crypto API - falling back to a non-cryptographic id.');
     return 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 }
 
 // Progressive enhancement, per the roadmap: ask, don't branch on the answer. A
 // granted request protects the profile id (and the existing settings and autosaves
 // alongside it) from silent eviction under storage pressure. A denial or a missing
-// API leaves behavior exactly as it is today — best-effort localStorage — so there
+// API leaves behavior exactly as it is today - best-effort localStorage - so there
 // is no fallback path to write.
 function RequestPersistentStorage() {
     if (typeof navigator === 'undefined') return;
@@ -245,7 +245,7 @@ function RequestPersistentStorage() {
 
 // --- testing seam -----------------------------------------------------------
 
-// Drops the profile entirely. Not reachable from any UI — the roadmap rules out
+// Drops the profile entirely. Not reachable from any UI - the roadmap rules out
 // account management, and a player deleting their identity is not a flow A5 was
 // asked to build. It exists so the console can test the "no profile" path without
 // the player having to open devtools and clear site data by hand.

@@ -23,8 +23,8 @@ const engine = CreateEngineInstance();
 // Local, in-process for now. Track B swaps this for WebRTC/WebSocket/UPnP
 // adapters carrying the same four message shapes.
 // `let`, not `const`: an online match swaps this for the WebSocket adapter and swaps
-// it back when the match ends. Every call site reads it from inside a function — there
-// is only one that matters for gameplay, js/client/actions.js — so reassigning is all
+// it back when the match ends. Every call site reads it from inside a function - there
+// is only one that matters for gameplay, js/client/actions.js - so reassigning is all
 // the handover needs. That was the point of A1 defining a transport interface.
 let transport = CreateLocalTransport(engine);
 
@@ -42,15 +42,23 @@ transport.OnMessage((message) => {
 // stops being the authority and becomes a renderer: actions go out over the socket, and
 // what comes back is a filtered view that ApplyRemoteView writes into engine.state so
 // every existing renderer keeps working untouched.
+// Releases the socket subscription when the hosted match ends. Held at module scope
+// because BeginOnlineMatchWith and EndOnlineMatch are the two halves of one lifecycle
+// and the second cannot undo the first without it.
+let onlineUnsubscribe = null;
+
 function BeginOnlineMatchWith(socketTransport, seat, options = {}) {
     if (!socketTransport) return;
 
+    // Never stack two subscriptions on one socket.
+    if (onlineUnsubscribe) { onlineUnsubscribe(); onlineUnsubscribe = null; }
+
     transport = socketTransport;
-    BeginRemoteMatch(seat);
+    BeginRemoteMatch(seat, options.isHost);
 
     // Fog is a property of the MATCH, chosen when the room was created, not of this
-    // device's settings panel. The host already filters what it sends accordingly —
-    // which is why enemy units were correctly missing — but the client draws the fog
+    // device's settings panel. The host already filters what it sends accordingly -
+    // which is why enemy units were correctly missing - but the client draws the fog
     // itself from engine.settings, and nothing was telling it the match had any. The
     // result was a board with no fog drawn and enemies that were simply absent.
     engine.settings.fogOfWarEnabled = !!options.fogOfWar;
@@ -59,9 +67,15 @@ function BeginOnlineMatchWith(socketTransport, seat, options = {}) {
     // the canvas or the side panels.
     SizeBoardAndPanels();
 
-    console.log('[Online] Match handed over to the socket. You are player ' + seat + '.');
+    console.log('[Online] Match handed over to the socket. You are player ' + seat
+        + ' (' + (options.isHost ? 'host' : 'guest') + ').');
 
-    socketTransport.OnMessage((message) => {
+    onlineUnsubscribe = socketTransport.OnMessage((message) => {
+        // A message that arrives after the match has been left is not ours to
+        // apply. The unsubscribe below closes the window, but a payload already
+        // in flight can still land in it.
+        if (!IsRemoteMatch()) return;
+
         // Wrapped, because a throw inside a socket callback goes nowhere useful: the
         // subscription simply stops delivering and the board silently freezes. That is
         // exactly the failure that is impossible to diagnose from the outside, so it
@@ -84,7 +98,7 @@ function BeginOnlineMatchWith(socketTransport, seat, options = {}) {
                 ApplyRemoteView(message.view);
                 RefreshRemoteUi();
             } else {
-                // Not fatal, but it means this update changed nothing drawable — worth
+                // Not fatal, but it means this update changed nothing drawable - worth
                 // saying out loud rather than leaving the board looking stuck.
                 console.warn('[Online] state-sync arrived with no board view.',
                     (message.events || []).map(e => e.type).join(', ') || '(no events)');
@@ -102,11 +116,27 @@ function BeginOnlineMatchWith(socketTransport, seat, options = {}) {
     ShowSuccess('Match started. You are ' + (seat === 1 ? 'Blue' : 'Red') + '.');
 }
 
-// Back to the in-process engine. Used when an online match ends or the socket drops —
+// Back to the in-process engine. Used when an online match ends or the socket drops -
 // without it the client would keep posting actions into a closed socket.
 function EndOnlineMatch() {
+    // THE important line. Without it the old subscription stayed live: every state-sync
+    // the host kept sending was still applied to the local engine, so a player who left
+    // for a local game watched that game get overwritten by the online board they had
+    // just walked away from - including whose turn it was, which handed them control of
+    // both sides. It also re-showed the disconnect banner for the person who left.
+    if (onlineUnsubscribe) { onlineUnsubscribe(); onlineUnsubscribe = null; }
+
     EndRemoteMatch();
     ClearOnlineContext();
+
+    // A direct match owns things a socket never did - a peer connection and a Web
+    // Worker running the authoritative engine. Dropping the transport reference does
+    // not stop either of them, and this is the one place every remote match ends, so
+    // it is the one place that can be sure of closing them.
+    if (window.FortHexUI && window.FortHexUI.EndDirectSession) {
+        window.FortHexUI.EndDirectSession();
+    }
+
     transport = CreateLocalTransport(engine);
     transport.OnMessage((message) => {
         if (message.type === 'state-sync') message.events.forEach(HandleActionEvent);
@@ -114,7 +144,7 @@ function EndOnlineMatch() {
 }
 
 // A5: the profile is read once, here, and handed to the engine as plain data.
-// Reading it does NOT create one — GetProfile returns null for the majority of
+// Reading it does NOT create one - GetProfile returns null for the majority of
 // players, who have never entered the Online flow, and null is the normal answer.
 // The engine carries it so BuildSaveObject (js/testament.js) can attach it to a
 // save without that DOM-free module reaching for localStorage, which it does not

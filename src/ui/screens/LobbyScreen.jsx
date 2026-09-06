@@ -9,14 +9,15 @@ import {
 // as the rest of the screens.
 //
 // Each row is: name | occupancy | privacy | build | connection.
-// The build column matters more than it looks — two players on different builds can
+// The build column matters more than it looks - two players on different builds can
 // disagree about the rules, and this is the only place that is visible before the
 // mismatch turns into a desync mid-match.
-export function LobbyScreen({ onBack, onCreate }) {
+export function LobbyScreen({ onBack, onCreate, onDirect }) {
     const net = useSyncExternalStore(Subscribe, GetSnapshot);
     const [pendingRoom, setPendingRoom] = useState(null);  // a locked room awaiting a code
     const [code, setCode] = useState('');
     const [refreshing, setRefreshing] = useState(false);
+    const [search, setSearch] = useState('');
 
     // The spin is time-based rather than tied to the reply. A LAN round trip is a few
     // milliseconds, so a spinner that stopped when the list arrived would flicker and
@@ -51,6 +52,19 @@ export function LobbyScreen({ onBack, onCreate }) {
         GetTransport().JoinRoom({ roomId: room.id });
     };
 
+    // Name and join code, nothing cleverer. The code is searchable because the way a
+    // player usually arrives here is with one somebody sent them, and hunting for the
+    // matching row by eye is worse than typing it.
+    //
+    // A locked room's code is never in the listing, so this cannot be used to discover
+    // one: a private room only matches on its name.
+    const query = search.trim().toLowerCase();
+    const rooms = query
+        ? net.rooms.filter(room =>
+            (room.name || '').toLowerCase().includes(query)
+            || (room.joinCode || '').toLowerCase().includes(query))
+        : net.rooms;
+
     const SubmitCode = () => {
         if (!pendingRoom) return;
         GetTransport().JoinRoom({ roomId: pendingRoom.id, code: code.trim().toUpperCase() });
@@ -65,7 +79,7 @@ export function LobbyScreen({ onBack, onCreate }) {
                     <span>Rooms</span>
 
                     {/* The list also polls every five seconds, but a poll is a promise
-                        about the future — this is for the moment you want to know NOW,
+                        about the future - this is for the moment you want to know NOW,
                         having just told a friend to make a room. */}
                     <button
                         type="button"
@@ -87,11 +101,47 @@ export function LobbyScreen({ onBack, onCreate }) {
 
                     <span className="fh-modal__status">
                         {net.status === 'connecting' && 'Connecting…'}
-                        {net.status === 'online' && net.rooms.length + ' available'}
+                        {net.status === 'online' && (query
+                            ? rooms.length + ' of ' + net.rooms.length
+                            : net.rooms.length + ' available')}
                         {net.status === 'offline' && 'Not connected'}
                         {net.status === 'error' && 'Unavailable'}
                     </span>
                 </div>
+
+                {/* Only once there is enough to be worth sifting. A search box over two
+                    rooms is clutter, and the count in the header already answers the
+                    question it would. */}
+                {net.status === 'online' && net.rooms.length > 3 && (
+                    <div className="fh-lobby__search">
+                        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2.2" />
+                            <path d="M16.5 16.5 21 21" fill="none" stroke="currentColor"
+                                  strokeWidth="2.2" strokeLinecap="round" />
+                        </svg>
+                        <input
+                            type="text"
+                            className="fh-lobby__searchinput"
+                            placeholder="Search rooms"
+                            value={search}
+                            maxLength={40}
+                            autoComplete="off"
+                            aria-label="Search rooms by name or code"
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                className="fh-lobby__searchclear"
+                                onClick={() => setSearch('')}
+                                title="Clear search"
+                                aria-label="Clear search"
+                            >
+                                ×
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 <div className="fh-modal__body">
                     {net.status === 'error' && (
@@ -106,24 +156,40 @@ export function LobbyScreen({ onBack, onCreate }) {
                         <p className="fh-lobby__empty">No rooms yet. Create one.</p>
                     )}
 
-                    {net.status === 'online' && net.rooms.map(room => {
+                    {/* Distinct from "no rooms": there ARE rooms, the search just hid
+                        them. Saying "create one" here would be answering a question
+                        nobody asked. */}
+                    {net.status === 'online' && net.rooms.length > 0 && rooms.length === 0 && (
+                        <p className="fh-lobby__empty">No rooms match that.</p>
+                    )}
+
+                    {net.status === 'online' && rooms.map(room => {
                         const full = room.players >= room.capacity;
                         const playing = room.state === 'in-progress';
-                        const closed = full || playing;
+
+                        // A match in progress is closed to strangers, but the player
+                        // whose seat is still being held for them can walk back in.
+                        // Without this a disconnected player had nowhere to go: their
+                        // room was right there and refused them.
+                        const closed = !room.canRejoin && (full || playing);
 
                         return (
                             <button
                                 key={room.id}
                                 type="button"
-                                className={'fh-room' + (closed ? ' fh-room--closed' : '')}
+                                className={'fh-room'
+                                    + (closed ? ' fh-room--closed' : '')
+                                    + (room.canRejoin ? ' fh-room--rejoin' : '')}
                                 disabled={closed}
                                 onClick={() => Join(room)}
-                                title={playing ? 'This match is already under way' : undefined}
+                                title={room.canRejoin
+                                    ? 'Rejoin this match'
+                                    : (playing ? 'This match is already under way' : undefined)}
                             >
                                 <span className="fh-room__name">{room.name}</span>
                                 <span className="fh-room__count">{room.players}/{room.capacity}</span>
                                 <span className="fh-room__privacy">
-                                    {room.locked ? 'Private' : 'Public'}
+                                    {room.canRejoin ? 'Rejoin' : (room.locked ? 'Private' : 'Public')}
                                 </span>
                                 <span className="fh-room__version">{room.hostVersion || 'unknown'}</span>
                                 <SignalBars level={room.quality} />
@@ -133,7 +199,7 @@ export function LobbyScreen({ onBack, onCreate }) {
                 </div>
 
                 {/* A locked room asks for its code in place rather than on another
-                    screen — the list is the context for what you are unlocking. */}
+                    screen - the list is the context for what you are unlocking. */}
                 {pendingRoom && (
                     <div className="fh-modal__foot fh-modal__foot--stack">
                         <label className="fh-profile__label" htmlFor="fhRoomCode">
@@ -166,6 +232,20 @@ export function LobbyScreen({ onBack, onCreate }) {
                     Create Room
                 </MenuButton>
                 <MenuButton variant="cancel" onClick={() => { Disconnect(); onBack(); }}>Back</MenuButton>
+            </div>
+
+            {/* Below the rooms, and deliberately quieter than Create Room. This is the
+                way out when the list above is empty because nothing is running - not a
+                third way to play that anybody should be weighing against the other two.
+                Reachable even while the lobby is offline, since that is precisely when
+                it is worth reaching. */}
+            <div className="fh-lobby__fallback">
+                <MenuButton className="fh-lobby__direct" onClick={() => { ClearError(); onDirect(); }}>
+                    Direct Connect
+                </MenuButton>
+                <p className="fh-lobby__disclaimer">
+                    Recommended to use direct connect only if FortHex servers are offline.
+                </p>
             </div>
         </div>
     );

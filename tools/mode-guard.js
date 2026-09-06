@@ -1,4 +1,4 @@
-// FortHex — stops "singleplayer" standing in for "the player has a side"  (B2)
+// FortHex - stops "singleplayer" standing in for "the player has a side"  (B2)
 //
 //   node tools/mode-guard.js
 //
@@ -8,18 +8,18 @@
 // action-button gating were all written as `gameMode === 'singleplayer'`.
 //
 // Every one of those silently did nothing in an online match, and each surfaced as its
-// own separate bug days apart — both players able to drag both armies, fog computed
+// own separate bug days apart - both players able to drag both armies, fog computed
 // from the opponent's viewpoint, a win by annihilation on the first end-turn. They were
 // never separate bugs. They were one wrong idea, repeated.
 //
 // The right question was never the mode. It is:
 //
-//   IsBoundToOneSide()  — does this client play one side, or both?
-//   IsForeignUnit(u)    — is that somebody else's unit?
-//   IsRemoteMatch()     — is the authority elsewhere, so we must not decide?
+//   IsBoundToOneSide()  - does this client play one side, or both?
+//   IsForeignUnit(u)    - is that somebody else's unit?
+//   IsRemoteMatch()     - is the authority elsewhere, so we must not decide?
 //
 // This file fails if a NEW `gameMode === 'singleplayer'` appears in client code outside
-// the allowlist below. A genuinely AI-specific check is still fine — it just has to be
+// the allowlist below. A genuinely AI-specific check is still fine - it just has to be
 // added here with a reason, which is the point: it makes the choice deliberate instead
 // of accidental.
 //
@@ -39,7 +39,7 @@ const ALLOWED = [
     {
         file: 'js/client/game-flow.js',
         contains: "gameMode === 'singleplayer' && engine.state.currentPlayer !== engine.state.playerSide",
-        why: 'triggers executeAITurn — there is no AI in an online match',
+        why: 'triggers executeAITurn - there is no AI in an online match',
     },
     {
         file: 'js/client/game-flow.js',
@@ -49,7 +49,7 @@ const ALLOWED = [
     {
         file: 'js/client/modals.js',
         contains: "gameMode === 'singleplayer' && engine.state.currentPlayer !== side",
-        why: 'resuming a save as a side — the AI owes the first move',
+        why: 'resuming a save as a side - the AI owes the first move',
     },
     {
         file: 'js/client/modals.js',
@@ -109,7 +109,7 @@ files.forEach(file => {
 // match the engine is a worker on the server: the ack carries an acknowledgement and
 // nothing else, so `outcome.result` is undefined and reading a field off it throws.
 //
-// That is why attacking and ending a turn broke online while plain moves did not —
+// That is why attacking and ending a turn broke online while plain moves did not -
 // move never awaited the ack, so it never read the result it did not have. Every one
 // of these needs an IsRemoteMatch() bail-out before it touches outcome.result.
 const resultFailures = [];
@@ -118,7 +118,7 @@ files.forEach(file => {
     const rel = path.relative(ROOT, file).replace(/\\/g, '/');
     if (EXEMPT_FILES.has(rel)) return;
 
-    // The map maker is local-only by definition — there is no hosted map editing.
+    // The map maker is local-only by definition - there is no hosted map editing.
     if (rel === 'js/client/map-maker.js') return;
 
     const lines = fs.readFileSync(file, 'utf8').split('\n');
@@ -135,10 +135,64 @@ files.forEach(file => {
     });
 });
 
-if (resultFailures.length) {
-    console.error('FAIL — ' + resultFailures.length + ' unguarded local-result read(s).');
+// --- third rule: things that WRITE must stand down in a hosted match ----------
+//
+// The client owns its board in a local match and merely draws one in a hosted match.
+// Anything that mutates authoritative state, or records it, has to know the difference:
+//
+//   ArchiveMatchSnapshot  would file a filtered half-board with no ledger under the
+//                         same matchId as the host's real record - and D3's corpus is
+//                         built from those, where bad data is worse than no data
+//   autoSaveGame          would overwrite the player's save slot with that half-board
+//   destroyUnit           calls a SERVER mutator; the host has already run it
+//   checkVictoryCondition adjudicates on a board it cannot fully see, which handed out
+//                         a win by annihilation on the first end-turn under fog
+//
+// Each must contain an IsRemoteMatch() bail-out. This checks the function BODY rather
+// than a line window, because these guards sit at the top and the writes can be far
+// below them.
+const MUST_STAND_DOWN = [
+    'ArchiveMatchSnapshot',
+    'autoSaveGame',
+    'destroyUnit',
+    'checkVictoryCondition',
+];
+
+const guardFailures = [];
+
+files.forEach(file => {   // js/client/archive.js is already in this walk
+    const rel = path.relative(ROOT, file).replace(/\\/g, '/');
+    const source = fs.readFileSync(file, 'utf8');
+
+    MUST_STAND_DOWN.forEach(name => {
+        const start = source.indexOf('function ' + name + '(');
+        if (start === -1) return;
+
+        // Body = up to the next top-level function, which is close enough: these are
+        // all declared at column zero.
+        const next = source.indexOf('\nfunction ', start + 1);
+        const body = source.slice(start, next === -1 ? source.length : next);
+
+        if (!/IsRemoteMatch\(\)/.test(body)) {
+            guardFailures.push(rel + '  ' + name + '() has no IsRemoteMatch() bail-out');
+        }
+    });
+});
+
+if (guardFailures.length) {
+    console.error('FAIL - ' + guardFailures.length + ' writer(s) that do not stand down in a hosted match.');
     console.error('');
-    console.error('In a hosted match the ack carries no result — the host sends the');
+    console.error('In a hosted match the client draws the board; it does not own it.');
+    console.error('Add:  if (IsRemoteMatch()) return;   before anything that writes.');
+    console.error('');
+    guardFailures.forEach(f => console.error('  !! ' + f));
+    process.exit(1);
+}
+
+if (resultFailures.length) {
+    console.error('FAIL - ' + resultFailures.length + ' unguarded local-result read(s).');
+    console.error('');
+    console.error('In a hosted match the ack carries no result - the host sends the');
     console.error('consequences as a state-sync instead. Bail out first:');
     console.error('  if (IsRemoteMatch()) return;   // the sync drives the UI from here');
     console.error('');
@@ -147,12 +201,12 @@ if (resultFailures.length) {
 }
 
 if (failures.length) {
-    console.error('FAIL — ' + failures.length + ' unreviewed singleplayer check(s).');
+    console.error('FAIL - ' + failures.length + ' unreviewed singleplayer check(s).');
     console.error('');
     console.error('If this is about WHO OWNS A SIDE, it is wrong in online play. Use:');
-    console.error('  IsForeignUnit(unit)   — somebody else\'s unit');
-    console.error('  IsBoundToOneSide()    — this client plays one side, not both');
-    console.error('  IsRemoteMatch()       — the host decides, not us');
+    console.error('  IsForeignUnit(unit)   - somebody else\'s unit');
+    console.error('  IsBoundToOneSide()    - this client plays one side, not both');
+    console.error('  IsRemoteMatch()       - the host decides, not us');
     console.error('');
     console.error('If it really is AI-specific, add it to ALLOWED in tools/mode-guard.js with a reason.');
     console.error('');
@@ -160,8 +214,9 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log('PASS — mode checks');
+console.log('PASS - mode checks');
 console.log('  ownership : no client code decides who owns a side from the mode string');
 console.log('  allowed   : ' + ALLOWED.length + ' AI-specific checks, each with a recorded reason');
 console.log('  results   : no client code reads a local action result during a hosted match');
+console.log('  writers   : archive, autosave, destroy and victory all stand down when hosted');
 console.log('  scanned   : ' + files.length + ' files');

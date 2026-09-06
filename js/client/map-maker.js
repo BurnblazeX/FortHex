@@ -1,4 +1,4 @@
-// === Map Maker (client half of the old map.js — A1 step 9) ===
+// === Map Maker (client half of the old map.js - A1 step 9) ===
 //
 // The editor UI, its input handling, and the test-play flow. Per the guide's
 // §4 map.js entry this all stays client-side: map maker painting is local

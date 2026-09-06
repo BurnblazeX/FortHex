@@ -1,4 +1,4 @@
-// === Turn Lifecycle (MIXED functions split, pure half — A1 step 8) ===
+// === Turn Lifecycle (MIXED functions split, pure half - A1 step 8) ===
 //
 // Same split pattern as js/server/actions.js (A1 step 7): pure state mutation,
 // player-visible outcomes pushed onto the engine's event queue via
@@ -508,7 +508,7 @@ function LogSiegeStatus() {
 // Pure half of handleRespawnQueue: decrements timers (engine-owned
 // respawnQueue) and reports whether a unit is ready. Whether that means
 // showing the respawn modal (human) or letting the AI/training loop handle it
-// silently is a client-side decision — the wrapper makes it.
+// silently is a client-side decision - the wrapper makes it.
 function ApplyRespawnQueueTick() {
     if (engine.state.gameMode === 'arcade') return { hasQueue: false, unitReady: false };
 
@@ -528,6 +528,23 @@ function ApplyRespawnQueueTick() {
 
     const firstItem = queue[0];
     const unitReady = !!(firstItem && firstItem.turnsRemaining <= 0);
+
+    // Emitted as well as returned. The return value only reaches whoever called
+    // SubmitAction - which in a hosted match is an ack the client is not supposed to
+    // read state from - so a remote player was never told a reinforcement was ready and
+    // the choice modal never opened for them.
+    engine.Emit({
+        type: 'RESPAWN_QUEUE_TICKED',
+        player,
+        hasQueue: true,
+        unitReady,
+        remaining: queue.map(item => ({
+            // The queue stores the whole unit template under `unitType`; only the name
+            // is worth putting in an event.
+            typeName: item.unitType ? item.unitType.typeName : null,
+            turnsRemaining: item.turnsRemaining,
+        })),
+    });
 
     return { hasQueue: true, unitReady, player };
 }
@@ -597,7 +614,7 @@ async function AdvanceTurn() {
     const healingResult = ApplyStartOfTurnHealing();
 
     // NOTE: "Turn Begins" is NOT pushed here even though it looks like it
-    // belongs with the other turn-start logs above — in the original, it
+    // belongs with the other turn-start logs above - in the original, it
     // fires from inside finalizeVisuals, AFTER the pass-device overlay
     // resolves, while everything above fires immediately/before the overlay.
     // The client wrapper (proceedToEndTurn) logs it itself at the right time.

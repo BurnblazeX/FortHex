@@ -1,11 +1,11 @@
-// === Actions (MIXED functions split, client wrapper half — A1 step 7) ===
+// === Actions (MIXED functions split, client wrapper half - A1 step 7) ===
 //
 // Thin wrappers matching the ORIGINAL function names/signatures from core.js,
 // so every existing call site (main.js, ai.js, ui.js, save.js, map-maker.js)
 // keeps working unchanged. Each wrapper calls the pure function of the same
 // name (but capitalized) in js/server/actions.js, then drains the engine's
 // event queue and does the client-owned state + UI work the original inline
-// code did — see FortHex_A1_Server_Core_Guide.md §3.
+// code did - see FortHex_A1_Server_Core_Guide.md §3.
 //
 // Wrappers used to be handed an events array in the return value. Since the
 // queue formalization they call HandleActionEvents() with no argument and it
@@ -19,7 +19,7 @@
 // drain (see the arcade turn-cap branch in game-flow.js).
 //
 // applyFortificationDamageOnMove has no wrapper here: nothing outside
-// handleMoveAction calls it (checked — grep found zero other call sites), and
+// handleMoveAction calls it (checked - grep found zero other call sites), and
 // ApplyMoveAction already calls the pure ApplyFortificationDamageOnMove
 // directly. Same for the pure-to-pure DestroyUnit calls inside actions.js.
 
@@ -82,15 +82,46 @@ function HandleActionEvent(event) {
         case 'PLAYER_DISCONNECTED':
             console.warn(`[Client] Player ${event.player} disconnected (${event.reason}). ` +
                          `Deadline: ${new Date(event.deadline).toISOString()}`);
+            // A3 put the deadline in this event and left drawing it to B3. This is it.
+            ShowDisconnectCountdown(event.player, event.deadline);
+            ShowWarning('Player ' + event.player + ' disconnected.');
             break;
         case 'PLAYER_RECONNECTED':
             console.info(`[Client] Player ${event.player} reconnected.`);
+            HideDisconnectCountdown();
+            ShowSuccess('Player ' + event.player + ' reconnected.');
             break;
         case 'DISCONNECT_RESOLUTION_NEEDED':
             // B3 surfaces the choice; the answer goes back as a
             // 'resolve-disconnect' action (FH.resolve() drives it by hand today).
             console.warn(`[Client] Player ${event.player} did not return. ` +
                          `Resolution required: ${event.choices.join(' | ')}`);
+            ShowAlert('Player ' + event.player + ' did not return.');
+            // B3: A3 raised this and stopped, because the choice is a UI question and
+            // A3 had no UI. This is where it gets asked.
+            if (window.FortHexUI && window.FortHexUI.OpenResolution) {
+                window.FortHexUI.OpenResolution({
+                    player: event.player,
+                    reason: event.reason,
+                    choices: event.choices,
+                });
+            }
+            break;
+        case 'RESPAWN_QUEUE_TICKED':
+            // The panel is redrawn either way; the modal only opens for the player whose
+            // reinforcement it is, and only in a hosted match - locally, proceedToEndTurn
+            // still owns that decision from its own return value.
+            updateRespawnQueueDisplay();
+            if (IsRemoteMatch() && event.unitReady && !IsForeignUnit({ player: event.player })) {
+                showRespawnModal(event.player);
+            }
+            break;
+        case 'DISCONNECT_RESOLVED':
+            // B3. A4 already turned the live match into a save; this decides where that
+            // save goes. Either way the match stops being online, so the socket is
+            // released first - otherwise the host's next sync would overwrite whatever
+            // we just loaded, which is the same trap the leave path fell into.
+            ApplyDisconnectResolution_Client(event);
             break;
         case 'SUPPLY_CHANGED':
             updateSupplyPointsDisplay();
@@ -101,7 +132,7 @@ function HandleActionEvent(event) {
             break;
         case 'FLAG_CAPTURED': {
             // Healing eligibility (unit.canHeal) is already recomputed server-side
-            // (RecalculateHealingEligibility, called from ApplyMoveAction) — no
+            // (RecalculateHealingEligibility, called from ApplyMoveAction) - no
             // client-side gameState mutation needed here, just the UI refresh.
             updateRespawnQueueDisplay();
             const unitPos = getUnitScreenPosition(event.carrierUnit);
@@ -170,7 +201,7 @@ function spawnUnit(player, unitType) {
     // In a hosted match there is no local result to act on. SendAction posted a REQUEST;
     // the host decides what happened and says so in the state-sync that follows, which
     // ApplyRemoteView writes into engine.state. Reading outcome.result here meant reading
-    // fields off an ack that carries none — undefined.spearWalled and the like — which is
+    // fields off an ack that carries none - undefined.spearWalled and the like - which is
     // why attacking and ending a turn threw while plain moves (which never awaited the
     // ack) appeared to work.
     if (IsRemoteMatch()) return true;
@@ -179,6 +210,16 @@ function spawnUnit(player, unitType) {
 }
 
 function destroyUnit(unitToDestroy, reason = "destroyed") {
+    // DestroyUnit is a SERVER mutator. In a hosted match the host has already run it on
+    // the authoritative board and the result arrives as a state-sync; running it again
+    // here would mutate the local drawing surface a second time, and the next view
+    // would overwrite whatever that produced. The console command is the only caller
+    // that reaches this in an online match, and it should not.
+    if (typeof IsRemoteMatch === 'function' && IsRemoteMatch()) {
+        console.warn('[Online] destroyUnit ignored - the host owns the board.');
+        return null;
+    }
+
     const result = DestroyUnit(unitToDestroy, reason);
     HandleActionEvents();
 
@@ -187,7 +228,7 @@ function destroyUnit(unitToDestroy, reason = "destroyed") {
     }
     updateSupplyPointsDisplay();
 
-    // Client-owned selection/hover/drag state — was never engine-owned, so
+    // Client-owned selection/hover/drag state - was never engine-owned, so
     // this whole block moved here wholesale rather than being split further.
     if (gameState.selectedUnit && gameState.selectedUnit.id === result.destroyedUnitId) {
         gameState.selectedUnit = null;
@@ -253,7 +294,6 @@ function performSwap(unit, newType) {
 }
 
 function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
-    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
     // cost and path are deliberately not sent - the server recomputes both from
     // its own getPossibleMoves, which is also how it verifies the move is legal.
@@ -322,7 +362,6 @@ async function completeBuildBridge(targetEdgeKey) {
     updateSelectedUnitInfoPanel();
 
     await SendAction('build-bridge', { unitId: selectedUnit.id, targetEdgeKey, duration });
-    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
     resetActionSelectionStates();
     updateSelectedUnitInfoPanel();
 }
@@ -361,7 +400,6 @@ async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
 
     await SendAction('unfortify', { unitId: unitToUnfortify.id, targetEdgeKey, duration });
 
-    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
     gameState.mustUnfortify = false;
     ui.endTurnButton.disabled = false;
 
@@ -390,7 +428,7 @@ async function completeFortify(unitToFortify, targetTileKeyToFortify) {
         updateSelectedUnitInfoPanel(); return;
     }
 
-    // Enforced here, not just in the UI — the player-facing paths already blocked
+    // Enforced here, not just in the UI - the player-facing paths already blocked
     // this, but nothing stopped a non-UI caller from fortifying inside enemy base
     // camp tiles. The enemy FLAG tile remains a legal capture target.
     const enemyPlayer = unitToFortify.player === 1 ? 2 : 1;
@@ -419,7 +457,6 @@ async function completeFortify(unitToFortify, targetTileKeyToFortify) {
 
     await SendAction('fortify', { unitId: unitToFortify.id, targetTileKey: targetTileKeyToFortify, duration });
 
-    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
     engine.visionDirty = true;
     gameState.currentReachableMoves.clear();
@@ -444,7 +481,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
 
     gameState.currentReachableMoves.clear(); // client-owned, cleared immediately
 
-    // --- Animation setup (pixel-space — a client-only concern per the guide).
+    // --- Animation setup (pixel-space - a client-only concern per the guide).
     // This computes `duration`, which is all the server-side ApplyAttack needs
     // to know how long to wait before applying the real mutation. ---
     let duration = 0;
@@ -520,7 +557,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     // In a hosted match there is no local result to act on. SendAction posted a REQUEST;
     // the host decides what happened and says so in the state-sync that follows, which
     // ApplyRemoteView writes into engine.state. Reading outcome.result here meant reading
-    // fields off an ack that carries none — undefined.spearWalled and the like — which is
+    // fields off an ack that carries none - undefined.spearWalled and the like - which is
     // why attacking and ending a turn threw while plain moves (which never awaited the
     // ack) appeared to work.
         resetActionSelectionStates();
@@ -532,7 +569,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     const result = outcome.result;
 
     // Replicate original's post-mutation currentReachableMoves branching
-    // (client-owned) — attackingUnit is the same object ApplyAttack just
+    // (client-owned) - attackingUnit is the same object ApplyAttack just
     // mutated, so its fields (currentMove, spearWalled) already reflect the
     // outcome; result.spearWalled/bridgeDestroyed cover the branches that
     // depend on combat-resolution details rather than just the unit's fields.

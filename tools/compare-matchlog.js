@@ -1,4 +1,4 @@
-// FortHex — semantic diff for two match logs captured by ExportMatchHistory().
+// FortHex - semantic diff for two match logs captured by ExportMatchHistory().
 //
 //   node tools/compare-matchlog.js tools/reference/default-opening.a2.json after.json
 //
@@ -127,7 +127,7 @@ notes.forEach(n => console.log(`note  : ${n}`));
 console.log('');
 
 if (problems.length === 0) {
-    console.log('IDENTICAL — same ledger, same numbers, same final board.');
+    console.log('IDENTICAL - same ledger, same numbers, same final board.');
     process.exit(0);
 }
 

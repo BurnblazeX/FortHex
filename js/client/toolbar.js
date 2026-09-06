@@ -1,4 +1,4 @@
-// === Toolbar and map button wiring (moved from main.js — A1 step 12) ===
+// === Toolbar and map button wiring (moved from main.js - A1 step 12) ===
 //
 // The action panel buttons, End Turn, the new/custom/select map buttons, the
 // custom-confirm OK/Cancel pair, and Save/Load. Registered at script scope

@@ -15,7 +15,7 @@ function DrawableUnitsOnEdge(edge) {
 }
 
 function getPerspectivePlayer() {
-    // Whoever this client PLAYS, if it plays one side — singleplayer or online alike.
+    // Whoever this client PLAYS, if it plays one side - singleplayer or online alike.
     // This used to test gameMode === 'singleplayer', so an online client fell through
     // to "whoever's turn it is" and, on the opponent's turn, computed fog from the
     // OPPONENT's perspective. Same mistake as the ownership checks: the mode string was
@@ -1287,7 +1287,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 drawMiniHex(f.fq, f.fr, 'rgba(0, 100, 255, 0.6)');
             });
 
-            // 2. Attack range (red) — always a subset of visibility, so drawn on top.
+            // 2. Attack range (red) - always a subset of visibility, so drawn on top.
             attackCells.forEach(fineKey => {
                 const [fq, fr] = fineKey.split(',').map(Number);
                 drawMiniHex(fq, fr, 'rgba(255, 0, 0, 0.65)');
@@ -1791,7 +1791,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
         //
         // Menu-first boot means there is no board to draw until the player picks one,
         // so js/main.js no longer calls gameLoop() at startup. Every match start goes
-        // through StartMatchFromMenu (js/client/game-flow.js), which calls this — and
+        // through StartMatchFromMenu (js/client/game-flow.js), which calls this - and
         // starting a second match must not stack a second requestAnimationFrame chain
         // on top of the first, which is the whole reason this guard exists rather than
         // the callers just calling gameLoop() directly.
@@ -1814,6 +1814,36 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             const currentTime = Date.now();
             const deltaTime = (currentTime - lastFrameTime) / 1000;
             lastFrameTime = currentTime;
+
+            // 1a. HOSTED MATCH, GUEST: the match-level controls are not theirs.
+            //
+            // New Map, Save Game and Load Game all act on the WHOLE match, and in a
+            // hosted match the match belongs to the host - the board lives in their
+            // worker. A guest pressing New Map would regenerate their own drawing
+            // surface and desync instantly; Save would write the filtered board they
+            // can see, which is not the match. So the three are disabled for guests and
+            // left alone for the host, who owns all three legitimately.
+            //
+            // Asserted per frame for the same reason the End Turn gate is: several
+            // paths re-enable these as a side effect of their own work.
+            if (IsRemoteGuest()) {
+                ['newMapButton', 'saveGameButton', 'loadGameButton'].forEach(id => {
+                    const button = document.getElementById(id);
+                    if (button && !button.disabled) button.disabled = true;
+                });
+            }
+
+            // 1b. HOSTED MATCH: the opponent's turn is not yours to end.
+            //
+            // Asserted every frame rather than once per sync, because half a dozen
+            // client paths re-enable this button as a side effect of finishing their
+            // own work (actions.js, respawn-ui.js, fullGameRedraw). Setting it after a
+            // sync only holds until the next one of those runs - which is why it kept
+            // coming back despite being set correctly on arrival.
+            if (IsRemoteMatch() && ui.endTurnButton) {
+                const notYours = IsOpponentsTurn() || engine.state.gameOver;
+                if (ui.endTurnButton.disabled !== notYours) ui.endTurnButton.disabled = notYours;
+            }
 
             // 2. ARCADE LOGIC 
             if (engine.state.gameMode === 'arcade' && !engine.state.gameOver && !engine.state.mapMakerMode) {

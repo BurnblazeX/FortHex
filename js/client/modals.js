@@ -1,21 +1,23 @@
-// === Modal wiring (moved from main.js — A1 step 12) ===
+// === Modal wiring (moved from main.js - A1 step 12) ===
 //
 // Tutorial, changelog, custom-confirm, and load-game modals, plus the file
 // loader. The game_save branch of the file loader routes through
 // ApplyLoadedState() so a loaded file lands on both sides of the client/server
 // split rather than only on the client's gameState.
 
+// Opened from the root menu now (src/ui/screens/RootScreen.jsx, via the bridge) rather
+// than from a floating button pinned over the board. Exported as a named function so
+// the React side has something to call - there is no element left to click.
+function OpenTutorialModal() {
+    if (!ui.tutorialModalOverlay) return;
+    ui.tutorialModalOverlay.style.display = 'flex';
+    // One frame, so the transition has a state to move away from.
+    setTimeout(() => {
+        ui.tutorialModalOverlay.classList.add('modal-visible');
+    }, 10);
+}
+
 function WireTutorialModal() {
-    if (ui.tutorialButton) {
-        ui.tutorialButton.addEventListener('click', () => {
-            if (ui.tutorialModalOverlay) {
-                ui.tutorialModalOverlay.style.display = 'flex'; 
-                setTimeout(() => {
-                    ui.tutorialModalOverlay.classList.add('modal-visible');
-                }, 10); 
-            }
-        });
-    }
 
     function closeTutorialModal() {
         if (ui.tutorialModalOverlay) {
@@ -136,13 +138,16 @@ function WireLoadAndConfirmModals() {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = function(e) {
+        // async: loading a file may stop to ask whether to modernise an older save.
+        // The autosave restore and the map loader deliberately do NOT ask - an autosave
+        // is your own most recent state, and a map has no units to modernise.
+        reader.onload = async function(e) {
             console.group("[FileLoad] Loading external file...");
             try {
                 let data = JSON.parse(e.target.result);
 
                 try {
-                    data = LoadThroughTestament(data);
+                    data = await LoadThroughTestamentAsked(data, file && file.name);
                 } catch (convError) {
                     console.warn("Conversion Error:", convError);
                     ShowAlert("File too old.");
@@ -152,7 +157,7 @@ function WireLoadAndConfirmModals() {
 
                 // A4 §9: what a file opens into is decided by what is actually in
                 // it, never by its extension. The three contexts below are user
-                // INTENT (resume / edit / play), so content can't replace them —
+                // INTENT (resume / edit / play), so content can't replace them -
                 // but it does catch the one mismatch that used to produce a broken
                 // half-loaded match: a map file opened through "Load Game".
                 const content = DescribeContent(data);
@@ -180,6 +185,7 @@ function WireLoadAndConfirmModals() {
                         gameState.renderOffset = correctOffset;
 
                         rehydrateGameState();
+                        FinishLoadedMatch();
 
                         if (engine.state.gameMode === 'arcade') {
                             ui.endTurnButton.classList.add('arcade-timer-active');
@@ -242,13 +248,13 @@ function WireLoadAndConfirmModals() {
 // takes: a save records a playerSide, but nothing says the player still wants it,
 // and a match can legitimately be resumed from either chair.
 //
-// Local pass-device play never needs asking — both sides are one person at one
+// Local pass-device play never needs asking - both sides are one person at one
 // device, and the save simply resumes on whoever was to move. Singleplayer always
 // asks. Online multiplayer is offered the same choice (Burn's call); that mode
 // arrives with Track B, and this handles it the moment it does.
 //
 // Vanilla DOM, matching every other modal here. The roadmap names this screen for
-// Track B's React adoption and Candidates F1's migration — it is deliberately not
+// Track B's React adoption and Candidates F1's migration - it is deliberately not
 // built in React now, because React is not in the project yet.
 function MaybePromptForSide(onDone) {
     const mode = engine.state.gameMode;
@@ -285,7 +291,7 @@ function MaybePromptForSide(onDone) {
     // listeners from a previous load would fire again on the next one.
     const choose = (side) => {
         // Fade out the way every other modal does, but apply the choice straight
-        // away — the player shouldn't wait 300ms for the board to react.
+        // away - the player shouldn't wait 300ms for the board to react.
         overlay.classList.remove('modal-visible');
         setTimeout(() => { overlay.style.display = 'none'; }, 300);
         ApplyChosenSide(side);
@@ -295,7 +301,7 @@ function MaybePromptForSide(onDone) {
     p2.onclick = () => choose(2);
 
     // .modal-overlay is display:none AND opacity:0/visibility:hidden (modals.css),
-    // so setting display alone shows nothing — the overlay is there and invisible.
+    // so setting display alone shows nothing - the overlay is there and invisible.
     // Every modal in the app sets display first and adds .modal-visible on a later
     // frame, which is also what makes the fade transition run at all.
     overlay.style.display = 'flex';

@@ -284,7 +284,7 @@ const ACTION_SPECS = {
 
     // Prompts the server to look at its own clock. Carries nothing: a client
     // that reported elapsed time would be a client deciding when it wins the
-    // wait. Provisional until Track B can push without being asked — see the
+    // wait. Provisional until Track B can push without being asked - see the
     // note on CheckDisconnectDeadlines.
     'heartbeat': {
         turnGated: false,
@@ -306,7 +306,7 @@ const ACTION_SPECS = {
         required: ['player', 'choice'],
         Resolve(payload) {
             // Requester identity comes off the payload because nothing carries
-            // it yet — same shape as spawn-unit's `player`. Track B replaces
+            // it yet - same shape as spawn-unit's `player`. Track B replaces
             // this with the identity of the connection the message arrived on;
             // until then a single local client is the only sender there is.
             if (payload.player !== 1 && payload.player !== 2) {
@@ -464,7 +464,7 @@ function ValidateAction(spec, message) {
     // Who ASKED, checked against whose turn it is.
     //
     // Per-action turn gating was written as "does this unit belong to the current
-    // player", which is enough when only one client exists — and 'end-turn' was marked
+    // player", which is enough when only one client exists - and 'end-turn' was marked
     // turnGated:false with the note that ending your own turn is in-turn by definition.
     // With two networked clients that stopped being true: the opponent could end YOUR
     // turn, because nothing compared the requester to the current player.

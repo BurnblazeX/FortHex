@@ -1,7 +1,7 @@
 // === Lobby connection state (B2) ===
 //
 // Owns the one WebSocketTransport the lobby uses and exposes its state to React the
-// same way menu-store.js and notify-store.js do — an external store, because the
+// same way menu-store.js and notify-store.js do - an external store, because the
 // socket's lifetime is longer than any component's and messages arrive whether or not
 // anything is mounted.
 //
@@ -11,9 +11,11 @@
 
 import {
     CreateSocketTransport, GetLocalProfile, GetBuildVersion, BeginOnlineMatch,
-    SetMatchContext, ClearMatchContext, LeaveOnlineMatch,
+    SetMatchContext, ClearMatchContext, LeaveOnlineMatch, ShowMenuAtRoot, ShowMenuAt,
+    ProbeDirect, GetBuildFingerprint,
 } from './bridge.js';
 import { Notify } from './notify-store.js';
+import { BeginDirectMatch, EndDirectMatch, GetDirectTransport } from './direct-store.js';
 
 let state = {
     status: 'offline',   // offline | connecting | online | error
@@ -22,6 +24,13 @@ let state = {
     room: null,          // the room this client is IN, once joined
     seat: null,
     matchStarted: false,
+
+    // B2. What this network can do, and whether this build is welcome here. Both are
+    // answered once and remembered: the probe takes seconds and the fingerprint reads
+    // every file the page loaded, and neither answer can change without a reload.
+    direct: null,          // null until probed, then the probe's { ok, verdict, detail }
+    buildAccepted: true,   // the server's verdict on this build; true until told otherwise
+    buildEnforced: false,  // whether that server is checking at all
 };
 
 const listeners = new Set();
@@ -46,7 +55,7 @@ export function GetTransport() {
 }
 
 // Where the host lives. Same origin as the page by default, so a build served by
-// host/server.js or by Caddy in front of it needs no configuration — and wss:// is
+// host/server.js or by Caddy in front of it needs no configuration - and wss:// is
 // chosen from the page's own protocol, which is what makes it work behind the tunnel
 // without a second setting to get wrong.
 export function DefaultHostUrl() {
@@ -61,10 +70,17 @@ export async function ConnectToLobby(url) {
     SetState({ status: 'connecting', error: null });
 
     const profile = GetLocalProfile();
+
+    // Awaited rather than raced: `hello` carries this, and a hello sent without it
+    // would be judged as a build that sent nothing - which on an enforcing server is
+    // a refusal. Costs one pass over the already-cached page files.
+    const fingerprint = await GetBuildFingerprint();
+
     transport = CreateSocketTransport(url || DefaultHostUrl(), {
         profileId: profile ? profile.id : null,
         name: profile ? profile.name : 'Player',
         version: GetBuildVersion(),
+        fingerprint,
     });
 
     transport.OnLobbyMessage(HandleLobbyMessage);
@@ -88,17 +104,25 @@ export async function ConnectToLobby(url) {
 // navigation keyed off `room`, so a leave that had not yet been confirmed left the UI
 // on a room screen with no room to draw.
 export function LeaveRoom() {
-    if (transport) transport.LeaveRoom();
-
-    // Give the board back to the local engine. Leaving the room without this left the
-    // client still submitting actions over a socket it was no longer seated on.
+    // Order matters: hand the board back FIRST, then tell the server. Announcing the
+    // departure first leaves a window in which the host's reply - including the
+    // PLAYER_DISCONNECTED it raises for the leaver's own seat - arrives while this
+    // client is still subscribed, which is how the person who left ended up watching a
+    // countdown for their own disconnection.
     if (state.matchStarted) LeaveOnlineMatch();
+
+    // A direct match has a peer connection and a worker of its own to shut down. The
+    // socket knows nothing about either, so leaving the room would otherwise leave a
+    // data channel open and an engine running in a worker nobody is talking to.
+    EndDirectMatch();
+
+    if (transport) transport.LeaveRoom();
     SetState({ room: null, seat: null, matchStarted: false, error: null });
     if (transport) transport.ListRooms();
 }
 
 // Called before starting any LOCAL match. Walking away to play singleplayer is
-// leaving the room, and the server has no way to know that on its own — the socket
+// leaving the room, and the server has no way to know that on its own - the socket
 // is still open, so the seat stayed occupied and the room went on advertising
 // itself as full with nobody actually in it.
 export function LeaveRoomIfAny() {
@@ -114,7 +138,17 @@ export function Disconnect() {
 function HandleLobbyMessage(message) {
     switch (message.type) {
         case 'hello-ok':
-            SetState({ rooms: message.rooms || [] });
+            SetState({
+                rooms: message.rooms || [],
+                buildAccepted: message.buildAccepted !== false,
+                buildEnforced: !!message.buildEnforced,
+            });
+            // Said once, on arrival, rather than only when they try to create a room and
+            // are refused with no idea why. A modified build is a thing the player did
+            // on purpose, so this is information, not an accusation.
+            if (message.buildAccepted === false) {
+                Notify('This build is not recognised by the server. You can still play direct or offline.', 'warn');
+            }
             break;
 
         case 'room-list':
@@ -139,12 +173,22 @@ function HandleLobbyMessage(message) {
             if (transport) transport.ListRooms();
             break;
 
+        case 'match-direct':
+            // The server has bowed out. It will not see another byte of this match -
+            // it relays the two connection blobs and that is all. Everything from here
+            // is between the two browsers.
+            SetState({ room: message.room, seat: message.seat, matchStarted: true });
+            BeginDirectMatch(transport, message);
+            PushMatchContext(message.room);
+            break;
+
         case 'match-started':
             SetState({ room: message.room, seat: message.seat, matchStarted: true });
             // Hands the board over to the socket. Until this existed, pressing Start
             // did everything on the server and nothing the player could see.
             BeginOnlineMatch(transport, message.seat, {
                 fogOfWar: !!(message.room && message.room.fogOfWar),
+                isHost: !!(message.room && message.room.isHost),
             });
             PushMatchContext(message.room);
             break;
@@ -165,19 +209,59 @@ function HandleLobbyMessage(message) {
             break;
 
         case 'host-disconnected':
+            // The server restarted, or the network went. Either way the match this
+            // client was drawing does not exist any more, so hand the board back and
+            // put them somewhere real rather than leaving them on a frozen board with
+            // no way to act. Burn's case: the host refreshing takes the server's rooms
+            // with it, and the guest was left stranded.
+            // A DIRECT match survives this: the server going away is exactly the case it
+            // was built for, and the data channel does not care. Only the lobby is lost.
+            if (state.matchStarted && !GetDirectTransport()) LeaveOnlineMatch();
+            if (GetDirectTransport()) {
+                Notify('Lost the lobby, but your match is direct and continues.', 'warn');
+                SetState({ status: 'offline', rooms: [] });
+                break;
+            }
             SetState({ status: 'offline', room: null, seat: null, matchStarted: false,
                        error: 'Lost connection to the server.' });
+            ClearMatchContext();
             Notify('Lost connection to the server.', 'error');
+            ShowMenuAtRoot();
             break;
 
         case 'match-ended':
             LeaveOnlineMatch();
-            SetState({ room: null, seat: null, matchStarted: false });
+            EndDirectMatch();
             ClearMatchContext();
-            Notify(message.reason === 'opponent_left'
-                ? 'Your opponent left the match.'
-                : 'The match ended.', 'warn');
-            if (transport) transport.ListRooms();
+
+            // Where the player lands depends on whose absence ended it, because the room
+            // belongs to its host. A host who did not return takes the room with them, so
+            // the guest goes back to the list; a guest who did not return leaves the room
+            // standing, so the host waits in it for somebody new.
+            if (message.returnTo === 'room' && message.room) {
+                SetState({
+                    room: message.room,
+                    seat: message.seat !== undefined ? message.seat : state.seat,
+                    matchStarted: false,
+                });
+                Notify('Your opponent did not return. Waiting for another player.', 'warn');
+            } else {
+                SetState({
+                    room: null,
+                    seat: null,
+                    matchStarted: false,
+                    rooms: message.rooms || state.rooms,
+                });
+                Notify(message.reason === 'host_gone'
+                    ? 'The host did not return - the room closed.'
+                    : 'The match ended.', 'warn');
+                if (transport) transport.ListRooms();
+            }
+
+            // Straight to the screen they belong on. MenuApp's rule only moves between
+            // 'lobby' and 'room', so opening on 'root' with a room in hand would leave
+            // them on the root menu wondering where their room went.
+            ShowMenuAt(message.returnTo === 'room' ? 'room' : 'lobby');
             break;
 
         case 'room-closed':
@@ -217,10 +301,38 @@ function DescribeError(code) {
         case 'room_not_full':     return 'Both seats have to be filled first.';
         case 'server_at_capacity':return 'The server is running as many matches as it can.';
         case 'too_many_attempts': return 'Too many wrong codes. Wait a minute and try again.';
+        case 'build_not_recognised':
+                                  return 'This build is not one the server recognises. Direct play still works.';
         default:                  return 'Something went wrong (' + code + ').';
     }
 }
 
 export function ClearError() {
     SetState({ error: null });
+}
+
+// === B2: can this network host a direct match? ===
+//
+// Asked once, lazily, the first time a screen needs the answer - the probe opens real
+// peer connections against two STUN servers and takes a second or two, which is fine
+// to spend when opening Create Room and not fine to spend on every page load.
+//
+// The result is deliberately not treated as a failure when it says no. "Your network
+// will not do this" is an ordinary fact about a lot of connections - Burn's own is
+// CGNAT and is exactly the case it exists to catch - so it downgrades an option with
+// a reason attached rather than raising an error.
+let probePromise = null;
+
+export function EnsureDirectProbe() {
+    if (!probePromise) {
+        SetState({ direct: { verdict: 'probing', detail: 'Checking your network…', ok: false } });
+        probePromise = ProbeDirect()
+            .then(result => { SetState({ direct: result }); return result; })
+            .catch(() => {
+                const failed = { ok: false, verdict: 'blocked', detail: 'Could not test this network.' };
+                SetState({ direct: failed });
+                return failed;
+            });
+    }
+    return probePromise;
 }

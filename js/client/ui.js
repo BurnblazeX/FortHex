@@ -16,8 +16,6 @@
             buildBridgeButton: document.getElementById('buildBridgeButton'),
             attackButton: document.getElementById('attackButton'),
             endTurnButton: document.getElementById('endTurnButton'),
-            downloadButton: document.getElementById('downloadButton'),
-            tutorialButton: document.getElementById('tutorialButton'), 
             victoryMessage: document.getElementById('victoryMessage'),
             customConfirmModal: document.getElementById('customConfirmModal'),
             customConfirmOkButton: document.getElementById('customConfirmOkButton'),
@@ -449,15 +447,15 @@
         //
         // #messageBox is gone. It was one fixed red bar that every one of these calls
         // wrote to, in the same alarm colour, so "Game Saved!" looked exactly like
-        // "Save File Corrupted." — and after B1's menu-first boot it also sat on the
+        // "Save File Corrupted." - and after B1's menu-first boot it also sat on the
         // main menu announcing a turn in a match that did not exist.
         //
         // The replacement is the React toast stack (src/ui/components/Notifications.jsx),
         // top-right, two severities and nothing else:
         //
-        //   ShowAlert(msg)   red    — the player has lost something or an operation failed
-        //   ShowWarning(msg) yellow — the game refused what they just tried to do
-        //   ShowSuccess(msg) green  — an operation the player asked for succeeded
+        //   ShowAlert(msg)   red    - the player has lost something or an operation failed
+        //   ShowWarning(msg) yellow - the game refused what they just tried to do
+        //   ShowSuccess(msg) green  - an operation the player asked for succeeded
         //
         // showInstruction is deliberately SILENT and kept only so the ~100 narration
         // call sites still compile and still reach the action log through logAction.
@@ -588,7 +586,7 @@
             }
         }
 
-        // Thin wrapper — the actual engine.state.supplyPoints mutation lives in
+        // Thin wrapper - the actual engine.state.supplyPoints mutation lives in
         // js/server/actions.js's SetSupplyPointsForFlagStatus. Client-side files
         // must not mutate gameState directly.
         function updateSupplyPointsBasedOnFlagStatus(playerNum) {
@@ -605,7 +603,7 @@
 
     // 1. Completely rebuild the HTML specifically for Swapping, bypassing the tab system
     content.innerHTML = `
-        <h3 style="font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 10px;">Swap Unit</h3>
+        <h3 style="font-family: 'Lexend Deca', 'Exo 2', sans-serif; font-size: 1.8em; color: #FFC020; margin-bottom: 10px;">Swap Unit</h3>
         <p style="margin-bottom: 20px;">Select new class for ${unit.type.name}</p>
         <div id="respawnChoices" style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
             <button class="respawn-button" data-unit-type="MELEE" title="Melee"></button>
@@ -693,7 +691,7 @@
 
         const title = document.createElement('h3');
         title.textContent = 'Select Map';
-        title.style.cssText = "font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;";
+        title.style.cssText = "font-family: 'Lexend Deca', 'Exo 2', sans-serif; font-size: 1.8em; color: #FFC020; margin-bottom: 25px;";
         
         const presetContainer = document.createElement('div');
         // Flex row, centered, wrapping allowed but shouldn't happen with this width
@@ -1024,7 +1022,7 @@
             if (unitType) {
                 const spawnSuccess = spawnUnit(player, unitType);
                 if (spawnSuccess) {
-                    consumeRespawnCharge(player);
+                    // charge is spent server-side now (SpendReinforcementCharge)
                     hideRespawnModal();
                 } else {
                     ShowWarning("Base is blocked!");
@@ -1053,9 +1051,19 @@
         pip.addEventListener('click', (e) => {
             const stat = e.target.dataset.upgradeStat;
             const success = applyUnitUpgrade(unit, stat);
-            
+
+            // In a hosted match applyUnitUpgrade returns nothing - it posts a request and
+            // the host decides. Waiting for a local `success` that cannot arrive left the
+            // modal open with the promotion apparently ignored, which is what "selecting
+            // a stat does not actually do anything" looked like. Close it and let the
+            // state-sync report what happened; a refusal comes back as a warning toast.
+            if (IsRemoteMatch()) {
+                hideRespawnModal();
+                return;
+            }
+
             if (success) {
-                consumeRespawnCharge(unit.player);
+                // charge is spent server-side now (SpendReinforcementCharge)
                 hideRespawnModal();
 
                 // FORCED UNFORTIFY
@@ -1101,7 +1109,7 @@
         if (queue.length > 0 && queue[0].turnsRemaining <= 0) {
             // --- FIX: Prevent AI from opening the modal ---
             if (engine.state.isTrainingMode || IsForeignUnit({ player })) {
-                return; // not our unit to place — the AI or the other player handles it
+                return; // not our unit to place - the AI or the other player handles it
             }
             // Re-open for next charge
             setTimeout(() => showRespawnModal(player), 500);
@@ -1137,7 +1145,7 @@
                 
                 calibrationDiv.innerHTML = `
                     <div id="calibrationCardContainerHeader" style="cursor: move; padding-bottom: 10px; border-bottom: 1px solid #4a6075; margin-bottom: 15px; text-align: center;">
-                        <h3 style="color: #FFC020; margin: 0; font-family: 'Geostar', cursive; pointer-events: none; font-size: 1.2em;">UI Calibrator</h3>
+                        <h3 style="color: #FFC020; margin: 0; font-family: 'Lexend Deca', 'Exo 2', sans-serif; pointer-events: none; font-size: 1.2em;">UI Calibrator</h3>
                     </div>
                     
                     <button id="calibrationCardCloseBtn" style="position: absolute; top: 10px; right: 10px; background: none; border: none; cursor: pointer; padding: 5px; z-index: 9999; pointer-events: auto; display: block;">

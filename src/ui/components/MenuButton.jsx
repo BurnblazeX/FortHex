@@ -4,6 +4,10 @@
 export function MenuButton({ variant, className = '', children, ...rest }) {
     const classes = ['action-button'];
     if (variant === 'cancel') classes.push('action-button-cancel');
+    if (variant === 'muted') classes.push('action-button-muted');
+    if (variant === 'play') classes.push('action-button-play');
+    if (variant === 'confirm') classes.push('action-button-confirm');
+    if (variant === 'accent') classes.push('action-button-accent');
     if (className) classes.push(className);
 
     return (

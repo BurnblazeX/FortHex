@@ -1,4 +1,4 @@
-// === Turn Lifecycle (MIXED functions split, client wrapper half — A1 step 8) ===
+// === Turn Lifecycle (MIXED functions split, client wrapper half - A1 step 8) ===
 //
 // Same pattern as js/client/actions.js (A1 step 7): each wrapper keeps the
 // original name/signature so every existing call site keeps working, calls
@@ -129,13 +129,13 @@ function checkVictoryCondition() {
     // In a hosted match the host decides, and this client is in no position to.
     //
     // CheckVictoryCondition runs the real rule against the LOCAL engine, which during
-    // an online match holds a filtered board — under fog it contains no enemy units at
+    // an online match holds a filtered board - under fog it contains no enemy units at
     // all. So the first time this ran after a turn ended, it saw an empty enemy army
     // and awarded victory by annihilation to whoever had just moved.
     //
     // Guarding the wrapper rather than each of its seven call sites: every one of them
     // is a client asking "did that end the game", and in a hosted match the honest
-    // answer is always "the host will tell you" — which it does, via gameOver in the
+    // answer is always "the host will tell you" - which it does, via gameOver in the
     // view and the VICTORY event that HandleActionEvent already renders.
     if (typeof IsRemoteMatch === 'function' && IsRemoteMatch()) {
         return !!engine.state.gameOver;
@@ -156,7 +156,7 @@ function checkVictoryCondition() {
         console.log(`[TRAINING] ${result.victoryText}`);
         ApplyTrainingMatchOutcome(result);
         if (result.needsPopulationMaintenance) {
-            // localStorage-touching — must stay client-side (see
+            // localStorage-touching - must stay client-side (see
             // js/server/turn-lifecycle.js header comment).
             maybeEvolvePopulation();
             savePopulation();
@@ -204,7 +204,7 @@ async function proceedToEndTurn() {
         return;
     }
 
-    // Arcade swap-pending guard — client-owned swapState, checked before any
+    // Arcade swap-pending guard - client-owned swapState, checked before any
     // engine-state mutation happens.
     if (engine.state.gameMode === 'arcade' && engine.state.globalTurnNumber >= 2) {
         if (gameState.swapState === 'selecting_unit' || gameState.swapState === 'selecting_class') {
@@ -220,7 +220,7 @@ async function proceedToEndTurn() {
     // In a hosted match there is no local result to act on. SendAction posted a REQUEST;
     // the host decides what happened and says so in the state-sync that follows, which
     // ApplyRemoteView writes into engine.state. Reading outcome.result here meant reading
-    // fields off an ack that carries none — undefined.spearWalled and the like — which is
+    // fields off an ack that carries none - undefined.spearWalled and the like - which is
     // why attacking and ending a turn threw while plain moves (which never awaited the
     // ack) appeared to work.
         gameState.selectedUnit = null;
@@ -253,13 +253,13 @@ async function proceedToEndTurn() {
     canvas.style.cursor = 'default';
     resetActionSelectionStates();
 
-    // Fires immediately, before any pass-device overlay — matches original
+    // Fires immediately, before any pass-device overlay - matches original
     // timing (ZoC/attrition/healing/siege/resupply logs all fired inline,
     // before the overlay-vs-finalizeVisuals branch).
     HandleActionEvents();
 
     // Respawn queue UI decision, using the tick AdvanceTurn already
-    // performed (must not call handleRespawnQueue here — it would tick the
+    // performed (must not call handleRespawnQueue here - it would tick the
     // timers a second time).
     if (result.respawnResult.hasQueue && result.respawnResult.unitReady) {
         console.log(`[Respawn] Player ${result.respawnResult.player} unit ready.`);
@@ -321,16 +321,16 @@ async function proceedToEndTurn() {
     }
 }
 
-// === Match/Turn DOM Orchestration (client-only — A1 step 8/12) ===
+// === Match/Turn DOM Orchestration (client-only - A1 step 8/12) ===
 //
-// Pure relocation from main.js — these were already correctly classified as
+// Pure relocation from main.js - these were already correctly classified as
 // client-side (DOM/UI, victory-screen presentation, confetti, pass-device
 // overlay), matching the guide's explicit destination for this content
 // (§4's main.js entry names showPassDeviceOverlay/triggerConfetti/the
 // victory-screen DOM block as game-flow.js content). No logic changes.
 //
 // checkArcadeVictoryCondition is a near-duplicate of checkVictoryCondition's
-// victory-screen tail (js/client/game-flow.js) — flagging as a
+// victory-screen tail (js/client/game-flow.js) - flagging as a
 // simplification candidate, not merging it as part of this relocation.
 
 // Client half of the arcade forced swap; the pick itself is PickForcedSwap in
@@ -394,7 +394,7 @@ function showPassDeviceOverlay(nextPlayer, callback) {
     `;
     
     overlay.innerHTML = `
-        <h2 id="passDeviceText" style="font-family: 'Geostar', cursive; font-size: clamp(2em, 6vw, 3.5em); margin-bottom: 10px; text-align: center; text-shadow: 0 4px 10px rgba(0,0,0,0.9); font-weight: bold;">Pass to Player X</h2>
+        <h2 id="passDeviceText" style="font-family: 'Lexend Deca', 'Exo 2', sans-serif; font-size: clamp(2em, 6vw, 3.5em); margin-bottom: 10px; text-align: center; text-shadow: 0 4px 10px rgba(0,0,0,0.9); font-weight: bold;">Pass to Player X</h2>
         <div id="passDeviceCountdown" style="font-size: clamp(3em, 8vw, 5em); font-weight: bold; color: #FFFFFF; margin-bottom: 20px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">5</div>
         <p style="font-size: clamp(1.2em, 4vw, 1.5em); color: #FFFFFF; opacity: 0.9; text-align: center; text-shadow: 0 2px 5px rgba(0,0,0,0.9);">Tap anywhere to continue</p>
     `;
@@ -527,7 +527,7 @@ function handleGenerateNewMap() {
 // reasons for the indirection rather than letting components call initializeGrid
 // themselves: match setup is client game logic and does not belong in a bundled
 // UI tree, and the bundle would otherwise have to know the order these steps run
-// in — which is exactly the kind of knowledge that rots when C or D moves a step.
+// in - which is exactly the kind of knowledge that rots when C or D moves a step.
 //
 // startSingleplayerGame below is left alone and still works; this generalizes it
 // to carry a chosen map, which singleplayer never had before B1 (it hardcoded
@@ -536,25 +536,16 @@ function handleGenerateNewMap() {
 // The maps offered on the Singleplayer map-selection screen, in display order.
 //
 // Shaped exactly like the PRESET_MAP_* objects so renderMapPreview (js/client/ui.js)
-// draws all four the same way — the default layout is only a tile Map on its own,
+// draws all four the same way - the default layout is only a tile Map on its own,
 // so it gets wrapped here rather than the preview learning a second shape.
 //
 // NOTE: "Standard" is a placeholder name. The roadmap flags naming the default map
 // as an open decision at this stage; nothing depends on the string.
+// The list moved to js/server/map-generation.js, which is in the worker bundle. A
+// hosted match has to be able to build whichever map the room picked, and two copies
+// of this list would eventually disagree about what "River Fork" is.
 function GetSelectableMaps() {
-    return [
-        {
-            name: 'Standard',
-            radius: 3,
-            tiles: DEFAULT_MAP_LAYOUT_RADIUS_3,
-            units: null,
-            baseCampPositions: { player1: null, player2: null },
-            isDefault: true,
-        },
-        PRESET_MAP_2, // Alpha Grounds  (radius 2)
-        PRESET_MAP_1, // River Fork     (radius 3)
-        PRESET_MAP_3, // Volcano Island (radius 4)
-    ];
+    return GetSelectableMapList();
 }
 
 // Starts a match from the menu. `mode` is 'singleplayer' or 'local'; `playerSide`
@@ -572,18 +563,26 @@ function StartMatchFromMenu({ mode, playerSide = 1, map = null } = {}) {
     hideAllModals();
     engine.state.isTrainingMode = false;
 
+    // Starting a local match ends any hosted one, unconditionally.
+    //
+    // The lobby already calls this on the paths it knows about, but it decides from its
+    // own room state - and the failure that has to be impossible is a live socket
+    // subscription writing the online board over a local game. Asserting it here, at
+    // the moment a local board is created, does not depend on the UI having kept track.
+    if (typeof IsRemoteMatch === 'function' && IsRemoteMatch()) EndOnlineMatch();
+
     // Camera framing and grid extent both follow the map, not the mode. resizeMapGrid
     // owns both, including the radius-2/radius-4 render scales, so this replaces the
     // hardcoded "radius 3, scale 1.0, offset 0" reset the old handlers each carried.
     //
     // It also writes engine.state.gameMode as a side effect (SetGridMode,
-    // js/server/map-generation.js) — which is why the menu's own mode is applied
+    // js/server/map-generation.js) - which is why the menu's own mode is applied
     // AFTER it rather than before, or the resize would silently overwrite it.
     resizeMapGrid(chosenMap.radius || 3);
 
     // Radius 2 IS arcade: SetGridMode clears the flags and base camps for it, and no
     // other part of the game has ever run a non-arcade match in that state. So a
-    // radius-2 map keeps arcade rather than being forced into the chosen mode — the
+    // radius-2 map keeps arcade rather than being forced into the chosen mode - the
     // map screen labels those cards accordingly instead of the mode changing silently.
     const isArcadeMap = (engine.state.gameMode === 'arcade');
     if (!isArcadeMap) {
@@ -594,7 +593,7 @@ function StartMatchFromMenu({ mode, playerSide = 1, map = null } = {}) {
     }
 
     // InitializeGrid (js/server/match-setup.js) tests `if (baseCampData)`, and an
-    // object of two nulls is truthy — passing one straight through would overwrite the
+    // object of two nulls is truthy - passing one straight through would overwrite the
     // camps resizeMapGrid just computed with nothing, on a map that has none of its
     // own. The preview renderer needs the object to exist; the initializer needs it to
     // be absent when it is empty. So it is normalized here, between the two.
@@ -605,7 +604,7 @@ function StartMatchFromMenu({ mode, playerSide = 1, map = null } = {}) {
 
     // Preset maps carry their own base camps, and the flags have to follow them or
     // a returned flag lands where the previous map's camp was. Lifted verbatim from
-    // loadPresetMap (js/client/ui.js) — the default map has null camps and skips it.
+    // loadPresetMap (js/client/ui.js) - the default map has null camps and skips it.
     if (engine.state.flags && hasOwnCamps && camps.player1) {
         engine.state.flags.p1_flag.homePosition = engine.state.baseCampPositions.player1;
         engine.state.flags.p2_flag.homePosition = engine.state.baseCampPositions.player2;
@@ -626,7 +625,7 @@ function StartMatchFromMenu({ mode, playerSide = 1, map = null } = {}) {
             setTimeout(() => { executeAITurn(); }, 1500);
         }
     } else if (isArcadeMap) {
-        showInstruction(`'${chosenMap.name}' is an Arcade map — turn timer is on.`, 4000);
+        showInstruction(`'${chosenMap.name}' is an Arcade map - turn timer is on.`, 4000);
     } else {
         showInstruction('New Local Multiplayer game started.', 3000);
     }
@@ -659,7 +658,7 @@ function startSingleplayerGame(playerSide) {
     }
 }
 
-// Thin wrapper — the actual unit.canHeal mutation lives in
+// Thin wrapper - the actual unit.canHeal mutation lives in
 // js/server/actions.js's RecalculateHealingEligibility. Client-side files
 // must not mutate gameState directly.
 function updateAllHealingStatus() {
@@ -668,7 +667,7 @@ function updateAllHealingStatus() {
         }
 
 // Archers holding a mountain peak bleed HP unless they are BOTH supplied and their
-// player's flag is safely at base — a stolen flag cuts the peak off just as surely as a
+// player's flag is safely at base - a stolen flag cuts the peak off just as surely as a
 // severed supply line. The damage escalates 1, 2, 3... for each consecutive turn the
 // hold is unsupported, and resets the moment support is restored (or when the unit
 // unfortifies off the peak).

@@ -1,4 +1,4 @@
-// FortHex — headless harness for the consent-gated match archive  (Track A6, guide §8)
+// FortHex - headless harness for the consent-gated match archive  (Track A6, guide §8)
 //
 //   node tools/archive-smoke.js
 //
@@ -27,7 +27,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 
 // The engine, plus the two client files under test. archive.js needs BuildSaveState
-// (save.js), which needs the engine — this is very nearly the whole app minus the
+// (save.js), which needs the engine - this is very nearly the whole app minus the
 // DOM, which is what an integration check of the archive actually requires.
 const BUNDLE = [
     'js/config-data.js', 'js/grid-math.js', 'js/testament.js',
@@ -124,7 +124,7 @@ function LoadPage() {
     // The two client files under test, plus the minimum client surface they touch.
     // Rather than loading save.js whole (it reaches for the DOM, file dialogs and
     // localStorage all over), the one function archive.js actually calls is
-    // reproduced here exactly as save.js defines it — a divergence would show up
+    // reproduced here exactly as save.js defines it - a divergence would show up
     // as an assertion failure below, since both go through BuildSaveObject.
     vm.runInContext(`
         var gameState = { arcadeTurnTimer: 0, isTestingMap: false };
@@ -274,7 +274,7 @@ let openingUnits = 0;
 }
 
 // --- 5. the claim §3 was incomplete about: a record is replayable ----------
-// Not "something got written" — the opening board goes back through a real engine
+// Not "something got written" - the opening board goes back through a real engine
 // and comes out as a board units can move on.
 {
     const page = LoadPage();
@@ -377,21 +377,21 @@ let openingUnits = 0;
 
 // --- report ----------------------------------------------------------------
 if (failures.length) {
-    console.error('FAIL — ' + failures.length + ' check(s)');
+    console.error('FAIL - ' + failures.length + ' check(s)');
     failures.forEach(f => console.error('  !! ' + f));
     process.exit(1);
 }
-console.log('PASS — js/client/archive.js');
+console.log('PASS - js/client/archive.js');
 console.log('  gate      : nothing recorded without consent; training, map maker and');
 console.log('              map-testing excluded; revoking stops it and keeps what exists');
 console.log('  record    : one per match, opening written once, latest tracks the board');
 console.log('  no litter : opening the game writes nothing until a match produces a turn');
-console.log('  format    : identical to what BuildSaveState writes — no second format');
+console.log('  format    : identical to what BuildSaveState writes - no second format');
 console.log('  replayable: the archived opening restores to a board units can move on');
 console.log('  sync      : the central-server hook is empty and says why');
 
 })().catch(err => {
-    console.error('FAIL — the harness threw');
+    console.error('FAIL - the harness threw');
     console.error(err.stack);
     process.exit(1);
 });

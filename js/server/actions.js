@@ -1,4 +1,4 @@
-// === Actions (MIXED functions split, pure half — A1 step 7) ===
+// === Actions (MIXED functions split, pure half - A1 step 7) ===
 //
 // These are the pure-mutation halves of core.js's MIXED action functions.
 // None of them call UI functions. Anything the player needs to be told about
@@ -37,7 +37,7 @@
 // animation, instead of the old callback-driven `animation.onComplete` model.
 // See [[project_forthex_animation_fow_design]].
 
-// Moved from main.js — delay() has no DOM dependency, and the async action
+// Moved from main.js - delay() has no DOM dependency, and the async action
 // functions below need it too. Reads engine.state.isTrainingMode so training
 // matches don't pay for animation waits.
 function delay(ms) {
@@ -74,7 +74,10 @@ async function WaitForAnimation(durationMs) {
 }
 
 async function ApplyBuildBridge(unit, targetEdgeKey, duration = 500) {
-    // Immediate (synchronous prefix, runs before the animation delay) — locks
+    // Same reasoning as ApplyMoveAction - see there.
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
+
+    // Immediate (synchronous prefix, runs before the animation delay) - locks
     // the unit out of further major actions right away, matching the original
     // completeBuildBridge's timing exactly.
     unit.currentMove -= BUILD_BRIDGE_COST;
@@ -97,7 +100,10 @@ async function ApplyBuildBridge(unit, targetEdgeKey, duration = 500) {
 }
 
 async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
-    // Immediate (synchronous prefix) — matches original timing.
+    // Same reasoning as ApplyMoveAction - see there.
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
+
+    // Immediate (synchronous prefix) - matches original timing.
     const startTileKey = unit.position;
     const oldFortifiedTile = engine.state.tiles.get(startTileKey);
     if (oldFortifiedTile) {
@@ -148,7 +154,10 @@ async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
 }
 
 async function ApplyFortify(unit, targetTileKey, duration = 450) {
-    // Immediate (synchronous prefix) — matches original timing.
+    // Same reasoning as ApplyMoveAction - see there.
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
+
+    // Immediate (synchronous prefix) - matches original timing.
     unit.hasPerformedMajorAction = true;
 
     await WaitForAnimation(duration);
@@ -269,12 +278,12 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
 }
 
 // duration is computed by the client wrapper (pixel-distance-dependent for
-// projectiles) and passed in — this function never touches pixel space.
+// projectiles) and passed in - this function never touches pixel space.
 // Returns spearWalled/bridgeDestroyed so the wrapper can replicate the
 // original's currentReachableMoves branching without duplicating the combat
 // logic that decides them (currentReachableMoves is client-owned).
 async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration = 250) {
-    // Immediate (synchronous prefix) — matches original timing.
+    // Immediate (synchronous prefix) - matches original timing.
     attackingUnit.hasPerformedMajorAction = true;
 
     await WaitForAnimation(duration);
@@ -364,8 +373,8 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                 bridgeDestroyed = true;
 
                 // A6. The ATTACK entry records isKill, but a destroyed bridge is a
-                // board change with its own consequences — severed supply, drowned
-                // units — and reads as an ordinary attack without this.
+                // board change with its own consequences - severed supply, drowned
+                // units - and reads as an ordinary attack without this.
                 engine.actionManager.RecordHistory({
                     type: "BRIDGE_DESTROYED", turn: engine.state.globalTurnNumber,
                     player: attackingUnit.player, actorId: attackingUnit.id,
@@ -414,7 +423,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
             // entered the game inside commit 9d1be7d ("Split monolithic file into
             // parts", 24 Jun 2026) labelled `// Forest Penalty Logic (New)`, appears in
             // no patch, balance or bug note, and was never designed. Forest does not
-            // inherently lower defense — combined arms is what strips defense there
+            // inherently lower defense - combined arms is what strips defense there
             // (Track C / C2 in the roadmap).
             //
             // The Mountain clause was appended later and is left standing: a peak is a
@@ -640,7 +649,7 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
     }
 
     // A6. Death was only ever inferable from ATTACK.isKill, which misses every
-    // death that was not an attack — ZoC, bridge collapse, cowardice, mountain
+    // death that was not an attack - ZoC, bridge collapse, cowardice, mountain
     // attrition. Recorded here rather than at each call site precisely because
     // this function is the one place they all converge.
     //
@@ -706,9 +715,9 @@ function SeverSupplyLinesForPlayer(playerNum) {
 // fundNewFortification (single-unit, dead code, no callers),
 // recalculateSupplyLinesForPlayer (full-recompute, dead code, no callers),
 // and attemptToResupplyForts (afford-check on unsupplied forts, the one
-// actually called — from main.js's turn lifecycle). All three were hand-rolled
+// actually called - from main.js's turn lifecycle). All three were hand-rolled
 // variants of what recalculatePlayerSupplyNetwork (rules.js) already does
-// correctly and completely — full re-path + cost-gated greedy assignment with
+// correctly and completely - full re-path + cost-gated greedy assignment with
 // shared-road discounting. This just calls that, then diffs supply-line state
 // before/after to report which forts newly became supplied (matching
 // attemptToResupplyForts's original per-unit logging), covering all three
@@ -787,10 +796,42 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
     return { destroyed: unitDestroyed };
 }
 
+// Spends one reinforcement charge from a player's queue.
+//
+// This lived in the CLIENT until B30 (consumeRespawnCharge, js/client/ui.js), called
+// after the client decided the spawn or promotion had worked. Two consequences, and the
+// second one is the one that corrupted saves:
+//
+//   Online - the client spent a charge the server knew nothing about, and the next view
+//   handed it straight back. Promotions appeared to do nothing.
+//
+//   Everywhere - the queue was only ever debited by whichever UI path remembered to
+//   call it. Any path that did not spent nothing. That is how a B29 save ended up with
+//   a level-3 unit AND a fresh reinforcement on three deaths' worth of charges: four
+//   spent, three earned, because the accounting never lived next to the thing it paid
+//   for.
+//
+// It is now spent HERE, by the action that consumes it, and only on success.
+function SpendReinforcementCharge(player) {
+    const queue = engine.state.respawnQueue[`player${player}`];
+    if (!queue || queue.length === 0) return false;
+
+    queue.shift();
+    return true;
+}
+
 function ApplyUnitUpgrade(unit, statType) {
     if (!unit || unit.level >= UPGRADE_CONSTANTS.MAX_LEVEL) {
         console.warn("Upgrade failed: Max level reached or invalid unit.");
         return { success: false };
+    }
+
+    // A promotion is PAID FOR with a reinforcement charge, so refuse it when there is
+    // none. Nothing checked this before: the queue was debited afterwards by the client,
+    // which meant an empty queue simply shifted nothing and the promotion happened free.
+    const queue = engine.state.respawnQueue[`player${unit.player}`];
+    if (!queue || queue.length === 0 || queue[0].turnsRemaining > 0) {
+        return { success: false, error: 'no_reinforcement_ready' };
     }
 
     const validStats = ['health', 'speed', 'damage', 'defense'];
@@ -857,6 +898,11 @@ function ApplyUnitUpgrade(unit, statType) {
         });
     }
 
+
+    // Paid for. Spent here rather than by the caller, so the debit cannot be skipped by
+    // a path that forgets, and so it lands on the authoritative board.
+    SpendReinforcementCharge(unit.player);
+
     return { success: true };
 }
 
@@ -899,6 +945,13 @@ function ApplyClassSwap(unit, newType) {
 }
 
 function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
+    // Marked HERE, not by the caller. js/client/actions.js used to set this itself
+    // before sending the request - a client writing authoritative state, which A2 rules
+    // out. Locally it looked fine; online the server never set it, so the view that came
+    // back said "no action taken" and overwrote the client's optimistic true. The result
+    // was the pass-turn confirmation asking whether you were sure after every move.
+    engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
+
     const masterUnit = engine.state.units.find(u => u.id === unitToMove.id);
     if (!masterUnit) return { unitFound: false };
     const unit = masterUnit;

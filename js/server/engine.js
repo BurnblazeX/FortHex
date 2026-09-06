@@ -1,18 +1,18 @@
-// === FortHexEngine — the authoritative, DOM-free engine shell ===
+// === FortHexEngine - the authoritative, DOM-free engine shell ===
 //
 // Field list mirrors §5.1 plus gameOver (reclassified engine-owned in step 8,
 // once real victory-check logic needed to set it authoritatively).
 // mustUnfortify/playerActionTaken/selectedUnit/currentActionState/the
 // valid*TargetKeys/currentReachableMoves highlight caches stayed client-owned
-// per the guide's fallback rule — they never got forced onto the engine side
+// per the guide's fallback rule - they never got forced onto the engine side
 // the way gameOver did.
 //
-// This is genuinely live now (see js/main.js) — as of the engine.state
+// This is genuinely live now (see js/main.js) - as of the engine.state
 // cutover, every js/server/ pure function reads/writes this instance's state
 // directly, not a bare gameState global. gameState (js/client/client-state.js) now holds
 // only client-owned fields.
 //
-// NOTE: this file must stay zero-DOM/window/canvas — it needs to load cleanly
+// NOTE: this file must stay zero-DOM/window/canvas - it needs to load cleanly
 // in a bare Web Worker (§9's "Worker smoke test").
 
 class FortHexEngine {
@@ -79,7 +79,7 @@ class FortHexEngine {
         // Who is currently connected, and if not, how long they have to come
         // back (A3). Same category as pendingVictory: session truth, not match
         // truth, so it sits on the instance and never reaches a save file.
-        // See js/server/session.js — including the note there for A4.
+        // See js/server/session.js - including the note there for A4.
         this.playerSessions = {
             player1: MakePlayerSession(),
             player2: MakePlayerSession(),
@@ -127,7 +127,7 @@ class FortHexEngine {
 }
 
 // The legacy global `ActionManager` object (state.js) is retired now that the
-// actions it guarded live in js/server/actions.js/turn-lifecycle.js — this is
+// actions it guarded live in js/server/actions.js/turn-lifecycle.js - this is
 // the only ActionManager, instance-owned per §5.2.
 class ActionManager {
     constructor(engineInstance) {
@@ -210,7 +210,7 @@ class ActionManager {
         //
         // It mattered less when there was one local recipient who saw every event. Over
         // a wire, FilterEventsForPlayer delivers ACTION_REJECTED only to the player it
-        // names — so attributing it to currentPlayer meant the player who made the bad
+        // names - so attributing it to currentPlayer meant the player who made the bad
         // request was told nothing at all, while their OPPONENT was told that someone
         // had tried something. Wrong player informed, wrong player left guessing.
         //

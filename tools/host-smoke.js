@@ -1,4 +1,4 @@
-// FortHex — proves the engine runs as a standalone Node host  (B2 groundwork)
+// FortHex - proves the engine runs as a standalone Node host  (B2 groundwork)
 //
 //   node tools/host-smoke.js
 //
@@ -7,7 +7,7 @@
 // client action over a message port, and hand back a state-sync that SURVIVES JSON.
 //
 // That last part is the one genuinely unknown property. LocalTransport deliberately
-// passes live object references — transport.js says so in its header — because an
+// passes live object references - transport.js says so in its header - because an
 // in-process call can. A socket cannot. If an event payload carries a Map, a Set or a
 // circular reference, it works locally and breaks the moment it goes over a wire, and
 // nothing before this file would have caught it.
@@ -111,19 +111,19 @@ async function Main() {
     // --- the payload that actually risks not surviving a wire ------------------
     //
     // end-turn emits a thin event. A MOVE carries a unit, a resolved path and a cost
-    // — live object references in-process — which is precisely what transport.js
+    // - live object references in-process - which is precisely what transport.js
     // warned would need serializing for real.
     //
     // The move is computed the way a real client computes one: its own copy of the
     // same engine code, from the same deterministic starting board. That is not a
-    // shortcut around the server, it is how FortHex already works — the browser loads
+    // shortcut around the server, it is how FortHex already works - the browser loads
     // js/server/*.js too, and only ever *requests* the move it computed.
     const mirror = { console: { log() {}, warn() {}, error() {} } };
     vm.createContext(mirror);
     vm.runInContext(ReadBundle(), mirror);
     // The end-turn above already advanced the server to player 2, so the mirror is
     // advanced too. Turn start resets movement points, which is why the mirror's move
-    // costs still match the server's — and if they ever stop matching, server-side
+    // costs still match the server's - and if they ever stop matching, server-side
     // validation rejects the move and this test says so rather than passing quietly.
     vm.runInContext('globalThis.engine = CreateEngineInstance(); InitializeGrid();', mirror);
     vm.runInContext("engine.actionManager.SubmitAction({ type: 'action', action: 'end-turn', payload: {} });", mirror);
@@ -179,11 +179,11 @@ async function Main() {
     await worker.terminate();
 
     if (failures.length) {
-        console.error('FAIL — ' + failures.length + ' check(s)');
+        console.error('FAIL - ' + failures.length + ' check(s)');
         failures.forEach(f => console.error('  !! ' + f));
         process.exit(1);
     }
-    console.log('PASS — host/match-worker.js');
+    console.log('PASS - host/match-worker.js');
     console.log('  standalone : the engine boots and runs a match in bare Node, no DOM');
     console.log('  protocol   : connect and action go in as the same four message shapes');
     console.log('  wire-safe  : ' + wire.length + ' state-sync(s) round-tripped through JSON');
@@ -192,6 +192,6 @@ async function Main() {
 }
 
 Main().catch((error) => {
-    console.error('FAIL —', error.message);
+    console.error('FAIL -', error.message);
     process.exit(1);
 });

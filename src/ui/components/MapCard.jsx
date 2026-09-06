@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { DrawMapPreview } from '../bridge.js';
 
 // The canvas thumbnail is drawn by renderMapPreview (js/client/ui.js), the same
-// function the map maker's Select Map view has always used — not a reimplementation.
+// function the map maker's Select Map view has always used - not a reimplementation.
 // It reads TEAM_COLORS live, so the preview follows the player's colour settings.
 export function MapCard({ map, onSelect }) {
     const canvasRef = useRef(null);
@@ -11,7 +11,7 @@ export function MapCard({ map, onSelect }) {
         if (canvasRef.current) DrawMapPreview(canvasRef.current, map);
     }, [map]);
 
-    // Radius 2 forces arcade (SetGridMode, js/server/map-generation.js) — no flags,
+    // Radius 2 forces arcade (SetGridMode, js/server/map-generation.js) - no flags,
     // no base camps, turn timer on. Saying so on the card is the alternative to the
     // chosen mode being silently overridden after the player has already picked it.
     const isArcade = (map.radius === 2);

@@ -44,8 +44,13 @@ body {
     min-height: 100vh;
     margin: 0;
     padding-top: 20px;
-    padding-bottom: 100px;
-    box-sizing: border-box; 
+
+    /* Was 100px, to keep content clear of the two fixed buttons that used to sit in
+       the bottom-left corner. They are gone, and the padding was 100px of page height
+       that existed whether or not anything needed it - which is most of the reason a
+       board that fitted the window still made the page scroll. */
+    padding-bottom: 20px;
+    box-sizing: border-box;
     overflow-x: auto;
 }
 
@@ -70,7 +75,7 @@ body {
 }
 
 h1.text-4xl {
-    font-family: 'Geostar', cursive;
+    font-family: 'Lexend Deca', 'Exo 2', sans-serif;
 }
 
 /* The corner positions itself; the lines inside just stack. Previously
@@ -89,7 +94,7 @@ h1.text-4xl {
     font-size: 0.8em;
     color: var(--color-warning);
     opacity: 0.75;
-    margin-top: 2px;
+    margin-bottom: 2px;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.04em;
 }
@@ -186,6 +191,49 @@ canvas {
 .action-button-cancel {
     background-color: #E04030;
     box-shadow: 0 3px #C03020;
+}
+
+/* Grey, for a button that is not one of the choices being offered - Settings, which
+   is a door to somewhere else rather than a way to start playing. Lifted from the
+   pre-B1 menu, where it was an inline style on #settingsButton. */
+.action-button-muted {
+    background-color: #90A0A0;
+    box-shadow: 0 3px #708080;
+}
+
+.action-button.action-button-muted:hover:not(:disabled) {
+    background-color: #788888;
+}
+
+/* Play. The muted red the old menu gave Singleplayer, which was the first thing on
+   it and the reason the stack did not read as one block of blue. */
+.action-button-play {
+    background-color: #E07060;
+    box-shadow: 0 3px #C05040;
+}
+
+.action-button.action-button-play:hover:not(:disabled) {
+    background-color: #D06050;
+}
+
+/* Changelog. GREEN_EMERALD, the same --color-confirm the modal OK buttons use. */
+.action-button-confirm {
+    background-color: #20B060;
+    box-shadow: 0 3px #208040;
+}
+
+.action-button.action-button-confirm:hover:not(:disabled) {
+    background-color: #1A9450;
+}
+
+/* Tutorial. The purple its floating button carried before it moved into the menu. */
+.action-button-accent {
+    background-color: #9040B0;
+    box-shadow: 0 3px #703090;
+}
+
+.action-button.action-button-accent:hover:not(:disabled) {
+    background-color: #703090;
 }
 
 .action-button.action-button-cancel:hover:not(:disabled) {
@@ -573,7 +621,7 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
  *
  * The wordmark is plain white with no outline (Burn, revised). It is still SVG
  * rather than styled text because that is what keeps this rule the single source
- * for both the menu component and the in-game title inlined in index.html — and if
+ * for both the menu component and the in-game title inlined in index.html - and if
  * an outline ever comes back, stroke plus stroke-linejoin: miter is a two-line
  * change here rather than a rebuild. */
 .fh-wordmark text {
@@ -590,7 +638,7 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
 
 /* The logo doubles as the connection indicator, replacing the wifi glyph that used
  * to sit top-right. hex-logo.png is RGBA, so it is used as an alpha MASK and the
- * colour comes from background-color — that gives an exact white/red rather than
+ * colour comes from background-color - that gives an exact white/red rather than
  * the approximation a filter chain would produce. */
 #gameIcon {
     display: block;
@@ -606,29 +654,8 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
     background-color: var(--color-status-offline);
 }
 
-#downloadButton {
-    position: fixed; bottom: 20px; left: 20px; width: 60px; height: 60px;
-    background-color: #27B060; color: white; border: none; border-radius: 8px;
-    font-family: 'Exo 2', sans-serif; cursor: pointer;
-    transition: background-color 0.3s, box-shadow 0.3s, transform 0.1s;
-    box-shadow: 0 4px #208050; display: flex; align-items: center; justify-content: center;
-    padding: 0; z-index: 1001;
-}
-#downloadButton:hover:not(:disabled) { background-color: #208050; box-shadow: 0 4px #207040; }
-#downloadButton:active:not(:disabled) { box-shadow: 0 1px #207040; transform: translateY(3px); }
 
-#tutorialButton {
-    position: fixed; bottom: 90px; left: 20px; width: 60px; height: 60px;
-    background-color: #9040B0; color: white; border: none; border-radius: 8px;
-    font-family: 'Exo 2', sans-serif; cursor: pointer;
-    transition: background-color 0.3s, box-shadow 0.3s, transform 0.1s;
-    box-shadow: 0 4px #703090; display: flex; align-items: center; justify-content: center;
-    padding: 0; z-index: 1002;
-}
-#tutorialButton:hover:not(:disabled) { background-color: #703090; box-shadow: 0 4px #502070; }
-#tutorialButton:active:not(:disabled) { box-shadow: 0 1px #502070; transform: translateY(3px); }
-
-/* .message-box removed — the centred red bar is now the top-right toast stack in
+/* .message-box removed - the centred red bar is now the top-right toast stack in
  * src/ui/menu.css (.fh-toasts / .fh-toast). */
 
 .victory-message {
@@ -820,7 +847,7 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
     }
 }
 
-/* The in-game title doubles as the menu trigger — the separate "Menu" link that used
+/* The in-game title doubles as the menu trigger - the separate "Menu" link that used
  * to sit beside the logo was a second control for the same job. */
 .fh-wordmark-trigger {
     display: block;
@@ -835,3 +862,38 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
 .fh-wordmark-trigger:hover { transform: scale(1.02); filter: drop-shadow(0 0 14px rgba(255, 192, 32, 0.7)); }
 .fh-wordmark-trigger:active { transform: scale(0.99); }
 .fh-wordmark-trigger:focus-visible { outline: 3px solid var(--color-warning); outline-offset: 6px; border-radius: 8px; }
+
+
+/* B3 - the disconnect countdown. Centred at the top, where the old message bar used
+ * to sit: it is the one thing on screen that is genuinely urgent, and it stays until
+ * the opponent returns or the window closes. */
+#disconnectBanner {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2400;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 22px;
+    border: 3px solid #fff;
+    border-radius: 12px;
+    background: rgba(48, 64, 80, 0.96);
+    color: var(--color-text-main);
+    font-family: 'Exo 2', sans-serif;
+    font-weight: bold;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+#disconnectBannerClock {
+    font-variant-numeric: tabular-nums;
+    font-size: 1.25em;
+    color: var(--color-warning);
+    min-width: 3.2em;
+    text-align: right;
+}
+
+/* Under ten seconds it stops being information and starts being a deadline. */
+#disconnectBanner.is-urgent { border-color: var(--color-cancel); }
+#disconnectBanner.is-urgent #disconnectBannerClock { color: var(--color-cancel); }

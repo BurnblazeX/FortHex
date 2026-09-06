@@ -1,6 +1,6 @@
-// === Input Handlers (client-only — A1 step 8/12) ===
+// === Input Handlers (client-only - A1 step 8/12) ===
 //
-// Pure relocation from main.js, no logic changes — these are input
+// Pure relocation from main.js, no logic changes - these are input
 // translation (click/drag/tap -> a call into the action layer), which the
 // guide explicitly classifies as staying entirely client-side and unchanged
 // in shape for A1. The boundary these handlers call into (js/client/actions.js
@@ -778,7 +778,7 @@ function handleUnitSelectionClick(x, y) {
         }
 
 
-// === Canvas input listener registration (moved from main.js — A1 step 12) ===
+// === Canvas input listener registration (moved from main.js - A1 step 12) ===
 //
 // The handlers themselves already lived here; only their registration moved,
 // so js/main.js reads as a list of wiring calls.

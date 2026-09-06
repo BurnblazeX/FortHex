@@ -1,11 +1,11 @@
 // Four-bar connection indicator, for the room listing.
 //
-// `level` is 0–4 and comes from the host, not from anything measured here: the room's
+// `level` is 0-4 and comes from the host, not from anything measured here: the room's
 // number is the ROOM HOST's round-trip time (host/rooms.js QualityBars), measured with
 // the WebSocket protocol's own ping/pong. A viewer's own latency would be identical
 // for every row and would say nothing about the rooms.
 //
-// 0 means "not measured yet", drawn as four empty bars rather than one filled one — a
+// 0 means "not measured yet", drawn as four empty bars rather than one filled one - a
 // room created a second ago has no sample, and inventing a bar would be a lie about
 // the connection rather than an admission that nothing is known.
 const LABELS = {

@@ -1,4 +1,4 @@
-// FortHex — replay a captured match log through the engine, headlessly.
+// FortHex - replay a captured match log through the engine, headlessly.
 //
 //   node tools/replay-matchlog.js tools/reference/default-opening-annihilation.a2.json
 //
@@ -137,7 +137,7 @@ const HARNESS = `
             if (!ack.ok) {
                 problems.push('#' + i + ' ' + entry.type + ' (t' + entry.turn + ' p' + entry.player + ' ' +
                               entry.actorId + ') REJECTED: ' + ack.error +
-                              (ack.detail ? ' — ' + ack.detail : ''));
+                              (ack.detail ? ' - ' + ack.detail : ''));
                 break;
             }
             applied++;
@@ -237,7 +237,7 @@ worker.on('message', (m) => {
     if (m.gameOver !== undefined) console.log(`  match ended     : ${m.gameOver}   flags: ${m.flags}   supply: ${JSON.stringify(m.supply)}`);
     console.log('');
     if (m.ok) {
-        console.log('REPRODUCED — the engine replayed this match to the same final board.');
+        console.log('REPRODUCED - the engine replayed this match to the same final board.');
         process.exit(0);
     }
     console.log(`${m.problems.length} DIVERGENCE(S):`);

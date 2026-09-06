@@ -1,7 +1,7 @@
 // === Room registry (B2) ===
 //
 // A room is NOT a match. It is a lobby entry: a name, a visibility, and up to two
-// seats. The engine — and the ~12.4 MB worker thread that carries it — is not
+// seats. The engine - and the ~12.4 MB worker thread that carries it - is not
 // created until a match actually starts.
 //
 // That distinction is the whole reason this file exists separately from the worker
@@ -13,14 +13,14 @@
 //
 // Deliberately free of sockets, `ws`, and Node's http module: everything here is
 // plain data in and plain data out, so tools/lobby-smoke.js can exercise every rule
-// — capacity, private-room secrets, reconnect resolution — without opening a port.
+// - capacity, private-room secrets, reconnect resolution - without opening a port.
 
 const crypto = require('crypto');
 
 // The game is two-player and its rules are deeply built around that (base camps,
 // flags, currentPlayer). A1 asked that the PROTOCOL leave the door open for more
 // without the rules pretending to support it, so this is a named constant rather
-// than a hardcoded 2 — that is "leave the door open", not "build for it".
+// than a hardcoded 2 - that is "leave the door open", not "build for it".
 const SEATS = [1, 2];
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no I/L/O/0/1
@@ -36,7 +36,7 @@ function NewRoomCode() {
 }
 
 // Secrets are stored hashed and compared in constant time. This is a game room code,
-// not a password vault — but a plain === leaks length and prefix through timing, the
+// not a password vault - but a plain === leaks length and prefix through timing, the
 // hash keeps the secret out of memory dumps and logs, and both cost nothing here.
 function HashSecret(secret) {
     return crypto.createHash('sha256').update(String(secret)).digest();
@@ -47,6 +47,15 @@ function SecretMatches(hash, candidate) {
     if (candidate === undefined || candidate === null) return false;
     const supplied = HashSecret(candidate);
     return supplied.length === hash.length && crypto.timingSafeEqual(supplied, hash);
+}
+
+// What board a room is on, in one line, for the listing and the room screen. One
+// function so the two cannot describe the same room differently.
+function DescribeRoomBoard(room) {
+    const settings = room.settings || {};
+    if (settings.resumeSave) return settings.resumeSave.label || 'Saved match';
+    if (settings.customMap) return settings.customMap.name || 'Custom map';
+    return settings.mapName || 'Standard';
 }
 
 class RoomRegistry {
@@ -63,7 +72,7 @@ class RoomRegistry {
     // --- lifecycle ----------------------------------------------------------
 
     Create({ name, visibility = 'public', code = null, hostClientId, hostName,
-             hostProfileId = null, hostVersion = null, settings = {} }) {
+             hostProfileId = null, hostVersion = null, hosting = 'server', settings = {} }) {
         const isPrivate = visibility === 'private';
 
         // Falls back to the host's own name rather than "Untitled room". The client
@@ -72,7 +81,7 @@ class RoomRegistry {
         const who = String(hostName || 'Player').trim() || 'Player';
         const roomName = String(name || '').trim().slice(0, 40) || (who + "'s Room");
 
-        // Every room gets a join code, private or not — it is the room's shareable
+        // Every room gets a join code, private or not - it is the room's shareable
         // address ("join ABC123"), separate from whether a secret is required to get
         // in. A private room with no supplied password uses its own code as the
         // secret, which is the "share a code out-of-band" flow B2 describes.
@@ -86,23 +95,53 @@ class RoomRegistry {
             joinCode,
             secretHash: secret ? HashSecret(secret) : null,
             hostClientId,
+
+            // Host identity is anchored to the PROFILE, not the socket. A host who drops
+            // and comes back arrives on a new clientId; keyed on that alone they would
+            // return to their own room as a guest, and nobody would be able to start it.
+            hostProfileId: hostProfileId || null,
             hostName: String(hostName || 'Player').slice(0, 24),
 
             // The build the room's host is running. Recorded per room rather than
             // read from this process because it is the CLIENT build that decides
-            // whether two players can understand each other — the host process may
+            // whether two players can understand each other - the host process may
             // be serving files it did not compile.
             hostVersion: hostVersion ? String(hostVersion).slice(0, 24) : null,
             seats: new Map(SEATS.map(seat => [seat, null])),
             state: 'waiting',
-            settings: { fogOfWarEnabled: !!settings.fogOfWarEnabled },
+            settings: {
+                fogOfWarEnabled: !!settings.fogOfWarEnabled,
+
+                // A preset map is a NAME. The worker has config-data.js and looks it
+                // up itself, so nothing about the board travels.
+                mapName: typeof settings.mapName === 'string' ? settings.mapName.slice(0, 60) : null,
+
+                // A map loaded from a file has no name the other side knows, so this
+                // one carries the board. Held as received and handed to the worker
+                // unread: the host process does not adjudicate maps any more than it
+                // adjudicates moves.
+                customMap: settings.customMap || null,
+
+                // A saved match to resume, already migrated by whoever uploaded it.
+                // Held and forwarded unread, like customMap: this process does not
+                // adjudicate saves any more than it adjudicates moves.
+                resumeSave: settings.resumeSave || null,
+            },
+
+            // B2. 'server' spawns a worker on this process when the match starts;
+            // 'direct' spawns nothing and the two players connect to each other, with
+            // this process relaying only the two setup messages. The room itself is
+            // identical either way - it is listed, seated and coded the same - because
+            // finding an opponent is the same problem regardless of where the match
+            // ends up running.
+            hosting: hosting === 'direct' ? 'direct' : 'server',
             createdAt: Date.now(),
             matchId: null,
         };
 
         // The creator is seated HERE rather than by a follow-up Join. Routing them
-        // through Join meant passing the room's own secret check — which they had no
-        // code for, because they had just invented it — so creating a PRIVATE room
+        // through Join meant passing the room's own secret check - which they had no
+        // code for, because they had just invented it - so creating a PRIVATE room
         // silently failed to seat its host and the room sat there reading 0/2.
         //
         // Seat 1 always. Which side the host actually plays is chosen in the room
@@ -138,7 +177,7 @@ class RoomRegistry {
     // `preferSeat` is a REQUEST, not a claim: honoured when that seat is free and
     // quietly ignored when it is not. The host picks a side when creating the room, so
     // whoever joins takes whatever is left rather than the sides being fixed by who
-    // arrived first — which is what locked every host to Blue.
+    // arrived first - which is what locked every host to Blue.
     Join({ roomId, joinCode, code, clientId, profileId, name = null, preferSeat = null }) {
         const room = roomId ? this.Get(roomId) : this.FindByJoinCode(joinCode);
         if (!room) return { ok: false, error: 'no_such_room' };
@@ -149,7 +188,7 @@ class RoomRegistry {
             return { ok: false, error: 'bad_code' };
         }
 
-        // Already seated — the same client asking twice, or a reconnect landing before
+        // Already seated - the same client asking twice, or a reconnect landing before
         // the old socket was reaped. Hand back the seat they already hold rather than
         // consuming the other one.
         const held = this.SeatOf(room, clientId, profileId);
@@ -166,7 +205,7 @@ class RoomRegistry {
     }
 
     // Which seat this client holds, if any. profileId is checked as well as
-    // clientId because a reconnecting player arrives on a NEW socket — the durable
+    // clientId because a reconnecting player arrives on a NEW socket - the durable
     // identity A5 gave them is the only thing that survives the drop.
     SeatOf(room, clientId, profileId) {
         for (const seat of SEATS) {
@@ -179,7 +218,7 @@ class RoomRegistry {
     }
 
     // Frees whatever seat this client held, in whatever room. Returns the affected
-    // room, or null. A player leaving a room mid-match does NOT free the seat — A3's
+    // room, or null. A player leaving a room mid-match does NOT free the seat - A3's
     // disconnect window owns that decision, and freeing it here would let a stranger
     // take the seat of someone who is about to reconnect.
     // `deliberate` is the difference between "my socket died" and "I clicked Leave",
@@ -197,12 +236,21 @@ class RoomRegistry {
             const seat = this.SeatOf(room, clientId, null);
             if (seat === null) continue;
 
-            if (room.state === 'in-progress' && !deliberate) {
-                return { room, seat, seatFreed: false };
+            // A match in progress keeps the seat WHETHER OR NOT the leaving was
+            // deliberate (Burn, 2026-09-06). Someone who clicks Leave mid-match may be
+            // switching to a local game and coming straight back, and the point of the
+            // window is that the match survives long enough for that. So both paths
+            // become "absent, with a deadline", and the room is only torn down when
+            // that deadline passes with nobody left - see FindAbandoned.
+            if (room.state === 'in-progress') {
+                const occupant = room.seats.get(seat);
+                if (occupant && !occupant.disconnectedAt) occupant.disconnectedAt = Date.now();
+                return { room, seat, seatFreed: false, held: true };
             }
 
+            // A room that has not started has nothing to hold a seat for.
             room.seats.set(seat, null);
-            return { room, seat, seatFreed: true };
+            return { room, seat, seatFreed: true, held: false };
         }
         return null;
     }
@@ -250,7 +298,7 @@ class RoomRegistry {
     }
 
     // Rooms nobody is left in. An in-progress room does NOT free its seats when a
-    // player drops — A3's reconnect window depends on that — which meant a match whose
+    // player drops - A3's reconnect window depends on that - which meant a match whose
     // players both closed their browsers stayed listed as full forever, and its worker
     // stayed resident with it. Nothing reaped them, because the only thing that would
     // have is a deadline checked on a heartbeat that had stopped arriving.
@@ -271,7 +319,7 @@ class RoomRegistry {
             // Everyone is gone. Wait out the grace period from the MOST RECENT
             // departure, so the last player to leave still gets a full window back.
             // Fall back to the room's own age. An occupant who LEFT deliberately has no
-            // disconnectedAt — nothing recorded one, because nothing had dropped — so
+            // disconnectedAt - nothing recorded one, because nothing had dropped - so
             // `latest` was 0 and the guard below never fired. That is how a finished
             // match ended up sitting in the list forever, empty and unjoinable, until
             // the host was restarted.
@@ -283,6 +331,13 @@ class RoomRegistry {
         return abandoned;
     }
 
+    // Host or guest. The distinction matters: only a host may start a match or swap
+    // sides, and a guest's client hides the match-level controls entirely.
+    IsHost(room, clientId, profileId) {
+        if (profileId && room.hostProfileId) return profileId === room.hostProfileId;
+        return room.hostClientId === clientId;
+    }
+
     Occupants(room) {
         return SEATS.map(seat => room.seats.get(seat)).filter(Boolean);
     }
@@ -291,39 +346,45 @@ class RoomRegistry {
         return this.Occupants(room).length === SEATS.length;
     }
 
+    // Matches this process is actually RUNNING - which is to say, workers. A direct
+    // match is in progress too, but it is in progress in somebody's browser and costs
+    // this process nothing, so counting it here would let a handful of direct rooms
+    // exhaust a ceiling that exists to cap worker memory. That is what this number is
+    // for (CanStartMatch below, and the ~12.4 MB per worker it guards), so it counts
+    // only what it is guarding.
     LiveMatchCount() {
         let count = 0;
         for (const room of this.rooms.values()) {
-            if (room.state === 'in-progress') count++;
+            if (room.state === 'in-progress' && room.hosting !== 'direct') count++;
         }
         return count;
     }
 
     // Called before a worker is spawned. This is where the memory ceiling is actually
-    // enforced — the registry is the only thing that knows how many matches are live.
+    // enforced - the registry is the only thing that knows how many matches are live.
     CanStartMatch() {
         return this.LiveMatchCount() < this.maxConcurrentMatches;
     }
 
     // --- what a client is allowed to see ------------------------------------
 
-    // The listing. Private rooms ARE included (Burn, 2026-09-06) — with only two seats,
+    // The listing. Private rooms ARE included (Burn, 2026-09-06) - with only two seats,
     // a room someone is already in is not joinable anyway, so hiding it buys little.
     // They are marked `locked` so the client can ask for a code, and their join code
     // is of course not in the row.
     //
     // What that trades away is obscurity: a visible private room can have its code
-    // guessed at leisure. Obscurity was never the real defence — the code is 6
-    // characters from a 31-symbol alphabet (~887 million combinations) — but guessing
+    // guessed at leisure. Obscurity was never the real defence - the code is 6
+    // characters from a 31-symbol alphabet (~887 million combinations) - but guessing
     // is only impractical if attempts are LIMITED, which is why failed joins are
     // throttled in host/server.js. Visibility is what makes that throttle load-bearing
     // rather than belt-and-braces.
     //
-    // Nothing secret-derived appears here — no secretHash, no joinCode, no clientIds
+    // Nothing secret-derived appears here - no secretHash, no joinCode, no clientIds
     // and no profileIds. Building this by picking fields rather than deleting them
     // from a copy means a field added to a room later is invisible by default rather
     // than published by default.
-    // `rttOf` is a lookup the host process supplies — the registry has no sockets and
+    // `rttOf` is a lookup the host process supplies - the registry has no sockets and
     // therefore no way to know a round-trip time. Passing it in keeps this file
     // testable without a port, which is the rule the whole module is built on.
     PublicList(rttOf = null, isConnected = null) {
@@ -342,6 +403,9 @@ class RoomRegistry {
                 state: room.state,
                 locked: room.visibility === 'private',
                 fogOfWar: !!room.settings.fogOfWarEnabled,
+                hosting: room.hosting || 'server',
+                mapName: DescribeRoomBoard(room),
+                resuming: !!room.settings.resumeSave,
                 quality: QualityBars(rttOf ? rttOf(room.hostClientId) : null),
                 createdAt: room.createdAt,
             });
@@ -349,18 +413,39 @@ class RoomRegistry {
         return listing.sort((a, b) => a.createdAt - b.createdAt);
     }
 
-    // What a member of the room may see. Carries the join code — they are inside, and
-    // it is how they invite the other player — but still never the secret hash.
-    RoomView(room, forClientId) {
+    // What a member of the room may see. Carries the join code - they are inside, and
+    // it is how they invite the other player - but still never the secret hash.
+    // Which seat the host is sitting in. A direct match needs it by number rather
+    // than by "whoever is host", because the guest has to be told which side it is
+    // playing before any connection exists to ask over.
+    SeatOfHost(room) {
+        let found = null;
+        room.seats.forEach((occupant, seat) => {
+            // IsHost, not a clientId comparison: a host who reconnects arrives on a new
+            // socket with a new clientId, and their profileId is what still identifies
+            // them. Comparing sockets would hand the room to nobody.
+            if (occupant && this.IsHost(room, occupant.clientId, occupant.profileId)) found = seat;
+        });
+        return found;
+    }
+
+    RoomView(room, forClientId, forProfileId = null) {
         return {
             id: room.id,
             name: room.name,
             visibility: room.visibility,
             joinCode: room.joinCode,
             hostName: room.hostName,
-            isHost: room.hostClientId === forClientId,
+            isHost: this.IsHost(room, forClientId, forProfileId),
             state: room.state,
             fogOfWar: !!room.settings.fogOfWarEnabled,
+            hosting: room.hosting || 'server',
+            // The name only. A client that needs the board either has the preset
+            // already or is the host who loaded the file.
+            mapName: DescribeRoomBoard(room),
+            // The guest is told they are joining a match in progress, not starting
+            // one. It changes what the room means to them.
+            resuming: !!room.settings.resumeSave,
             seats: SEATS.map(seat => {
                 const occupant = room.seats.get(seat);
                 return {
@@ -368,7 +453,7 @@ class RoomRegistry {
                     filled: !!occupant,
                     you: !!occupant && occupant.clientId === forClientId,
                     // Names are already public via the room listing's hostName, so this
-                    // exposes nothing new — it just lets a client say who it is playing.
+                    // exposes nothing new - it just lets a client say who it is playing.
                     name: occupant ? (occupant.name || 'Player') : null,
                     connected: occupant ? !occupant.disconnectedAt : false,
                 };
@@ -379,7 +464,7 @@ class RoomRegistry {
 
 // Four bars, from a real round-trip time. The thresholds are deliberately generous:
 // FortHex is turn-based, so 250ms is perfectly playable and the indicator should say
-// so rather than alarming people used to shooters. 0 means "not measured yet" — a
+// so rather than alarming people used to shooters. 0 means "not measured yet" - a
 // room created a second ago has no sample, and claiming one bar would be a lie.
 function QualityBars(rttMs) {
     if (rttMs === null || rttMs === undefined) return 0;

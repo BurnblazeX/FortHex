@@ -25,7 +25,7 @@ and it names the ledger entry to start from.
 ## `default-opening.a2.json`
 
 Burn's "default" opening. Captured 2026-09-02, build `InDev B30`, **after** Track
-A2's validation work — so it locks in current behaviour for comparison against
+A2's validation work - so it locks in current behaviour for comparison against
 Track C and later, rather than proving A2 changed nothing.
 
 | | |
@@ -46,7 +46,7 @@ absent. The ledger and the state it describes agree.
 
 ### What it does NOT cover
 
-This is the important part — a green diff on this file does **not** mean nothing
+This is the important part - a green diff on this file does **not** mean nothing
 broke. Untouched by this opening:
 
 - `BUILD_BRIDGE`, bridge-as-attack-target
@@ -82,11 +82,11 @@ Two things this log exposed rather than covered:
 
 Three more openings would close most of that gap:
 
-1. **Fog on** — the same opening with fog of war enabled. None of the three
+1. **Fog on** - the same opening with fog of war enabled. None of the three
    current logs exercise it, and it gates what the server may send.
-2. **Engineering** — bridge building, a bridge destroyed by attack, supply
+2. **Engineering** - bridge building, a bridge destroyed by attack, supply
    lines cut and restored. `BUILD_BRIDGE` is the last unexercised action.
-3. **Respawn** — play past a death to a respawn choice, covering spawn-unit and
+3. **Respawn** - play past a death to a respawn choice, covering spawn-unit and
    the respawn queue.
 
 Capture each twice on different days; if two captures of the *same* opening

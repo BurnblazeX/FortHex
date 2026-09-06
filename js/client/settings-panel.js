@@ -1,4 +1,4 @@
-// === Settings panel wiring (moved from main.js — A1 step 12) ===
+// === Settings panel wiring (moved from main.js - A1 step 12) ===
 //
 // The settings modal and every control inside it. Note which side each setting
 // is read from and written to: animationsEnabled and fogOfWarEnabled live on
@@ -30,7 +30,7 @@ function SyncSettingControls() {
     }
 }
 
-// Settings stays vanilla DOM — B4 adopts React for NEW screens and explicitly does
+// Settings stays vanilla DOM - B4 adopts React for NEW screens and explicitly does
 // not retrofit working modals. What changed in B1 is only who opens it.
 //
 // The old handler faded the menu out, waited 350ms, then faded settings in, and the

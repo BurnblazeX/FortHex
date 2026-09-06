@@ -1,4 +1,4 @@
-// === Map Generation (PURE, moved from map.js — A1 step 9) ===
+// === Map Generation (PURE, moved from map.js - A1 step 9) ===
 //
 // The generation/placement half of the old js/map.js. Everything here is
 // engine-owned: it reads and writes engine.state and never touches the DOM,
@@ -511,7 +511,7 @@ function InitializeGridDimensions(newRadius, baseCampRotation = '3') {
                     // `units` is a live view, not stored data, and it must be
                     // NON-ENUMERABLE. As a plain object-literal getter it was
                     // enumerable, so spreading or JSON-ing an edge built here invoked
-                    // it and embedded full unit objects — which over a wire would
+                    // it and embedded full unit objects - which over a wire would
                     // carry every unit past the per-recipient redaction in
                     // js/server/state-filter.js. The other construction path
                     // (js/server/match-setup.js) always defined it this way; this one
@@ -679,4 +679,40 @@ function ClearMapForEditor(baseCampRotation) {
         }
     }
     return { cleared: true };
+}
+
+// === The maps a match can start on (B2) ===
+//
+// One list, on the SERVER side, because both halves need it and they must not disagree:
+// the menu offers these and a hosted worker has to be able to build whichever one was
+// picked. It lives here rather than in js/client/game-flow.js (where it used to) because
+// this file is in the worker bundle and that one is not.
+//
+// The consequence worth knowing: a room only sends the map's NAME over the wire, never
+// its tiles. The worker already has config-data.js and can look the map up itself, so a
+// preset map costs a handful of bytes instead of a whole board. A map LOADED FROM A FILE
+// has no name the other side knows, so that one does travel in full - see the customMap
+// path in host/match-worker.js.
+function GetSelectableMapList() {
+    return [
+        {
+            name: 'Standard',
+            radius: 3,
+            tiles: DEFAULT_MAP_LAYOUT_RADIUS_3,
+            units: null,
+            baseCampPositions: { player1: null, player2: null },
+            isDefault: true,
+        },
+        PRESET_MAP_2, // Alpha Grounds  (radius 2)
+        PRESET_MAP_1, // River Fork     (radius 3)
+        PRESET_MAP_3, // Volcano Island (radius 4)
+    ];
+}
+
+// Name in, map out, or the default when the name is unknown. Falling back rather than
+// failing is deliberate: a room created by a newer build naming a map this one has never
+// heard of should still be playable, on a board both sides agree about.
+function FindSelectableMap(name) {
+    const maps = GetSelectableMapList();
+    return maps.find(map => map.name === name) || maps[0];
 }

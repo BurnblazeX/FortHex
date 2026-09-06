@@ -1,14 +1,14 @@
-// === Match Setup (MIXED function split, client wrapper half — A1 step 8/12) ===
+// === Match Setup (MIXED function split, client wrapper half - A1 step 8/12) ===
 //
 // Keeps the original name/signature so every existing call site keeps
 // working unchanged. All the client-owned state resets and DOM/UI calls that
 // used to be interleaved throughout the original initializeGrid now run
-// before/after the pure InitializeGrid call instead — see
+// before/after the pure InitializeGrid call instead - see
 // js/server/match-setup.js's header comment for why that reordering is safe.
 
 // Canvas size and the side panels' minimum height, which is derived from it.
 //
-// Pulled out of initializeGrid because an ONLINE match never calls that function — the
+// Pulled out of initializeGrid because an ONLINE match never calls that function - the
 // board arrives as a view from the host and is written straight into engine.state. So
 // the canvas kept its default size and the panels kept no minHeight at all, which is
 // why the side panels rendered about two thirds of their proper length online and

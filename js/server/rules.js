@@ -1,4 +1,4 @@
-// === Rules (PURE, moved from core.js — A1 step 5) ===
+// === Rules (PURE, moved from core.js - A1 step 5) ===
 //
 // Every function here reads and writes the live engine instance
 // (engine.state / engine.settings). Nothing in this file touches the DOM, the
@@ -144,7 +144,7 @@ function getVisibleKeysFromUnit(unit) {
     const VISIBILITY_RANGE = onMountainPeak ? 3 : 2;
     const startCoord = getFineCoordForUnit(unit);
 
-    // A fortified unit occupies its tile, so that tile's own terrain never blocks it —
+    // A fortified unit occupies its tile, so that tile's own terrain never blocks it -
     // it still gets the full flower and can see out of the forest/mountain it sits in.
     // Any OTHER forest or mountain tile still blocks normally.
     const occupiedTileKey = (unit.positionType === 'center') ? unit.position : null;
@@ -164,7 +164,7 @@ function getVisibleKeysFromUnit(unit) {
 
     // BLOCKING RULE: a subHex "contains" a forest/mountain if it is that tile's own
     // subHex, OR it is an edge subHex with such a tile on either side. Such a subHex
-    // is itself visible, but nothing beyond it is — sight stops there. The unit's own
+    // is itself visible, but nothing beyond it is - sight stops there. The unit's own
     // subHex never blocks.
     const blocksSight = (entity) => {
         if (entity.type === 'tile') {
@@ -189,7 +189,7 @@ function getVisibleKeysFromUnit(unit) {
     });
 
     // MOUNTAIN RULE 1: a mountain's peak (its centre subHex) is always visible so long
-    // as it is within visibility range — it stands above whatever else is in the way,
+    // as it is within visibility range - it stands above whatever else is in the way,
     // so blockers along the path don't hide it.
     engine.state.tiles.forEach((tile, tileKey) => {
         if (tile.type.name !== 'Mountain') return;
@@ -199,7 +199,7 @@ function getVisibleKeysFromUnit(unit) {
     });
 
     // MOUNTAIN RULE 2: standing on a mountain tile's edge, that same mountain's other
-    // edges rotationally adjacent to the unit (fine-distance 1) cannot be seen —
+    // edges rotationally adjacent to the unit (fine-distance 1) cannot be seen -
     // the peak between them is in the way.
     if (unit.positionType === 'edge') {
         const ownMountainKeys = getTileKeysOfEdge(unit.position).filter(isMountainTile);
@@ -259,7 +259,7 @@ function getAttackRangeCells(unit) {
     const sideTileKeys = getSideTileKeys(unit);
     const startCoord = getFineCoordForUnit(unit);
 
-    // MODIFIER 2 — low-visibility fortified restriction: an archer fortified somewhere
+    // MODIFIER 2 - low-visibility fortified restriction: an archer fortified somewhere
     // with visibility <= 1 (e.g. a Forest) drops to range 1 instead of 2.
     //
     // A mountain peak is checked FIRST and overrides it: mountains are visibility 0, so
@@ -278,7 +278,7 @@ function getAttackRangeCells(unit) {
         }
     }
 
-    // MODIFIER 1 — mountains stop arrows the same way they stop sight. Melee has no
+    // MODIFIER 1 - mountains stop arrows the same way they stop sight. Melee has no
     // LOS blocking at range 1, so it runs unblocked. An archer's own peak never blocks
     // its own shots.
     const blocksBeyond = !isArcher ? null : (entity, distance) => {
@@ -288,7 +288,7 @@ function getAttackRangeCells(unit) {
         return !!(tile && getTileVisibility(tile) === 0);
     };
 
-    // MODIFIER 3 — combined arms: a friendly melee unit sharing the edge spots for the
+    // MODIFIER 3 - combined arms: a friendly melee unit sharing the edge spots for the
     // archer, relaxing the fortified-tile visibility threshold from 2 to 1 on the
     // archer's own side tiles.
     const hasCombinedArms = isArcher && hasCombinedArmsSupport(unit);
@@ -301,7 +301,7 @@ function getAttackRangeCells(unit) {
         if (data.type === 'edge') {
             if (!vis.edges.has(data.key)) return;
 
-            // MODIFIER 4 — edge-position range restriction: an archer standing on an
+            // MODIFIER 4 - edge-position range restriction: an archer standing on an
             // edge can only hit edges touching one of its own two side tiles.
             if (isArcher && unit.positionType === 'edge') {
                 const edgeTileKeys = getTileKeysOfEdge(data.key);
@@ -330,7 +330,7 @@ function getAttackRangeCells(unit) {
                 }
             } else {
                 // Melee: fortified enemies can only be hit from an edge, not from
-                // another fortified position — and a mountain peak can never be melee'd
+                // another fortified position - and a mountain peak can never be melee'd
                 // at all, no matter where the attacker stands.
                 if (unit.positionType !== 'edge') return;
                 if (isMountainPeak) return;
@@ -340,7 +340,7 @@ function getAttackRangeCells(unit) {
         cells.set(fineKey, data);
     });
 
-    // BALANCE RULE — an archer fortified in low visibility (a Forest) has its range cut
+    // BALANCE RULE - an archer fortified in low visibility (a Forest) has its range cut
     // to 1 by MODIFIER 2, but can still target the centre of every adjacent PLAINS tile,
     // even though those sit at fine-distance 2.
     if (isLowVisFortifiedArcher) {
@@ -528,7 +528,7 @@ function getAttackRangeFineCells(unit) {
         }
 
         // baseCampPositions[playerN] is either an array of tile keys or a single edge-key
-        // string depending on map radius. Normalise to an array of tile keys — hand-rolled
+        // string depending on map radius. Normalise to an array of tile keys - hand-rolled
         // copies of this that forgot the string case have already caused one live bug.
         function GetBaseCamp(player) {
             const rawBaseData = engine.state.baseCampPositions ? engine.state.baseCampPositions[`player${player}`] : null;
@@ -547,7 +547,7 @@ function getAttackRangeFineCells(unit) {
         }
 
         // Is this unit currently fortified on a mountain peak? Gated on Archer, not just
-        // terrain — only archers are meant to hold the range-3/vision-3 peak package.
+        // terrain - only archers are meant to hold the range-3/vision-3 peak package.
         // Without the type check, an arcade class-swap that morphs a fortified peak
         // archer into another class would keep granting it archer-tier vision.
         function isUnitOnMountainPeak(unit) {
@@ -794,6 +794,12 @@ function getAttackRangeFineCells(unit) {
                     actorId: newUnit.id,
                     payload: { typeName: unitType.name, at: spawnEdgeKey }
                 });
+
+                // The charge is spent HERE, on success, not by the caller. It used to be
+                // debited client-side after the fact (consumeRespawnCharge), which meant
+                // a blocked base spent nothing while some paths spent twice - and online
+                // it was never spent on the authoritative board at all.
+                SpendReinforcementCharge(player);
                 return true;
             }
 
@@ -1151,7 +1157,7 @@ function getAttackRangeFineCells(unit) {
         }
 
         // Compares the supply state captured before a recalculation against what came
-        // out of it, and records the difference — nothing at all when there is no
+        // out of it, and records the difference - nothing at all when there is no
         // difference, which is the common case.
         function RecordSupplyTransitions(playerNum, before) {
             if (!engine.state.matchHistory) return;
@@ -1269,7 +1275,7 @@ function getAttackRangeFineCells(unit) {
         }
 
         // Walks a getAttackRangeCells() result and collects the actual targets sitting in
-        // it. Shared by the melee and archer target-getters — the only difference between
+        // it. Shared by the melee and archer target-getters - the only difference between
         // them is the range calculation, which getAttackRangeCells() already handles.
         function collectTargetsFromAttackRange(attackingUnit, rangeCells) {
             const targets = [];

@@ -104,7 +104,7 @@ const FH = {
     // There is no real transport yet, so there is no real disconnect to detect.
     // These drive LocalTransport's connect/disconnect handling directly, which
     // is the same entry point Track B's adapters will call when a socket
-    // actually drops — so the server-side flow is exercised for real, only the
+    // actually drops - so the server-side flow is exercised for real, only the
     // trigger is by hand.
 
     // profileId defaults to this device's real profile when it has one, so the
@@ -117,7 +117,7 @@ const FH = {
         const ack = transport.Send(MakeDisconnectMessage(reason || 'console', { player, profileId: id }));
         if (!ack.ok) { console.warn('✗ disconnect: ' + ack.error); return ack; }
         const left = Math.round((ack.deadline - Date.now()) / 1000);
-        console.log(`✓ player ${player} absent — ${left}s to return`);
+        console.log(`✓ player ${player} absent - ${left}s to return`);
         return ack;
     },
 
@@ -134,7 +134,7 @@ const FH = {
         if (player !== undefined && ack.reconnected !== player) {
             console.warn(`note: claimed slot ${ack.reconnected}, not ${player} (matched by IsReturningPlayer)`);
         }
-        console.log(`✓ player ${ack.reconnected} back — resync: ${ack.resync.units.length} units, ` +
+        console.log(`✓ player ${ack.reconnected} back - resync: ${ack.resync.units.length} units, ` +
                     `filtered=${ack.resync.filtered}, turn ${ack.resync.globalTurnNumber} p${ack.resync.currentPlayer}`);
         return ack;
     },
@@ -171,7 +171,7 @@ const FH = {
 
     profile() {
         const p = GetProfile();
-        if (!p) { console.log('(no profile on this device — that is the normal state)'); return null; }
+        if (!p) { console.log('(no profile on this device - that is the normal state)'); return null; }
         console.table([{ id: p.id, name: p.name, consent: p.consent, created: new Date(p.createdAt).toLocaleString() }]);
         return p;
     },
@@ -199,7 +199,7 @@ const FH = {
     // management out of scope, and this is a test seam, not a feature.
     clearProfile() {
         ClearProfile();
-        console.log('profile cleared — this device is back to never having gone online');
+        console.log('profile cleared - this device is back to never having gone online');
         return null;
     },
 
@@ -283,7 +283,7 @@ const FH = {
 
     archiveSync() { return SyncArchiveToServer(); },
 
-    // The one command here that isn't something a player could do — and it still
+    // The one command here that isn't something a player could do - and it still
     // isn't a rule bypass. Waiting out a real 100-second window by hand is not a
     // workable test loop, so this winds the stored deadline back into the past.
     // The server still decides the timeout itself, off its own clock, on the next
@@ -293,7 +293,7 @@ const FH = {
         if (!s || s.connected) { console.warn('player ' + player + ' is not absent'); return null; }
         s.absentSince -= DISCONNECT_TIMEOUT_MS;
         s.deadline -= DISCONNECT_TIMEOUT_MS;
-        console.log(`deadline for player ${player} wound back — run FH.heartbeat()`);
+        console.log(`deadline for player ${player} wound back - run FH.heartbeat()`);
         return this.heartbeat();
     },
 
@@ -318,7 +318,7 @@ const FH = {
     },
 
     help() {
-        console.log(`FH — console commands (all actions pass server validation)
+        console.log(`FH - console commands (all actions pass server validation)
 
   inspect     FH.state()  FH.units(player?)  FH.unit(id)  FH.history(n?)
               FH.moves(id)  FH.targets(id)  FH.fortifySpots(id)
@@ -369,7 +369,7 @@ function FH_Run(action, payload) {
 
     const report = (settled) => {
         if (!settled.ok) {
-            console.warn(`✗ ${action}: ${settled.error}${settled.detail ? ' — ' + settled.detail : ''}`);
+            console.warn(`✗ ${action}: ${settled.error}${settled.detail ? ' - ' + settled.detail : ''}`);
         } else {
             const u = engine.state.units.find(x => x.id === payload.unitId);
             const bits = [`✓ ${action}`];

@@ -84,9 +84,11 @@
     align-items: center;
 }
 
-#singleplayerButton { background-color: #E07060; box-shadow: 0 3px #C05040; }
-#singleplayerButton:hover:not(:disabled) { background-color: #D06050; }
-#changelogButton { background-color: #20B060; box-shadow: 0 3px #208040; }
+/* The old modal menu's Singleplayer and Changelog colours lived here, keyed by id.
+   B1 replaced that menu with React and those ids no longer exist, so the rules were
+   matching nothing. The colours themselves are not lost - they are .action-button-play
+   and .action-button-confirm in css/main.css now, applied through MenuButton's
+   variant prop. The remaining ids in this file are still live elements. */
 #changelogButton:hover:not(:disabled) { background-color: #209050; }
 
 
@@ -150,7 +152,7 @@
     text-align: left; 
 }
 #tutorialModalContent h2 {
-    font-family: 'Geostar', cursive; font-size: 2em; text-align: center;
+    font-family: 'Lexend Deca', 'Exo 2', sans-serif; font-size: 2em; text-align: center;
     margin-bottom: 15px; color: #FFC020;
 }
 #tutorialModalContent p, #tutorialModalContent li {
@@ -190,7 +192,7 @@
 #respawnModalContent.swap-mode { border-color: #FFC020 !important; }
 
 #respawnModalContent h3 {
-    font-family: 'Geostar', cursive; font-size: 1.8em; color: #FFC020; margin-bottom: 10px;
+    font-family: 'Lexend Deca', 'Exo 2', sans-serif; font-size: 1.8em; color: #FFC020; margin-bottom: 10px;
 }
 #respawnModalContent.swap-mode h3 { color: #FFC020 !important; }
 

@@ -1,4 +1,4 @@
-// === Respawn and swap modal wiring (moved from main.js — A1 step 12) ===
+// === Respawn and swap modal wiring (moved from main.js - A1 step 12) ===
 //
 // Respawn choices, the arcade class-swap choices, and the info-panel tabs.
 // These call the client wrappers (spawnUnit, performSwap), never the engine

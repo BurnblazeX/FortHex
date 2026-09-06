@@ -12,9 +12,10 @@ import { ProfileSetupScreen } from './screens/ProfileSetupScreen.jsx';
 import { CreditsScreen } from './screens/CreditsScreen.jsx';
 import { LobbyScreen } from './screens/LobbyScreen.jsx';
 import { CreateRoomScreen, RoomScreen } from './screens/RoomScreen.jsx';
+import { DirectConnectScreen } from './screens/DirectConnectScreen.jsx';
 
 // Where each screen's Back goes. A flat map rather than a history stack because the
-// menu is a fixed tree — every screen has exactly one parent, and a stack would let
+// menu is a fixed tree - every screen has exactly one parent, and a stack would let
 // Back land somewhere different depending on how the player arrived.
 const PARENT = {
     play: 'root',
@@ -25,6 +26,7 @@ const PARENT = {
     credits: 'root',
     lobby: 'multiplayer',
     'create-room': 'lobby',
+    'direct-connect': 'lobby',
     room: 'lobby',
 };
 
@@ -38,7 +40,7 @@ export function MenuApp() {
     const [playerSide, setPlayerSide] = useState(1);
 
     // Being in a room decides which screen you are on, and that decision lives HERE
-    // rather than in the screens themselves — this component is always mounted, and
+    // rather than in the screens themselves - this component is always mounted, and
     // the screens are not. Putting it in LobbyScreen meant creating a room navigated
     // nowhere (LobbyScreen was unmounted at the time), Back re-mounted it and only
     // then jumped, and Leave landed on a room screen with no room left to draw.
@@ -92,11 +94,18 @@ export function MenuApp() {
             break;
         case 'lobby':
             content = (
-                <LobbyScreen onBack={Back} onCreate={() => GoTo('create-room')} />
+                <LobbyScreen
+                    onBack={Back}
+                    onCreate={() => GoTo('create-room')}
+                    onDirect={() => GoTo('direct-connect')}
+                />
             );
             break;
         case 'create-room':
             content = <CreateRoomScreen onBack={() => GoTo('lobby')} />;
+            break;
+        case 'direct-connect':
+            content = <DirectConnectScreen onBack={Back} onClose={HideMenu} />;
             break;
         case 'room':
             content = <RoomScreen />;

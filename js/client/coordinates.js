@@ -1,7 +1,7 @@
 // === Pixel/Screen-Space Coordinate Conversion (client-only, A1 step 6) ===
 //
 // These read canvas.width/canvas.height and gameState.renderScale/renderOffset
-// directly — genuinely screen-space concerns with no meaning outside a browser
+// directly - genuinely screen-space concerns with no meaning outside a browser
 // tab, so they can never live in js/server/. Moved verbatim from core.js.
 //
 // The rest of the old js/core.js folded in here when the /js root was cleaned up:

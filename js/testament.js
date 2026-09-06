@@ -1,4 +1,4 @@
-// === Testament — versioned save/map schema and migration chain (A4) ===
+// === Testament - versioned save/map schema and migration chain (A4) ===
 //
 // Replaces attemptLegacyConversion (js/client/save.js), which tried to patch every
 // broken shape B20 through B29 in one reactive pass with no idea which version it
@@ -200,7 +200,10 @@ const MIGRATIONS = [
 // after every step rather than once at the end - the historical bugs the audit
 // catches are not known to be scoped to a single boundary, so a bug introduced
 // partway through the range has to be caught wherever it first shows up.
-function MigrateSave(rawData) {
+// `options.modernise` is the player's answer to "bring this up to the current rules?".
+// Default false - a migration that re-judged by default would be the very thing the
+// no-backporting rule forbids.
+function MigrateSave(rawData, options = {}) {
     let version = DetectVersion(rawData);
     const report = MakeMigrationReport(version);
 
@@ -227,6 +230,13 @@ function MigrateSave(rawData) {
 
     report.toVersion = version;
     data.schemaVersion = version;
+    if (options.modernise) {
+        const modernised = ModerniseUnits(data.units);
+        data.units = modernised.units;
+        modernised.changes.forEach(change => report.corrections.push(change));
+        report.modernised = true;
+    }
+
     return { data, report };
 }
 
@@ -882,7 +892,7 @@ function TileTypeName(tile) {
 // --- rebuilding the action log ----------------------------------------------
 //
 // The action log is not saved. It is a rolling 25-entry UI window (ui.js trims it
-// on every push), never match truth — matchHistory is the record, and the log is a
+// on every push), never match truth - matchHistory is the record, and the log is a
 // rendering of it. So it gets rebuilt from the ledger at load instead of stored.
 //
 // WHAT THIS CANNOT REBUILD, and why. Some messages the live game prints have no
@@ -894,7 +904,7 @@ function TileTypeName(tile) {
 //   - flag returned to base                    A2's known ledger gap
 //   - unit death as its own line               A2's known gap (inferable from ATTACK.isKill)
 //
-// That is cosmetic — the log is chrome — but closing those gaps is A6's ledger work
+// That is cosmetic - the log is chrome - but closing those gaps is A6's ledger work
 // and would make this reconstruction complete. Flagged rather than papered over.
 const REBUILT_LOG_LIMIT = 25;
 
@@ -928,7 +938,7 @@ function RebuildActionLog(matchHistory, options) {
 
 // Under fog, a player's log should show what that player could actually have seen:
 // their own actions, and anything that happened to their own units. Vision at the
-// time of each event is NOT recoverable — the board it was computed from is gone —
+// time of each event is NOT recoverable - the board it was computed from is gone -
 // so ownership is the honest approximation rather than a real replay of sight.
 function VisibleInRebuiltLog(entry, opts) {
     if (!opts.fogOfWarEnabled) return true;
@@ -1147,6 +1157,139 @@ function ParseTypeFromUnitId(unitId) {
 // Runs after every migration step (see MigrateSave). The known bugs are not
 // scoped to a single beta, so auditing once at the end could miss one that a
 // later step reshapes into something that looks fine.
+// === Opt-in modernisation (B30) ===
+//
+// Migration RESHAPES data; it does not re-judge it. That rule is what stops a v1 save
+// silently acquiring today's balance - an Archer recorded with attack 3 keeps attack 3,
+// even though the current template says damage 2, because rewriting it would be
+// inventing a match that was never played.
+//
+// The rule is right, and it also means old saves carry old numbers forever. So this is
+// the escape hatch, and it is OPT-IN: the player is asked, and only when there is
+// actually something to change. Saying no keeps the file exactly as faithful as it was.
+//
+// What it CAN do:
+//   - recompute every unit's stats from the current template plus its recorded upgrades
+//   - clamp a level above MAX_LEVEL and reconcile a level that disagrees with the
+//     upgrades actually recorded
+//
+// What it CANNOT do, and should not pretend to:
+//   - undo an over-promotion. Whether a promotion was PAID FOR is a fact about the
+//     match's history, not about the file: it needs a count of deaths, and ledgers
+//     before B30 recorded none. A unit promoted with charges it never earned is
+//     internally consistent and indistinguishable from a legitimate one.
+// Mirrors the literal 2 that js/server/actions.js applies in three places. Named here
+// because a rebuild that disagrees with the live rule is worse than no rebuild.
+const FORTIFIED_ARCHER_DAMAGE_BONUS = 2;
+
+function RecomputeUnitStats(unit) {
+    const template = UNIT_TYPES[unit.typeId];
+    if (!template) return null;
+
+    const upgrades = unit.upgrades || { health: 0, speed: 0, damage: 0, defense: 0 };
+
+    const stats = {
+        maxHp: template.hp,
+        speed: template.speed,
+        damage: template.damage,
+        defense: template.defense,
+        range: unit.stats && unit.stats.range !== undefined ? unit.stats.range : 1,
+    };
+
+    // Replays the same arithmetic ApplyUnitUpgrade performs, in the same order, rather
+    // than trusting the stored numbers - the whole point is to rebuild them from today's
+    // template. The paired penalty lands on the 2nd and 3rd point in a stat, which is
+    // the rule the live code applies.
+    ['health', 'speed', 'damage', 'defense'].forEach(stat => {
+        const count = upgrades[stat] || 0;
+        const boost = UPGRADE_CONSTANTS.BOOST_VALUES[stat];
+
+        for (let point = 1; point <= count; point++) {
+            if (stat === 'health') stats.maxHp += boost;
+            else stats[stat] += boost;
+
+            if (point === 2 || point === 3) {
+                const paired = UPGRADE_CONSTANTS.PAIRS[stat];
+                const penalty = UPGRADE_CONSTANTS.BOOST_VALUES[paired];
+                if (paired === 'health') stats.maxHp -= penalty;
+                else stats[paired] -= penalty;
+            }
+        }
+    });
+
+    // A fortified Archer carries +2 damage BAKED INTO its stats - applied on fortify and
+    // removed on unfortify (js/server/actions.js), not calculated at attack time. So it
+    // is part of the unit's recorded stats and has to be re-applied here, or modernising
+    // a fortified archer would quietly strip 2 damage off it and call that a correction.
+    //
+    // This is the only situational modifier stored this way; every other stat difference
+    // comes from the template or a recorded upgrade.
+    if (unit.isFortified && unit.typeId === 'ARCHER') {
+        stats.damage += FORTIFIED_ARCHER_DAMAGE_BONUS;
+    }
+
+    const oldHp = unit.stats && Number.isFinite(unit.stats.hp) ? unit.stats.hp : stats.maxHp;
+    stats.hp = Math.min(oldHp, stats.maxHp);
+
+    return stats;
+}
+
+// Returns { units, changes } - changes is a plain list of what would differ, so the same
+// function powers both the preview the player is shown and the migration itself.
+function ModerniseUnits(units) {
+    const changes = [];
+
+    const modernised = (units || []).map(unit => {
+        const template = UNIT_TYPES[unit.typeId];
+        if (!template) {
+            changes.push(unit.id + ': unknown unit type ' + unit.typeId + ', left alone');
+            return unit;
+        }
+
+        const next = { ...unit };
+        const upgrades = { health: 0, speed: 0, damage: 0, defense: 0, ...(unit.upgrades || {}) };
+        const recorded = Object.keys(upgrades).reduce((sum, key) => sum + (upgrades[key] || 0), 0);
+
+        if (Number.isFinite(unit.level) && unit.level > UPGRADE_CONSTANTS.MAX_LEVEL) {
+            changes.push(unit.id + ': level ' + unit.level + ' is above the maximum, clamped to '
+                + UPGRADE_CONSTANTS.MAX_LEVEL);
+            next.level = UPGRADE_CONSTANTS.MAX_LEVEL;
+        }
+
+        // The upgrades actually recorded are the evidence; `level` is a tally that can
+        // drift from them. Trust the evidence.
+        const level = Number.isFinite(next.level) ? next.level : 0;
+        if (recorded !== level) {
+            changes.push(unit.id + ': level says ' + level + ' but ' + recorded
+                + ' upgrade(s) are recorded, level corrected');
+            next.level = recorded;
+        }
+
+        const stats = RecomputeUnitStats({ ...next, upgrades });
+        if (stats) {
+            const differs = ['maxHp', 'speed', 'damage', 'defense']
+                .filter(key => stats[key] !== (unit.stats ? unit.stats[key] : undefined));
+            if (differs.length) {
+                changes.push(unit.id + ': ' + differs
+                    .map(k => k + ' ' + (unit.stats ? unit.stats[k] : '?') + ' to ' + stats[k])
+                    .join(', '));
+            }
+            next.stats = stats;
+            next.upgrades = upgrades;
+        }
+
+        return next;
+    });
+
+    return { units: modernised, changes };
+}
+
+// The dry run. Called before asking, so the question is only put when there is an
+// answer worth having.
+function PreviewModernisation(migratedData) {
+    return ModerniseUnits(migratedData.units).changes;
+}
+
 function AuditForKnownBugs(data, report) {
     const out = { ...data };
     out.tiles = AuditBaseCampTerrain(out, report);
@@ -1217,12 +1360,12 @@ function DescribeContent(data) {
     const hasHistory = Array.isArray(data.matchHistory) && data.matchHistory.length > 0;
 
     // What a map file (createMapDataObject, js/client/save.js) actually omits:
-    // flags, supplyPoints, currentPlayer — everything describing a match in progress
+    // flags, supplyPoints, currentPlayer - everything describing a match in progress
     // rather than a board.
     //
     // Deliberately NOT keyed on edges: the lean schema regenerates those from the
     // tiles, so their absence says nothing about what kind of file this is. And NOT
-    // on turn number either — a match saved on turn 1 is still a match.
+    // on turn number either - a match saved on turn 1 is still a match.
     const hasMatchState = data.currentPlayer !== undefined && !!data.flags;
 
     return {

@@ -1,11 +1,11 @@
-// FortHex — headless harness for the local player profile  (Track A5, guide §8)
+// FortHex - headless harness for the local player profile  (Track A5, guide §8)
 //
 //   node tools/profile-smoke.js
 //
 // js/client/profile.js is the one file this track adds that no existing harness
 // reaches: worker-smoke.js proves the SERVER side runs without localStorage, which
 // is the opposite problem. So this runs profile.js against a fake localStorage and
-// checks the things §8 asks to be proven rather than assumed — most of all that a
+// checks the things §8 asks to be proven rather than assumed - most of all that a
 // profile survives a reload, since a profile that doesn't defeats the whole track.
 //
 // What it deliberately cannot cover: the consent screen (DOM) and the Online click
@@ -179,7 +179,7 @@ const persistentStore = MakeStore();
 // A preset portrait key, stored with the profile and chosen on the setup screen.
 // Two things worth asserting rather than assuming: it survives a reload like the
 // name does, and it does NOT leak into the engine copy that BuildSaveObject writes
-// into a file — a save records who wrote it, not what portrait they picked.
+// into a file - a save records who wrote it, not what portrait they picked.
 {
     const store = MakeStore();
     const engineStub = {};
@@ -201,7 +201,7 @@ const persistentStore = MakeStore();
     check('a pre-B1 profile still loads', read !== null && read.id === 'legacy-id');
     check('a pre-B1 profile reads as having no avatar', read.avatar === null);
 
-    // Every offered key must resolve to a file that actually exists — a broken
+    // Every offered key must resolve to a file that actually exists - a broken
     // portrait is the kind of thing nobody notices until a player sees it.
     const presets = page.call('PROFILE_AVATARS');
     check('four preset avatars are offered', presets.length === 4);
@@ -237,11 +237,11 @@ const persistentStore = MakeStore();
 
 // --- report ----------------------------------------------------------------
 if (failures.length) {
-    console.error('FAIL — ' + failures.length + ' check(s)');
+    console.error('FAIL - ' + failures.length + ' check(s)');
     failures.forEach(f => console.error('  !! ' + f));
     process.exit(1);
 }
-console.log('PASS — js/client/profile.js');
+console.log('PASS - js/client/profile.js');
 console.log('  created lazily  : reading never writes; nothing exists until asked for');
 console.log('  survives reload : same id across a fresh page context');
 console.log('  idempotent      : GetOrCreateProfile returns the existing profile');

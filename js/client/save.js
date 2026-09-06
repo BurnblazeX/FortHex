@@ -28,7 +28,7 @@ const ENGINE_SAVE_FIELDS = [
 ];
 
 // Goes through Testament's canonical serializer (A4 §8), the same one
-// ResolveDisconnectOutcome uses — two paths to one nominal format would defeat
+// ResolveDisconnectOutcome uses - two paths to one nominal format would defeat
 // having a single versioned schema at all.
 //
 // The result is the skeleton: no edge list (regenerated from the tiles), no action
@@ -60,7 +60,7 @@ function ApplyLoadedState(loadedState) {
     //
     // MERGED onto the live gameState rather than replacing it (changed in A4). The
     // lean schema deliberately saves almost no client state, so a wholesale replace
-    // would leave gameState missing fields the client assumes exist — visualEffects
+    // would leave gameState missing fields the client assumes exist - visualEffects
     // is pushed to unguarded by HandleActionEvent, and would be undefined on the
     // next flag capture. Merging keeps the client's own defaults for anything the
     // file legitimately doesn't carry; rehydrateGameState resets the transient ones
@@ -71,18 +71,30 @@ function ApplyLoadedState(loadedState) {
     delete gameState.edges;
 
     // A6. A save written before this version has no match identity to keep, so it
-    // gets one now — once, here, rather than inside a migration, which has to stay
+    // gets one now - once, here, rather than inside a migration, which has to stay
     // pure. Everything written from B30 onward arrives with its own id and keeps it.
     if (!engine.state.matchId) engine.state.matchId = NewMatchId();
 
     // B1. Both load paths (the file loader in js/client/modals.js and the autosave
     // restore below) funnel through here, so this is the one place that has to know
-    // a match now exists. Under menu-first boot the render loop has not been started
-    // yet on a fresh page, and the menu is still covering the board — loading a save
-    // as the very first thing after launch would otherwise apply the state correctly
-    // and show nothing. Both calls are idempotent.
-    EnsureGameLoopRunning();
-    HideMainMenu();
+    // a match now exists.
+    //
+    // The canvas and the side panels are sized by initializeGrid, which a load does NOT
+    // call - it builds the board from the file instead. That was harmless while the game
+    // always booted into a match, because initializeGrid had already run once at startup.
+    // Under menu-first boot it has never run, so loading a save straight from the menu
+    // landed on a default 300x150 canvas with unsized panels.
+    // Sizing is safe here - it touches the canvas element, not the board.
+    //
+    // Starting the RENDER LOOP is not, and used to happen here: this function leaves
+    // tiles and edges as the raw arrays the file carried, and rehydrateGameState is what
+    // turns them back into Maps afterwards. Drawing in between crashed in drawHexFill on
+    // a tile with no type, and left engine.state.tiles as a plain array - so the NEXT
+    // load then died in InitializeGridDimensions calling .clear() on it.
+    //
+    // The loop and the menu are now the caller's job, after rehydration. See
+    // FinishLoadedMatch below, which both load paths call.
+    SizeBoardAndPanels();
 
     // A5. `profile` is not an ENGINE_SAVE_FIELD, so it survives the merge above
     // and sits on gameState as a record of who wrote the file. Nothing reads it
@@ -90,6 +102,15 @@ function ApplyLoadedState(loadedState) {
     // played a match, never a credential. Loading a friend's save must not make
     // this browser think it is them - the only thing that writes a local profile
     // is js/client/profile.js, from the Online flow.
+}
+
+// Called by every load path AFTER rehydrateGameState has turned the file's raw arrays
+// back into live Maps. Anything that reads or draws the board belongs here rather than
+// in ApplyLoadedState, which runs while the board is still half-converted.
+function FinishLoadedMatch() {
+    EnsureGameLoopRunning();
+    HideMainMenu();
+    UpdateStatusCorner();
 }
 
 function saveSettings() {
@@ -149,8 +170,8 @@ function loadColorPreferences() {
 function autoSaveGame(isSilent = false) {
     if (engine.state.isTrainingMode) return;
 
-    // Never autosave a hosted match. The local engine holds a FILTERED board — under
-    // fog it is missing every enemy unit — so writing it would silently overwrite the
+    // Never autosave a hosted match. The local engine holds a FILTERED board - under
+    // fog it is missing every enemy unit - so writing it would silently overwrite the
     // player's autosave slot with a corrupt position that looks like a real one. The
     // authoritative save lives on the host; A4's disconnect flow is how it comes back.
     if (typeof IsRemoteMatch === 'function' && IsRemoteMatch()) return;
@@ -237,11 +258,40 @@ function saveGameToFile() {
 // This replaced attemptLegacyConversion: one reactive pass that tried to patch
 // every broken shape from B20 to B29 at once, with no idea which version it was
 // actually looking at. The ordered chain that does that job properly lives in
-// js/testament.js, shared by both sides. What is left here is the client edge —
+// js/testament.js, shared by both sides. What is left here is the client edge -
 // running the chain, reporting what it found, and handing the rest of this file
 // the shape it already expects.
-function LoadThroughTestament(data) {
-    const outcome = MigrateSave(data);
+// Decides whether to offer modernisation, then loads.
+//
+// Async because the question is a modal the player has to answer. The faithful migration
+// runs FIRST and unconditionally - a file that would not change loads exactly as it
+// always has, with no prompt, and a player who declines gets that same result.
+async function LoadThroughTestamentAsked(data, fileName) {
+    let modernise = false;
+
+    try {
+        const preview = PreviewModernisation(MigrateSave(JSON.parse(JSON.stringify(data))).data);
+        if (preview.length && window.FortHexUI && window.FortHexUI.AskAboutModernising) {
+            // The detail goes to the console, not the modal - accurate for a developer,
+            // noise for a player deciding yes or no.
+            console.groupCollapsed('[Testament] ' + preview.length
+                + ' change(s) available if modernised');
+            preview.forEach(change => console.log('  ' + change));
+            console.groupEnd();
+
+            modernise = await window.FortHexUI.AskAboutModernising({ changes: preview, fileName });
+        }
+    } catch (error) {
+        // A preview that throws must not block the load. Falling through means the file
+        // loads faithfully, which is the safe answer and the historical behaviour.
+        console.warn('[Testament] Could not preview modernisation:', error);
+    }
+
+    return LoadThroughTestament(data, { modernise });
+}
+
+function LoadThroughTestament(data, options = {}) {
+    const outcome = MigrateSave(data, options);
     // The action log is rebuilt from matchHistory rather than stored, so expansion
     // needs to know who is watching: under fog a player's log shows their own
     // actions and what happened to their own units, not the whole board's history.
@@ -258,7 +308,7 @@ function LoadThroughTestament(data) {
     report.corrections.forEach(c => console.log('corrected: ' + c));
     console.groupEnd();
 
-    // Repairs are worth saying out loud — the player's file was wrong and is not
+    // Repairs are worth saying out loud - the player's file was wrong and is not
     // any more. Warnings stay in the console; they are not the player's problem.
     if (report.corrections.length) {
         ShowSuccess('Repaired ' + report.corrections.length + ' problem(s) in this file.');
@@ -343,6 +393,7 @@ function loadAutoSave() {
 
             // 4. Rehydrate
             rehydrateGameState();
+            FinishLoadedMatch();
             
             // 5. Restore UI
             if (engine.state.gameMode === 'arcade') {
@@ -402,7 +453,7 @@ function rehydrateGameState() {
         }
 
         // 3b. Rebuild the fine-grid index from the freshly restored tiles/edges.
-        // It's derived data — never trust whatever the save serialised it into (a Map
+        // It's derived data - never trust whatever the save serialised it into (a Map
         // becomes a plain {} through JSON, which would break resolveFineCoord()).
         buildFineGridIndex();
 
@@ -432,7 +483,7 @@ function rehydrateGameState() {
         //
         // enumerable: true is LOAD-BEARING, not decoration. A live unit from
         // createUnit carries type/hp/maxHp as ordinary enumerable properties, and
-        // the codebase spreads units freely — ai.js builds a `ghostUnit` as
+        // the codebase spreads units freely - ai.js builds a `ghostUnit` as
         // `{ ...unit, position }` to score a hypothetical move, then reads
         // ghostUnit.type.attackType.
         //
@@ -440,8 +491,8 @@ function rehydrateGameState() {
         // when the property is NEW. Before A4 these three were always already
         // present as enumerable data properties (the old save format stored them),
         // so converting them to accessors silently KEPT enumerable:true and every
-        // spread still worked. A4's lean schema stopped saving them — correctly,
-        // they're derived — which made them new properties here, and non-enumerable
+        // spread still worked. A4's lean schema stopped saving them - correctly,
+        // they're derived - which made them new properties here, and non-enumerable
         // by default. Spreading then dropped them, and the AI's first ghost unit
         // died on `undefined.attackType`.
         //
@@ -602,7 +653,7 @@ function loadMapFromDataObject(mapData) {
     engine.state.baseCampPositions = mapData.baseCampPositions || { player1: null, player2: null };
 
     // resizeMapGrid(2) nulls engine.state.flags for arcade, so this must be guarded the same
-    // way startMapTest does it — otherwise loading any Compact (radius 2) map throws.
+    // way startMapTest does it - otherwise loading any Compact (radius 2) map throws.
     if (engine.state.flags) {
         engine.state.flags.p1_flag.homePosition = engine.state.baseCampPositions.player1;
         engine.state.flags.p2_flag.homePosition = engine.state.baseCampPositions.player2;
@@ -722,4 +773,128 @@ function ExportMatchHistory(label = 'reference') {
     console.log(`[Capture] ${capture.entryCount} ledger entries exported as "${safeLabel}".`);
     showInstruction(`Match log exported (${capture.entryCount} entries).`, 2500);
     return capture;
+}
+
+// === A map file, read but not loaded (B2) ===
+//
+// loadMapFromDataObject above replaces the live board and enters the map maker,
+// which is right for "open this map" and wrong for "host a room on this map" - the
+// player is in a lobby and the board behind them is not the subject.
+//
+// So this reads the file, runs it through Testament like any other load, checks it is
+// actually a map, and hands back the plain object a room stores and a worker builds
+// from. InitializeGrid accepts tiles as pairs and units keyed by typeName, which is
+// exactly the shape a map file already has, so nothing is reshaped here.
+async function ReadMapFileForRoom(file) {
+    if (!file) return { ok: false, error: 'No file chosen.' };
+
+    let data;
+    try {
+        data = JSON.parse(await file.text());
+    } catch (error) {
+        return { ok: false, error: 'That file is not readable.' };
+    }
+
+    try {
+        data = LoadThroughTestament(data);
+    } catch (error) {
+        return { ok: false, error: 'That map is too old to open.' };
+    }
+
+    // What a file opens into is decided by what is in it, never by its extension
+    // (A4 §9). A saved MATCH offered here is a different feature, not a map.
+    const content = DescribeContent(data);
+    if (content.opensAs !== 'map') {
+        return { ok: false, error: 'That is a saved game, not a map.' };
+    }
+
+    if (!Array.isArray(data.tiles) || data.tiles.length === 0) {
+        return { ok: false, error: 'That map has no tiles in it.' };
+    }
+
+    return {
+        ok: true,
+        map: {
+            // Named after the file, since a map file carries no name of its own and
+            // "Custom map" tells the other player nothing.
+            name: String(file.name || 'Custom map').replace(/\.[^.]+$/, '').slice(0, 40),
+            radius: data.radius || 3,
+            tiles: data.tiles,
+            units: data.units || null,
+            baseCampPositions: data.baseCampPositions || null,
+        },
+    };
+}
+
+// === A saved match, read for a room rather than loaded into this one (B2) ===
+//
+// The sibling of ReadMapFileForRoom above, and the same reasoning: the player is standing
+// in a lobby setting up a room, and replacing the board behind them is not what they
+// asked for.
+//
+// The important part is WHERE migration happens. Testament runs here, on the machine of
+// the person who chose the file, because the modernisation question is a decision only a
+// person can make and this is the only place a person is standing. What travels to the
+// host is a settled, current-version save, so the worker never has to ask anybody
+// anything - see ResumeMatchFromSave in js/server/match-setup.js.
+//
+// The result is deliberately the LEAN save object rather than the expanded one that
+// LoadThroughTestament returns: it has to survive JSON to reach the host, and
+// BuildSaveObject is the one serializer already asserted to do that.
+async function ReadSaveFileForRoom(file) {
+    if (!file) return { ok: false, error: 'No file chosen.' };
+
+    let raw;
+    try {
+        raw = JSON.parse(await file.text());
+    } catch (error) {
+        return { ok: false, error: 'That file is not readable.' };
+    }
+
+    // What a file opens into is decided by what is in it, never by its extension (A4 §9).
+    // A map offered here is the other feature, one control up.
+    let described;
+    try {
+        described = DescribeContent(MigrateSave(JSON.parse(JSON.stringify(raw))).data);
+    } catch (error) {
+        return { ok: false, error: 'That save is too old to open.' };
+    }
+    if (described.opensAs === 'map') {
+        return { ok: false, error: 'That is a map, not a saved game.' };
+    }
+
+    let loaded;
+    try {
+        // Asks about modernising, exactly as the ordinary Load Game path does, and for
+        // the same reason: an old save's numbers are not this build's numbers, and only
+        // the person holding the file can say whether that should be corrected.
+        loaded = await LoadThroughTestamentAsked(raw, file && file.name);
+    } catch (error) {
+        return { ok: false, error: 'That save could not be opened.' };
+    }
+
+    if (!loaded || !loaded.tiles) {
+        return { ok: false, error: 'That save has no board in it.' };
+    }
+
+    return {
+        ok: true,
+        save: {
+            ...loaded,
+
+            // Never travels. It records who WROTE the file, and pushing a stranger's
+            // identity onto the host would have it adopt them and then write them into
+            // the next save. ResumeMatchFromSave refuses it on the far side too; this is
+            // the near side of the same rule.
+            profile: undefined,
+
+            // Shown in the lobby so a joining player knows what they are walking into.
+            label: String(file.name || 'Saved match').replace(/\.[^.]+$/, '').slice(0, 40),
+        },
+        summary: {
+            turn: loaded.globalTurnNumber || 1,
+            units: Array.isArray(loaded.units) ? loaded.units.length : 0,
+            toMove: loaded.currentPlayer || 1,
+        },
+    };
 }

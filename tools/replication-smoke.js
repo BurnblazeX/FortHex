@@ -1,10 +1,10 @@
-// FortHex — proves a hosted match sends each player a board they can DRAW  (B2)
+// FortHex - proves a hosted match sends each player a board they can DRAW  (B2)
 //
 //   node tools/replication-smoke.js
 //
 // host-smoke.js proves the engine runs in bare Node and that its payloads survive
 // JSON. This proves what was missing underneath every transport: that an accepted
-// action produces, per recipient, enough state to RENDER — and no more.
+// action produces, per recipient, enough state to RENDER - and no more.
 //
 // Before this, ApplyMoveAction emitted LOG lines and nothing positional, so a remote
 // client was told "a unit moved" in prose with no way to know where. And A2's
@@ -25,7 +25,7 @@ function check(what, condition) {
     return condition;
 }
 
-// Two real recipients and fog ON — the configuration where getting this wrong is
+// Two real recipients and fog ON - the configuration where getting this wrong is
 // invisible locally and a cheat over a wire.
 const worker = new Worker(BuildWorkerSource(), {
     eval: true,
@@ -138,7 +138,7 @@ async function Main() {
 
     // --- 3. the edge getter did not smuggle units through ------------------
     // An edge carries a live `units` getter closing over engine state. If it is
-    // enumerable, spreading or JSON-ing an edge embeds full unit objects — which
+    // enumerable, spreading or JSON-ing an edge embeds full unit objects - which
     // would put every unit on the wire past the redaction checked below.
     const leaked = AllEdges(views).filter(edge => 'units' in edge);
     check('no edge smuggled a live units getter onto the wire (' + leaked.length + ' did)',
@@ -146,7 +146,7 @@ async function Main() {
 
     // The two construction paths DISAGREED until B2: match-setup.js defined the getter
     // non-enumerable, map-generation.js used a plain object-literal getter, which is
-    // enumerable — so edges built by the resize path serialized their units and edges
+    // enumerable - so edges built by the resize path serialized their units and edges
     // built by the normal path did not. The check above cannot catch that on its own,
     // because the board it inspects only ever comes from one of the two paths. This
     // asserts the property at the source, for both.
@@ -194,7 +194,7 @@ async function Main() {
     // (js/client/remote-state.js) is that step, and until it existed a hosted match
     // sent perfectly good state to a client that had nowhere to put it.
     //
-    // Applied into a FRESH engine with no board of its own, which is the real case —
+    // Applied into a FRESH engine with no board of its own, which is the real case -
     // a joining client has never seen this match.
     if (haveBoth) {
         const client = { console: { log() {}, warn() {}, error() {} } };
@@ -228,7 +228,7 @@ async function Main() {
         check('terrain is rehydrated back into a TILE_TYPES object, not left a name',
             rebuilt.terrainIsObject === true);
 
-        // The live accessor cannot travel, so it has to be re-attached — and must be
+        // The live accessor cannot travel, so it has to be re-attached - and must be
         // non-enumerable here too, or the next thing that serializes this board puts
         // every unit back on the wire.
         check('the edge units accessor is re-attached as non-enumerable',
@@ -242,7 +242,7 @@ async function Main() {
         check('applying a view asks for a repaint', rebuilt.redrawRequested === true);
 
         // Vision is TAKEN from the host, not recomputed. The client only holds part of
-        // the board, so deriving fog from it could agree only by luck — the server had
+        // the board, so deriving fog from it could agree only by luck - the server had
         // to work the set out anyway in order to know what to send.
         check('vision is taken from the host', rebuilt.visionFromHost === true);
         check('and is not marked for local recomputation', rebuilt.visionRecomputeSkipped === true);
@@ -253,7 +253,7 @@ async function Main() {
     //
     // Every ownership gate in the client used to read `gameMode === 'singleplayer' &&
     // unit.player !== playerSide`. Correct while singleplayer was the only mode that
-    // bound a client to one side — but an online client is bound the same way with a
+    // bound a client to one side - but an online client is bound the same way with a
     // different mode string, so every one of those tests evaluated false and both
     // players could drag both armies. The server refused the illegal moves, so nothing
     // desynced; it just made having two sides pointless.
@@ -292,7 +292,7 @@ async function Main() {
     // --- 7. the rebuilt board must be SPATIALLY usable, not just present -----
     //
     // Having the right tiles, edges and units is not enough. engine.state.fineGrid is a
-    // DERIVED index, rebuilt by every other path that replaces a board — after
+    // DERIVED index, rebuilt by every other path that replaces a board - after
     // InitializeGrid, after a load, after a resize. This path replaced the board and did
     // not, so the index stayed empty and every spatial query returned nothing.
     //
@@ -348,6 +348,48 @@ async function Main() {
             onServer.moves > 0 && onClient.moves === onServer.moves);
     }
 
+    // --- 8. leaving a hosted match really stops it reaching the client ------
+    //
+    // BeginOnlineMatchWith subscribed to the socket and EndOnlineMatch never released
+    // it, so a player who left for a local game kept receiving the hosted match - and
+    // kept APPLYING it. Their fresh local board was overwritten by the online one,
+    // including whose turn it was, which handed them control of both sides. It also
+    // re-showed the disconnect countdown for the person who had just left.
+    //
+    // Tested against the transport's own contract rather than the browser: OnMessage
+    // must hand back a working unsubscribe, and js/main.js must keep and call it.
+    {
+        const fake = {
+            subscribers: new Set(),
+            OnMessage(handler) {
+                this.subscribers.add(handler);
+                return () => this.subscribers.delete(handler);
+            },
+            deliver(message) { [...this.subscribers].forEach(h => h(message)); },
+        };
+
+        fake.OnMessage(() => {});
+        const release = fake.OnMessage(() => {});
+        check('OnMessage hands back an unsubscribe that works',
+            fake.subscribers.size === 2 && (release(), fake.subscribers.size === 1));
+
+        // And the real file must actually keep it. A returned unsubscribe that nobody
+        // stores is the bug this is guarding, so the assertion is about the CALL SITE.
+        const main = fs.readFileSync(path.join(__dirname, '../js/main.js'), 'utf8');
+        check('js/main.js stores the subscription it opens',
+            /onlineUnsubscribe\s*=\s*socketTransport\.OnMessage/.test(main));
+        check('and releases it when the hosted match ends',
+            /function EndOnlineMatch[\s\S]*?onlineUnsubscribe\(\)/.test(main));
+        check('and ignores anything that lands after the match is over',
+            /if \(!IsRemoteMatch\(\)\) return;/.test(main));
+
+        // Starting a local match must tear down a hosted one regardless of what the
+        // lobby thinks - the UI is not the thing that guarantees this.
+        const flow = fs.readFileSync(path.join(__dirname, '../js/client/game-flow.js'), 'utf8');
+        check('starting a local match ends any hosted match',
+            /IsRemoteMatch\(\)\) EndOnlineMatch\(\)/.test(flow));
+    }
+
     check('nothing errored inside the worker' +
         (errors.length ? ' (' + errors.map(e => e.where + ': ' + e.error).join('; ') + ')' : ''),
         errors.length === 0);
@@ -355,13 +397,13 @@ async function Main() {
     await worker.terminate();
 
     if (failures.length) {
-        console.error('FAIL — ' + failures.length + ' check(s)');
+        console.error('FAIL - ' + failures.length + ' check(s)');
         failures.forEach(f => console.error('  !! ' + f));
         process.exit(1);
     }
 
     const sizes = views.map(v => JSON.stringify(v).length);
-    console.log('PASS — per-recipient state replication');
+    console.log('PASS - per-recipient state replication');
     console.log('  addressed : each player got their own sync, not one broadcast');
     console.log('  renderable: the moved unit is reported at its new edge, with ' +
         views[0].tiles.length + ' tiles and ' + views[0].edges.length + ' edges');
@@ -370,10 +412,11 @@ async function Main() {
     console.log('  rebuild   : a received view reconstructs a drawable board on a fresh client');
     console.log('  ownership : a seated client controls its own side only; hotseat controls both');
     console.log('  geometry  : the rebuilt board answers attack range and movement like the server');
+    console.log('  teardown  : leaving releases the socket, so a local game is never overwritten');
     console.log('  size      : ' + sizes.map(n => (n / 1024).toFixed(1) + 'KB').join(' / ') + ' per view');
 }
 
 Main().catch((error) => {
-    console.error('FAIL —', error.message);
+    console.error('FAIL -', error.message);
     process.exit(1);
 });

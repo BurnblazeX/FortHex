@@ -288,7 +288,7 @@ async function handleAIReinforcements() {
             const statToUpgrade = statPool[Math.floor(Math.random() * statPool.length)];
             console.log(`[AI] Promoted ${targetUnit.type.name} (+${statToUpgrade})`);
             applyUnitUpgrade(targetUnit, statToUpgrade);
-            consumeRespawnCharge(player);
+            // charge is spent server-side now (SpendReinforcementCharge)
             actionTaken = true;
             await delay(800);
 
@@ -311,7 +311,7 @@ async function handleAIReinforcements() {
                 if (counts[unitName] < UNIT_CAPS[unitName]) {
                     const success = spawnUnit(player, UNIT_TYPES[typeKey]);
                     if (success) {
-                        consumeRespawnCharge(player);
+                        // charge is spent server-side now (SpendReinforcementCharge)
                         actionTaken = true;
                         await delay(800);
                         break;

@@ -7,7 +7,7 @@ export function MultiplayerScreen({ onGoTo, onBack, onClose }) {
         LeaveRoomIfAny();
         onClose();
         // "Launches directly into the current local-multiplayer default, no additional
-        // setup" — roadmap B1. The default map is the first entry, same as before.
+        // setup" - roadmap B1. The default map is the first entry, same as before.
         StartMatch({ mode: 'local', map: GetMaps()[0] });
     };
 
