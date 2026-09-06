@@ -34,7 +34,7 @@ function WireRespawnChoices() {
                                         hideRespawnModal();
                                     }
                                 } else {
-                                    showInstruction("Could not spawn unit, base is blocked!", 3000);
+                                    ShowWarning("Could not spawn unit, base is blocked!");
                                     hideRespawnModal();
                                 }
                             }

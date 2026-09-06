@@ -9,7 +9,7 @@
 function handleInteractionStart(x, y, isTouchEvent = false) {
             if (gameState.fillToolActive) {
                 if (gameState.mapMakerBrush.type !== 'tile') {
-                    showInstruction("Please select a tile type to fill with.", 2000);
+                    ShowWarning("Please select a tile type to fill with.");
                     return;
                 }
                 const coords = pixelToAxial(x, y);
@@ -80,7 +80,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
 
             if (gameState.fillToolActive) {
                 if (gameState.mapMakerBrush.type !== 'tile') {
-                    showInstruction("Please select a tile type to fill with.", 2000);
+                    ShowWarning("Please select a tile type to fill with.");
                     return;
                 }
                 const coords = pixelToAxial(x, y);
@@ -115,7 +115,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             for (let i = edgeUnits.length - 1; i >= 0; i--) {
                 const {unit, edge} = edgeUnits[i];
                 if (unit.player !== engine.state.currentPlayer) continue;
-                if (engine.state.gameMode === 'singleplayer' && unit.player !== engine.state.playerSide) continue; 
+                if (IsForeignUnit(unit)) continue; 
                 if (unit.isFortified || unit.currentMove < 1) continue;
                 if (unit.hasPerformedMajorAction && !unit.type.canMoveAfterAttack) continue;
                 if (unit.spearWalled) continue;
@@ -231,15 +231,15 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                                 isTargetKnownEnemy = true;
                             }
                         }
-                        if (isTargetKnownEnemy) { showInstruction("Cannot move to enemy edge."); break; }
-                        if (finalTargetEdgeData.units.filter(u => u.player === gameState.draggingUnit.player).length >= 2) { showInstruction("Target edge full."); break; }
+                        if (isTargetKnownEnemy) { ShowWarning("Cannot move to enemy edge."); break; }
+                        if (finalTargetEdgeData.units.filter(u => u.player === gameState.draggingUnit.player).length >= 2) { ShowWarning("Target edge full."); break; }
                         
                         // Pass moveData.path
                         if (costToMove <= gameState.draggingUnit.currentMove && costToMove !== Infinity) { 
                             handleMoveAction(gameState.draggingUnit, targetEdgeKey, costToMove, moveData.path); 
                             droppedOnValidTarget = true; 
                         }
-                        else { showInstruction(`Cannot move. Cost: ${costToMove.toFixed(1)}, Have: ${gameState.draggingUnit.currentMove.toFixed(1)}`); }
+                        else { ShowWarning(`Cannot move. Cost: ${costToMove.toFixed(1)}, Have: ${gameState.draggingUnit.currentMove.toFixed(1)}`); }
                         break;
                     }
                 }
@@ -251,7 +251,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                     if (gameState.dragUnitOriginalType === 'edge' && gameState.dragUnitOriginalPosition) {
                          unit.position = gameState.dragUnitOriginalPosition; unit.positionType = 'edge';
                      }
-                     if (gameState.draggedDistance >= DRAGGED_DISTANCE_THRESHOLD) showInstruction("Invalid drop. Unit returned.", 2000);
+                     if (gameState.draggedDistance >= DRAGGED_DISTANCE_THRESHOLD) ShowWarning("Invalid drop. Unit returned.");
                      gameState.selectedUnit = unit;
                      gameState.currentActionState = ACTION_STATES.UNIT_SELECTED; 
                       if(unit && !unit.isFortified && unit.hp > 0 && !unit.hasPerformedMajorAction && unit.currentMove >=1) gameState.currentReachableMoves = getPossibleMoves(unit);
@@ -297,7 +297,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             if (gameState.mustUnfortify) {
                 // allow clicking an action target
                 if (!handleActionTargetSelectionClick(x, y)) {
-                    showInstruction("You MUST select an edge to retreat to!", 2000);
+                    ShowWarning("You MUST select an edge to retreat to!");
                 }
                 return; // Block all other canvas interactions
             }
@@ -376,7 +376,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
     if (!selectedUnit || selectedUnit.isFortified || selectedUnit.currentMove < 1) {
         return false;
     }
-    if (engine.state.gameMode === 'singleplayer' && selectedUnit.player !== engine.state.playerSide) {
+    if (IsForeignUnit(selectedUnit)) {
         return false;
     }
     if (selectedUnit.hasPerformedMajorAction && !selectedUnit.type.canMoveAfterAttack) {
@@ -402,12 +402,12 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                     isTargetKnownEnemy = true;
                 }
             }
-            if (isTargetKnownEnemy) { showInstruction("Cannot move to enemy edge."); return true; }
-            if (finalTargetEdgeData.units.filter(u => u.player === selectedUnit.player).length >= 2) { showInstruction("Target edge full."); return true; }
+            if (isTargetKnownEnemy) { ShowWarning("Cannot move to enemy edge."); return true; }
+            if (finalTargetEdgeData.units.filter(u => u.player === selectedUnit.player).length >= 2) { ShowWarning("Target edge full."); return true; }
             
             // Pass moveData.path to handleMoveAction for ambush resolution
             if (costToMove <= selectedUnit.currentMove && costToMove !== Infinity) handleMoveAction(selectedUnit, targetEdgeKey, costToMove, moveData.path);
-            else showInstruction(`Cannot move. Cost: ${costToMove.toFixed(1)}, Have: ${selectedUnit.currentMove.toFixed(1)}`);
+            else ShowWarning(`Cannot move. Cost: ${costToMove.toFixed(1)}, Have: ${selectedUnit.currentMove.toFixed(1)}`);
             return true;
         }
     }
@@ -546,7 +546,7 @@ function handleActionTargetSelectionClick(x, y) {
     }
 
     if (clickHandled && !clickedValidTarget) {
-        showInstruction("Invalid selection. Click a highlighted target or Cancel.", 2000);
+        ShowWarning("Invalid selection. Click a highlighted target or Cancel.");
     }
     return clickHandled;
 }
@@ -561,8 +561,8 @@ function handleUnitSelectionClick(x, y) {
                         const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
                         if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5) {
                             if (unit.player === engine.state.currentPlayer) {
-                                if (engine.state.gameMode === 'singleplayer' && unit.player !== engine.state.playerSide) {
-                                    showInstruction(`That is an AI unit.`);
+                                if (IsForeignUnit(unit)) {
+                                    ShowWarning(ForeignUnitMessage());
                                     return true;
                                 }
                                 clickedOnUnit = unit;
@@ -604,8 +604,8 @@ function handleUnitSelectionClick(x, y) {
                     
                     if (Math.sqrt((x - unitX)**2 + (y - unitY)**2) < (UNIT_CLICK_RADIUS * gameState.renderScale)) {
                        if (unit.player === engine.state.currentPlayer) {
-                            if (engine.state.gameMode === 'singleplayer' && unit.player !== engine.state.playerSide) {
-                                showInstruction(`That is an AI unit.`);
+                            if (IsForeignUnit(unit)) {
+                                ShowWarning(ForeignUnitMessage());
                                 return true;
                             }
                             clickedOnUnit = unit;
@@ -649,13 +649,13 @@ function handleUnitSelectionClick(x, y) {
         function handleFortifyActionLogic() {
             const { selectedUnit } = gameState;
             if (!selectedUnit || selectedUnit.hasPerformedMajorAction || selectedUnit.isFortified || selectedUnit.positionType !== 'edge') { 
-                showInstruction("Cannot fortify.", 2000); 
+                ShowWarning("Cannot fortify.");
                 return; 
             }
             
             const edgeCoords = parseEdgeKey(selectedUnit.position);
             if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { 
-                showInstruction("Unit not on valid edge.", 2000); 
+                ShowWarning("Unit not on valid edge.");
                 return; 
             }
 
@@ -664,7 +664,7 @@ function handleUnitSelectionClick(x, y) {
             gameState.validFortifyTargetTileKeys = GetValidFortifyTargets(selectedUnit);
 
             if (gameState.validFortifyTargetTileKeys.length === 0) { 
-                showInstruction("No valid adjacent tile to fortify.", 2000); 
+                ShowWarning("No valid adjacent tile to fortify.");
                 return; 
             }
             
@@ -689,7 +689,7 @@ function handleUnitSelectionClick(x, y) {
         }
 
         function handleFortifyUnfortifyButtonClick() {
-            if (engine.state.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== engine.state.playerSide) return;
+            if (IsForeignUnit(gameState.selectedUnit)) return;
             if (gameState.isDragging) return; 
             const { selectedUnit } = gameState; 
             if (!selectedUnit) return;
@@ -707,7 +707,7 @@ function handleUnitSelectionClick(x, y) {
         }
 
         function handleBuildBridgeAction() {
-            if (engine.state.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== engine.state.playerSide) return;
+            if (IsForeignUnit(gameState.selectedUnit)) return;
             if (gameState.isDragging) return; 
             const { selectedUnit } = gameState;
 
@@ -732,7 +732,7 @@ function handleUnitSelectionClick(x, y) {
         }
 
         function handleAttackAction() {
-            if (engine.state.gameMode === 'singleplayer' && gameState.selectedUnit && gameState.selectedUnit.player !== engine.state.playerSide) return;
+            if (IsForeignUnit(gameState.selectedUnit)) return;
             if (gameState.isDragging) return; 
             const { selectedUnit } = gameState;
             

@@ -39,7 +39,7 @@ function handleRespawnQueue() {
     if (result.unitReady) {
         console.log(`[Respawn] Player ${result.player} unit ready.`);
 
-        if (engine.state.isTrainingMode || (engine.state.gameMode === 'singleplayer' && result.player !== engine.state.playerSide)) {
+        if (engine.state.isTrainingMode || IsForeignUnit({ player: result.player })) {
             updateRespawnQueueDisplay();
             return;
         }
@@ -126,6 +126,21 @@ function AwaitVictoryRestart() {
 }
 
 function checkVictoryCondition() {
+    // In a hosted match the host decides, and this client is in no position to.
+    //
+    // CheckVictoryCondition runs the real rule against the LOCAL engine, which during
+    // an online match holds a filtered board — under fog it contains no enemy units at
+    // all. So the first time this ran after a turn ended, it saw an empty enemy army
+    // and awarded victory by annihilation to whoever had just moved.
+    //
+    // Guarding the wrapper rather than each of its seven call sites: every one of them
+    // is a client asking "did that end the game", and in a hosted match the honest
+    // answer is always "the host will tell you" — which it does, via gameOver in the
+    // view and the VICTORY event that HandleActionEvent already renders.
+    if (typeof IsRemoteMatch === 'function' && IsRemoteMatch()) {
+        return !!engine.state.gameOver;
+    }
+
     const result = CheckVictoryCondition();
 
     if (result.alreadyOver) return true;
@@ -185,7 +200,7 @@ async function proceedToEndTurn() {
 
     // A pending forced retreat must be resolved before the turn can end.
     if (gameState.mustUnfortify) {
-        showInstruction("You MUST select an edge to retreat to first!", 2500);
+        ShowWarning("You MUST select an edge to retreat to first!");
         return;
     }
 
@@ -193,7 +208,7 @@ async function proceedToEndTurn() {
     // engine-state mutation happens.
     if (engine.state.gameMode === 'arcade' && engine.state.globalTurnNumber >= 2) {
         if (gameState.swapState === 'selecting_unit' || gameState.swapState === 'selecting_class') {
-            showInstruction("You must swap a unit first!", 2000);
+            ShowWarning("You must swap a unit first!");
             return;
         }
     }
@@ -232,7 +247,7 @@ async function proceedToEndTurn() {
     if (result.respawnResult.hasQueue && result.respawnResult.unitReady) {
         console.log(`[Respawn] Player ${result.respawnResult.player} unit ready.`);
         const suppressModal = engine.state.isTrainingMode ||
-            (engine.state.gameMode === 'singleplayer' && result.respawnResult.player !== engine.state.playerSide);
+            IsForeignUnit({ player: result.respawnResult.player });
         if (!suppressModal) {
             try {
                 showRespawnModal(result.respawnResult.player);
@@ -274,7 +289,10 @@ async function proceedToEndTurn() {
                 setTimeout(() => { executeAITurn(); }, 1500);
             }
         } else {
-            ui.endTurnButton.disabled = false;
+            // In an online match the other player's turn is not yours to end. The
+            // server refuses it anyway, but offering a button that always fails is
+            // worse than not offering it.
+            ui.endTurnButton.disabled = IsOpponentsTurn();
         }
     };
 
@@ -485,6 +503,117 @@ function handleGenerateNewMap() {
             
             showInstruction("New map generated. Player 1's Turn.", 3000);
         }
+
+// === Menu entry points (B1) ===
+//
+// The React menu in src/ui/ starts matches through here and nowhere else. Two
+// reasons for the indirection rather than letting components call initializeGrid
+// themselves: match setup is client game logic and does not belong in a bundled
+// UI tree, and the bundle would otherwise have to know the order these steps run
+// in — which is exactly the kind of knowledge that rots when C or D moves a step.
+//
+// startSingleplayerGame below is left alone and still works; this generalizes it
+// to carry a chosen map, which singleplayer never had before B1 (it hardcoded
+// DEFAULT_MAP_LAYOUT_RADIUS_3).
+
+// The maps offered on the Singleplayer map-selection screen, in display order.
+//
+// Shaped exactly like the PRESET_MAP_* objects so renderMapPreview (js/client/ui.js)
+// draws all four the same way — the default layout is only a tile Map on its own,
+// so it gets wrapped here rather than the preview learning a second shape.
+//
+// NOTE: "Standard" is a placeholder name. The roadmap flags naming the default map
+// as an open decision at this stage; nothing depends on the string.
+function GetSelectableMaps() {
+    return [
+        {
+            name: 'Standard',
+            radius: 3,
+            tiles: DEFAULT_MAP_LAYOUT_RADIUS_3,
+            units: null,
+            baseCampPositions: { player1: null, player2: null },
+            isDefault: true,
+        },
+        PRESET_MAP_2, // Alpha Grounds  (radius 2)
+        PRESET_MAP_1, // River Fork     (radius 3)
+        PRESET_MAP_3, // Volcano Island (radius 4)
+    ];
+}
+
+// Starts a match from the menu. `mode` is 'singleplayer' or 'local'; `playerSide`
+// is 1 or 2 for singleplayer and ignored for local; `map` is one of the objects
+// GetSelectableMaps returns, and defaults to the first of them.
+//
+// Everything here already existed, scattered across startSingleplayerGame and the
+// local-multiplayer click handler that used to live in js/client/menu.js. The one
+// genuinely new behaviour is honouring a non-default map's radius, which is why
+// resizeMapGrid appears in a path that never needed it before.
+function StartMatchFromMenu({ mode, playerSide = 1, map = null } = {}) {
+    const chosenMap = map || GetSelectableMaps()[0];
+
+    exitMapMakerMode();
+    hideAllModals();
+    engine.state.isTrainingMode = false;
+
+    // Camera framing and grid extent both follow the map, not the mode. resizeMapGrid
+    // owns both, including the radius-2/radius-4 render scales, so this replaces the
+    // hardcoded "radius 3, scale 1.0, offset 0" reset the old handlers each carried.
+    //
+    // It also writes engine.state.gameMode as a side effect (SetGridMode,
+    // js/server/map-generation.js) — which is why the menu's own mode is applied
+    // AFTER it rather than before, or the resize would silently overwrite it.
+    resizeMapGrid(chosenMap.radius || 3);
+
+    // Radius 2 IS arcade: SetGridMode clears the flags and base camps for it, and no
+    // other part of the game has ever run a non-arcade match in that state. So a
+    // radius-2 map keeps arcade rather than being forced into the chosen mode — the
+    // map screen labels those cards accordingly instead of the mode changing silently.
+    const isArcadeMap = (engine.state.gameMode === 'arcade');
+    if (!isArcadeMap) {
+        engine.state.gameMode = mode;
+        engine.state.playerSide = (mode === 'singleplayer') ? playerSide : null;
+    } else {
+        engine.state.playerSide = null;
+    }
+
+    // InitializeGrid (js/server/match-setup.js) tests `if (baseCampData)`, and an
+    // object of two nulls is truthy — passing one straight through would overwrite the
+    // camps resizeMapGrid just computed with nothing, on a map that has none of its
+    // own. The preview renderer needs the object to exist; the initializer needs it to
+    // be absent when it is empty. So it is normalized here, between the two.
+    const camps = chosenMap.baseCampPositions;
+    const hasOwnCamps = !!(camps && (camps.player1 || camps.player2));
+
+    initializeGrid(chosenMap.tiles, chosenMap.units, hasOwnCamps ? camps : null);
+
+    // Preset maps carry their own base camps, and the flags have to follow them or
+    // a returned flag lands where the previous map's camp was. Lifted verbatim from
+    // loadPresetMap (js/client/ui.js) — the default map has null camps and skips it.
+    if (engine.state.flags && hasOwnCamps && camps.player1) {
+        engine.state.flags.p1_flag.homePosition = engine.state.baseCampPositions.player1;
+        engine.state.flags.p2_flag.homePosition = engine.state.baseCampPositions.player2;
+    }
+
+    // Menu-first boot means the render loop is not running yet on the first match.
+    EnsureGameLoopRunning();
+
+    // The mode just changed, and the corner is the only thing that says so.
+    ClearOnlineContext();
+
+    if (engine.state.gameMode === 'singleplayer') {
+        showInstruction(`Singleplayer game started. You are Player ${playerSide}.`, 3000);
+
+        // If the human chose to be P2, the AI (P1) must take the first turn.
+        if (engine.state.playerSide === 2) {
+            ui.endTurnButton.disabled = true;
+            setTimeout(() => { executeAITurn(); }, 1500);
+        }
+    } else if (isArcadeMap) {
+        showInstruction(`'${chosenMap.name}' is an Arcade map — turn timer is on.`, 4000);
+    } else {
+        showInstruction('New Local Multiplayer game started.', 3000);
+    }
+}
 
 function startSingleplayerGame(playerSide) {
     exitMapMakerMode(); 

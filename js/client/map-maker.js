@@ -20,7 +20,7 @@ function startMapTest() {
     const p2Units = engine.state.units.filter(u => u.player === 2).length;
 
     if (p1Units === 0 || p2Units === 0) {
-        showInstruction("Map must contain at least one unit for each player to start a test.", 3000);
+        ShowWarning("Map must contain at least one unit for each player to start a test.");
         return; 
     }
 
@@ -113,7 +113,7 @@ function performFloodFill(startQ, startR) {
     const result = outcome.result;
 
     if (result.reason === 'base_camp') {
-        showInstruction("Cannot change the terrain of a base camp tile.", 2000);
+        ShowWarning("Cannot change the terrain of a base camp tile.");
         return;
     }
     if (!result.filled) return;
@@ -325,7 +325,7 @@ function buildMapMakerPalette() {
                 const p = gameState.mapMakerBrush.player;
                 const base = engine.state.baseCampPositions[`player${p}`];
                 if (Array.isArray(base) && base.length > 0 && base.length < 3) {
-                    showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
+                    ShowWarning(`P${p} Base incomplete! Must place 3 tiles.`);
                     return;
                 }
             }
@@ -407,7 +407,7 @@ function buildMapMakerPalette() {
                     const p = gameState.mapMakerBrush.player;
                     const base = engine.state.baseCampPositions[`player${p}`];
                     if (Array.isArray(base) && base.length > 0 && base.length < 3) {
-                        showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
+                        ShowWarning(`P${p} Base incomplete! Must place 3 tiles.`);
                         return;
                     }
                 }
@@ -582,7 +582,7 @@ function buildMapMakerControls() {
                 const p = gameState.mapMakerBrush.player;
                 const base = engine.state.baseCampPositions[`player${p}`];
                 if (Array.isArray(base) && base.length > 0 && base.length < 3) {
-                    showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
+                    ShowWarning(`P${p} Base incomplete! Must place 3 tiles.`);
                     return false;
                 }
             }
@@ -743,7 +743,7 @@ function buildMapMakerControls() {
             const p = gameState.mapMakerBrush.player;
             const base = engine.state.baseCampPositions[`player${p}`];
             if (Array.isArray(base) && base.length > 0 && base.length < 3) {
-                showInstruction(`P${p} Base incomplete! Must place 3 tiles.`, 2000);
+                ShowWarning(`P${p} Base incomplete! Must place 3 tiles.`);
                 return;
             }
             // If valid switch, reset brush to default tile

@@ -55,6 +55,57 @@ function FilterStateForPlayer(state, recipientPlayer, fogOfWarEnabled) {
     };
 }
 
+// The board itself, shaped for a wire. Units are handled above; this is the terrain
+// and the edges, which a remote client needs before it can draw anything at all —
+// A1's state-sync carried only events, so a `move` reached a remote client as a LOG
+// string with no way to render the result.
+//
+// Two things here are NOT incidental:
+//
+//   1. Edges are rebuilt field by field rather than spread. An edge carries a live
+//      `units` getter that closes over engine state. It is defined non-enumerable in
+//      both construction paths, so a spread does not currently invoke it — but that
+//      is a property of how those two files happen to be written, not something this
+//      function should depend on. (They disagreed until B2: map-generation.js used a
+//      plain literal getter, which IS enumerable, so edges from the resize path did
+//      serialize their units.) Naming the fields explicitly means what goes on the
+//      wire is decided here rather than inherited.
+//
+//   2. Tile `type` is a TILE_TYPES object reference. Only its name goes out; the
+//      client already has the table and rebuilding from a name is what the save
+//      format does too.
+//
+// Terrain is not secret — both players chose and saw the map — so tiles go out whole.
+// A BRIDGE is not terrain: it is built during play, so its state is gated on vision
+// the same way a unit is, and `bridgeKnown` tells the client the difference between
+// "no bridge" and "you cannot see".
+function BuildBoardView(state, visibleEdges, filtered) {
+    const tiles = [];
+    state.tiles.forEach((tile, key) => {
+        tiles.push({
+            key,
+            q: tile.q,
+            r: tile.r,
+            type: tile.type ? tile.type.name : null,
+            fortifiedByPlayer: tile.fortifiedByPlayer || null,
+        });
+    });
+
+    const edges = [];
+    state.edges.forEach((edge, key) => {
+        const seen = !filtered || visibleEdges.has(key);
+        edges.push({
+            key,
+            q1: edge.q1, r1: edge.r1, q2: edge.q2, r2: edge.r2,
+            bridge: seen ? !!edge.bridge : false,
+            bridgeHp: seen ? (edge.bridgeHp === undefined ? null : edge.bridgeHp) : null,
+            bridgeKnown: seen,
+        });
+    });
+
+    return { tiles, edges };
+}
+
 // Events carry unit references and positions, so they leak the same way state
 // does. A LOG line naming an unseen enemy's move is still a leak, even though
 // no coordinates are attached.

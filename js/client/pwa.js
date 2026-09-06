@@ -17,7 +17,7 @@ function WirePwaInstall() {
     // 2. Bind the new install functionality to your Download Button
     ui.downloadButton.addEventListener('click', async () => {
         if (!deferredPrompt) {
-            showInstruction("App cannot be installed right now.", 2000);
+            ShowWarning("App cannot be installed right now.");
             return;
         }
         // Show the native browser install prompt
@@ -27,7 +27,7 @@ function WirePwaInstall() {
         const { outcome } = await deferredPrompt.userChoice;
         if (outcome === 'accepted') {
             console.log('User installed FortHex');
-            showInstruction('FortHex installed successfully!', 3000);
+            ShowSuccess('FortHex installed successfully!');
         }
 
         // We've used the prompt, throw it away and hide the button

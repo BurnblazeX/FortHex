@@ -27,7 +27,34 @@
 // per-purpose flags (Burn's call, guide §6.1): one blanket agreement covers both
 // match archiving and balance telemetry. If those ever need separating, that is a
 // future field plus a second checkbox, not something to build defensively now.
-const PROFILE_VERSION = 1;
+// Bumped to 2 by B1, which added `avatar` — a preset portrait key, chosen on the
+// profile-setup screen. No migration function is needed for it: an absent avatar
+// reads as null and the UI falls back to a default, which is exactly what a v1
+// profile produces. Nor does it reach Testament — ProfileForSave still strips a
+// profile down to { id, name }, so the save schema is untouched by this.
+const PROFILE_VERSION = 2;
+
+// The preset portraits offered on the setup screen. Deliberately a fixed, tiny set
+// rather than an upload: this is a device-local nickname system, and an upload path
+// would mean storing user image data with no server to put it on.
+//
+// PLACEHOLDER ART: these are the existing unit portraits from assets/units/. They
+// stand in until purpose-drawn avatars exist; swapping them is a change to this
+// list and the files it names, nothing else.
+const PROFILE_AVATARS = [
+    { key: 'archer',   label: 'Archer',   src: 'assets/units/Archer.png' },
+    { key: 'swordsman', label: 'Swordsman', src: 'assets/units/Melee.png' },
+    { key: 'pikeman',  label: 'Pikeman',  src: 'assets/units/Pikeman.png' },
+    { key: 'horseman', label: 'Horseman', src: 'assets/units/Horseman.png' },
+];
+
+// Resolves a stored avatar key to a file path. Returns the first preset for a null
+// or unrecognised key, so a profile written by a future build that offered more
+// portraits still renders something rather than a broken image.
+function GetAvatarSrc(key) {
+    const found = PROFILE_AVATARS.find(a => a.key === key);
+    return (found || PROFILE_AVATARS[0]).src;
+}
 
 // Cached so repeated GetProfile() calls in a frame don't re-parse JSON. Set to
 // undefined (not null) to mean "not read yet" — null is a real answer here, and
@@ -78,6 +105,7 @@ function ReadProfileFromStorage() {
             version: Number.isInteger(parsed.version) ? parsed.version : PROFILE_VERSION,
             id: parsed.id,
             name: typeof parsed.name === 'string' ? parsed.name : '',
+            avatar: typeof parsed.avatar === 'string' ? parsed.avatar : null,
             consent: !!parsed.consent,
             createdAt: Number.isFinite(parsed.createdAt) ? parsed.createdAt : null,
         };
@@ -98,11 +126,12 @@ function ReadProfileFromStorage() {
 // `consent` is captured HERE rather than set afterwards (guide §6.2): the consent
 // screen collects it and passes it in, so a profile is never briefly stored in an
 // unconsented state that something else might read in between.
-function CreateProfile(name, consent = false) {
+function CreateProfile(name, consent = false, avatar = null) {
     const profile = {
         version: PROFILE_VERSION,
         id: NewProfileId(),
         name: typeof name === 'string' && name.trim() ? name.trim() : 'Player',
+        avatar: typeof avatar === 'string' ? avatar : null,
         consent: !!consent,
         createdAt: Date.now(),
     };
@@ -115,10 +144,10 @@ function CreateProfile(name, consent = false) {
 // The function the real Menu > Multiplayer > Online handler calls. First call
 // creates; every call after returns what is already there. It does NOT rename or
 // re-consent an existing profile — a returning player's stored answers stand.
-function GetOrCreateProfile(name, consent = false) {
+function GetOrCreateProfile(name, consent = false, avatar = null) {
     const existing = GetProfile();
     if (existing) return existing;
-    return CreateProfile(name, consent);
+    return CreateProfile(name, consent, avatar);
 }
 
 // Changes the stored flag. No archive logic here — A6 is what reads it and acts.

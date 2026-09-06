@@ -163,10 +163,19 @@ function ReconnectPlayer(player, profileId = null) {
 function BuildResyncSnapshot(player) {
     const view = FilterStateForPlayer(engine.state, player, engine.settings.fogOfWarEnabled);
 
+    // B2: tiles and edges added. They were absent while this only ever served a
+    // reconnect, because a reconnecting browser still had the board it started with.
+    // Once this same shape started riding along with every state-sync (transport.js
+    // Flush), their absence became the reason a bridge built or destroyed mid-match
+    // never reached the other client.
+    const board = BuildBoardView(engine.state, view.visibleEdges, view.filtered);
+
     return {
         player,
         filtered: view.filtered,
         units: view.units,
+        tiles: board.tiles,
+        edges: board.edges,
         visibleTiles: [...view.visibleTiles],
         visibleEdges: [...view.visibleEdges],
         currentPlayer: engine.state.currentPlayer,

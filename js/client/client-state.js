@@ -72,3 +72,46 @@ let lastTap = 0;
 let lastTapPosition = { x: 0, y: 0 };
 let lastTouchInteractionTime = 0;
 let fileLoadContext = 'game_save';
+
+// === Who this client is allowed to move (B2) ===
+//
+// Every one of these checks used to be written as `gameMode === 'singleplayer' &&
+// unit.player !== playerSide`, which was correct while singleplayer was the only mode
+// that bound a client to ONE side. Online does the same thing — the seat you took is
+// the side you play — but the mode string is different, so every one of those tests
+// silently evaluated false and both players could drag both armies around. The server
+// refused the illegal ones, so nothing desynced; it just made the two sides pointless.
+//
+// The real predicate was never the mode. It is whether this client is bound to a side
+// at all, which is exactly what playerSide records: a number in singleplayer and
+// online, and null in local and arcade hotseat, where controlling both sides is the
+// entire idea.
+
+// True when this client plays one specific side rather than both.
+function IsBoundToOneSide() {
+    return engine.state.playerSide === 1 || engine.state.playerSide === 2;
+}
+
+// True when a unit belongs to the side this client does NOT play. False in hotseat,
+// where nothing is foreign.
+function IsForeignUnit(unit) {
+    if (!unit) return false;
+    if (!IsBoundToOneSide()) return false;
+    return unit.player !== engine.state.playerSide;
+}
+
+// What to say when someone grabs a unit that is not theirs. The old wording assumed
+// the only opponent that could exist was an AI, which is wrong the moment a real person
+// is on the other side of a socket.
+function ForeignUnitMessage() {
+    return engine.state.gameMode === 'online'
+        ? "That is your opponent's unit."
+        : 'That is an AI unit.';
+}
+
+// True when the turn belongs to the other side, so this client should not be offering
+// actions at all.
+function IsOpponentsTurn() {
+    if (!IsBoundToOneSide()) return false;
+    return engine.state.currentPlayer !== engine.state.playerSide;
+}

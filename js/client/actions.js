@@ -238,7 +238,7 @@ function performSwap(unit, newType) {
     gameState.unitToSwap = null;
 
     updateSupplyPointsDisplay();
-    showInstruction("Swap complete! Turn begins.", 2000);
+    ShowSuccess("Swap complete! Turn begins.");
 }
 
 function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
@@ -261,7 +261,7 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
 
     if (result.unitStillAlive) {
         if (result.shouldRecalcReachableMoves) {
-            if (engine.state.gameMode !== 'singleplayer' || result.unit.player === engine.state.playerSide) {
+            if (!IsForeignUnit(result.unit)) {
                 gameState.currentReachableMoves = getPossibleMoves(result.unit);
             }
         } else {
@@ -278,14 +278,14 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
 async function completeBuildBridge(targetEdgeKey) {
     const { selectedUnit } = gameState;
     if (!selectedUnit || !selectedUnit.type.canBuildBridge || selectedUnit.hasPerformedMajorAction || selectedUnit.isFortified) {
-        showInstruction("Cannot build bridge.", 2000);
+        ShowWarning("Cannot build bridge.");
         resetActionSelectionStates();
         updateSelectedUnitInfoPanel();
         return;
     }
     const edgeToBridge = engine.state.edges.get(targetEdgeKey);
     if (!edgeToBridge || edgeToBridge.bridge) {
-        showInstruction("Cannot build bridge here.", 2000);
+        ShowWarning("Cannot build bridge here.");
         resetActionSelectionStates();
         updateSelectedUnitInfoPanel();
         return;
@@ -317,16 +317,16 @@ async function completeBuildBridge(targetEdgeKey) {
 
 async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
     if (!unitToUnfortify || !unitToUnfortify.isFortified || unitToUnfortify.hasPerformedMajorAction) {
-        showInstruction("Cannot unfortify now.", 2000);
+        ShowWarning("Cannot unfortify now.");
         return;
     }
     const targetEdge = engine.state.edges.get(targetEdgeKey);
     if (!targetEdge) {
-        showInstruction("Invalid target edge.", 2000);
+        ShowWarning("Invalid target edge.");
         return;
     }
     if (targetEdge.units.some(u => u.player !== unitToUnfortify.player) || targetEdge.units.filter(u => u.player === unitToUnfortify.player).length >= 2) {
-        showInstruction("Target edge blocked.", 2000);
+        ShowWarning("Target edge blocked.");
         resetActionSelectionStates();
         updateSelectedUnitInfoPanel();
         return;
@@ -362,18 +362,18 @@ async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
 }
 
 async function completeFortify(unitToFortify, targetTileKeyToFortify) {
-    if (!unitToFortify || unitToFortify.hasPerformedMajorAction || unitToFortify.isFortified) { showInstruction("Cannot fortify now.", 2000); return; }
+    if (!unitToFortify || unitToFortify.hasPerformedMajorAction || unitToFortify.isFortified) { ShowWarning("Cannot fortify now."); return; }
     const targetTileObject = engine.state.tiles.get(targetTileKeyToFortify);
-    if (!targetTileObject || !canUnitFortifyOnTile(unitToFortify, targetTileObject)) { showInstruction("Invalid tile to fortify.", 2000); return; }
+    if (!targetTileObject || !canUnitFortifyOnTile(unitToFortify, targetTileObject)) { ShowWarning("Invalid tile to fortify."); return; }
     if (targetTileObject.fortifiedByPlayer !== null) {
-        showInstruction(`Tile ${targetTileKeyToFortify.substring(0,5)}... already fortified.`, 2500);
+        ShowWarning(`Tile ${targetTileKeyToFortify.substring(0,5)}... already fortified.`);
         resetActionSelectionStates();
         updateSelectedUnitInfoPanel(); return;
     }
 
     const myFlagTileKey = getFlagTileKey(unitToFortify.player);
     if (targetTileKeyToFortify === myFlagTileKey && !unitToFortify.isCarryingFlag) {
-        showInstruction("Cannot fortify on the flag tile.", 2500);
+        ShowWarning("Cannot fortify on the flag tile.");
         resetActionSelectionStates();
         updateSelectedUnitInfoPanel(); return;
     }
@@ -384,7 +384,7 @@ async function completeFortify(unitToFortify, targetTileKeyToFortify) {
     const enemyPlayer = unitToFortify.player === 1 ? 2 : 1;
     const enemyFlagTileKey = getFlagTileKey(enemyPlayer);
     if (GetBaseCamp(enemyPlayer).includes(targetTileKeyToFortify) && targetTileKeyToFortify !== enemyFlagTileKey) {
-        showInstruction("Cannot fortify inside the enemy base camp.", 2500);
+        ShowWarning("Cannot fortify inside the enemy base camp.");
         resetActionSelectionStates();
         updateSelectedUnitInfoPanel(); return;
     }
@@ -419,7 +419,7 @@ async function completeFortify(unitToFortify, targetTileKeyToFortify) {
 async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
     // 1. Validate Attacker
     if (!attackingUnit || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) {
-        showInstruction("Cannot complete attack.", 2000);
+        ShowWarning("Cannot complete attack.");
         resetActionSelectionStates();
         updateSelectedUnitInfoPanel();
         return;
@@ -515,7 +515,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         if (result.spearWalled) {
             gameState.currentReachableMoves.clear();
         } else if (attackingUnit.currentMove > 0) {
-            if (engine.state.gameMode !== 'singleplayer' || attackingUnit.player === engine.state.playerSide) {
+            if (!IsForeignUnit(attackingUnit)) {
                 gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
             }
         } else {
@@ -525,7 +525,7 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         gameState.currentReachableMoves.clear();
     }
     if (result.bridgeDestroyed && attackingUnit.type.name === 'Horseman') {
-        if (engine.state.gameMode !== 'singleplayer' || attackingUnit.player === engine.state.playerSide) {
+        if (!IsForeignUnit(attackingUnit)) {
             gameState.currentReachableMoves = getPossibleMoves(attackingUnit);
         }
     }

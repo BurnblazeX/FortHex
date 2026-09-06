@@ -22,7 +22,11 @@ const engine = CreateEngineInstance();
 // --- 2. Transport ---
 // Local, in-process for now. Track B swaps this for WebRTC/WebSocket/UPnP
 // adapters carrying the same four message shapes.
-const transport = CreateLocalTransport(engine);
+// `let`, not `const`: an online match swaps this for the WebSocket adapter and swaps
+// it back when the match ends. Every call site reads it from inside a function — there
+// is only one that matters for gameplay, js/client/actions.js — so reassigning is all
+// the handover needs. That was the point of A1 defining a transport interface.
+let transport = CreateLocalTransport(engine);
 
 // Server -> client: every state-sync's events go through the same handler the
 // client has always used, so nothing in client/ui.js or client/render.js had to change.
@@ -31,6 +35,83 @@ transport.OnMessage((message) => {
         message.events.forEach(HandleActionEvent);
     }
 });
+
+// --- B2: handing the board over to a hosted match ---------------------------
+//
+// Called by the lobby (src/ui/net-store.js) when the host starts. From here the client
+// stops being the authority and becomes a renderer: actions go out over the socket, and
+// what comes back is a filtered view that ApplyRemoteView writes into engine.state so
+// every existing renderer keeps working untouched.
+function BeginOnlineMatchWith(socketTransport, seat, options = {}) {
+    if (!socketTransport) return;
+
+    transport = socketTransport;
+    BeginRemoteMatch(seat);
+
+    // Fog is a property of the MATCH, chosen when the room was created, not of this
+    // device's settings panel. The host already filters what it sends accordingly —
+    // which is why enemy units were correctly missing — but the client draws the fog
+    // itself from engine.settings, and nothing was telling it the match had any. The
+    // result was a board with no fog drawn and enemies that were simply absent.
+    engine.settings.fogOfWarEnabled = !!options.fogOfWar;
+
+    // An online match never goes through initializeGrid, so nothing else would size
+    // the canvas or the side panels.
+    SizeBoardAndPanels();
+
+    console.log('[Online] Match handed over to the socket. You are player ' + seat + '.');
+
+    socketTransport.OnMessage((message) => {
+        // Wrapped, because a throw inside a socket callback goes nowhere useful: the
+        // subscription simply stops delivering and the board silently freezes. That is
+        // exactly the failure that is impossible to diagnose from the outside, so it
+        // gets to name itself.
+        try {
+            if (message.type === 'state-resync') {
+                console.log('[Online] Full board received (resync).');
+                ApplyRemoteView(message.snapshot);
+                RefreshRemoteUi();
+                return;
+            }
+            if (message.type !== 'state-sync') return;
+
+            // Events first, then the board. The events drive the action log and the
+            // animations; the view is the authoritative position afterwards, so
+            // applying it second corrects a mid-flight animation rather than ignoring it.
+            (message.events || []).forEach(HandleActionEvent);
+
+            if (message.view) {
+                ApplyRemoteView(message.view);
+                RefreshRemoteUi();
+            } else {
+                // Not fatal, but it means this update changed nothing drawable — worth
+                // saying out loud rather than leaving the board looking stuck.
+                console.warn('[Online] state-sync arrived with no board view.',
+                    (message.events || []).map(e => e.type).join(', ') || '(no events)');
+            }
+        } catch (error) {
+            console.error('[Online] Failed to apply an update:', error);
+            ShowAlert('Lost sync with the match. See console.');
+        }
+    });
+
+    EnsureGameLoopRunning();
+    UpdateStatusCorner();
+    FetchBuildHash();
+    if (window.FortHexUI) window.FortHexUI.Hide();
+    ShowSuccess('Match started. You are ' + (seat === 1 ? 'Blue' : 'Red') + '.');
+}
+
+// Back to the in-process engine. Used when an online match ends or the socket drops —
+// without it the client would keep posting actions into a closed socket.
+function EndOnlineMatch() {
+    EndRemoteMatch();
+    ClearOnlineContext();
+    transport = CreateLocalTransport(engine);
+    transport.OnMessage((message) => {
+        if (message.type === 'state-sync') message.events.forEach(HandleActionEvent);
+    });
+}
 
 // A5: the profile is read once, here, and handed to the engine as plain data.
 // Reading it does NOT create one — GetProfile returns null for the majority of
@@ -69,7 +150,7 @@ window.onload = function () {
 
     document.getElementById('saveGameButton').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Game`;
     document.getElementById('loadGameButton').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; stroke: white;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> Load Game`;
-    document.getElementById('buildVersionDisplay').textContent = `FortHex Build ${BUILD_VERSION}`;
+    UpdateStatusCorner();
 
     loadSettings();
     loadColorPreferences();
@@ -82,13 +163,25 @@ window.onload = function () {
     WireLoadAndConfirmModals();
     WireRespawnChoices();
 
-    engine.state.gridRadius = 3; // Use the default value directly
-    initializeGrid();
-    // This is the important call to our new function
     updateCssVariables();
     populateColorPickers();
-    gameLoop();
-    showInstruction("Project Hexblade Loaded. Player 1's Turn.", 3000);
     WireColorDrawer();
     WireTabsAndSwapChoices();
+
+    // --- B1: menu-first boot ---
+    //
+    // This used to be initializeGrid() + gameLoop(): the page opened straight onto a
+    // live local match, and the menu was a modal drawn over the top of it. It now
+    // opens onto the menu, and no match exists until the player picks one.
+    //
+    // Three things follow from that, and each is deliberate:
+    //   - the render loop is started by the first match instead (EnsureGameLoopRunning,
+    //     js/client/render.js), because there is nothing to draw before one;
+    //   - engine.state.gridRadius is set by the chosen map's resize, not here;
+    //   - A6's CaptureArchiveOpening no longer fires at launch. It hangs off
+    //     initializeGrid, so booting a throwaway board was priming an archive opening
+    //     for a match nobody had agreed to play.
+    engine.state.gridRadius = 3;
+    FortHexUI.Mount();
+    FortHexUI.Show('root');
 };

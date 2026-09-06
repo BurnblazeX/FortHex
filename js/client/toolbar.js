@@ -165,7 +165,7 @@ function WireToolbar() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            showInstruction("Map file saved!", 2500);
+            ShowSuccess("Map file saved!");
         } else {
             saveGameToFile();
         }

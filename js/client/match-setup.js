@@ -6,13 +6,23 @@
 // before/after the pure InitializeGrid call instead — see
 // js/server/match-setup.js's header comment for why that reordering is safe.
 
-function initializeGrid(tileLayoutMap = null, customUnits = null, baseCampData = null) {
-    // Canvas & UI sizing
+// Canvas size and the side panels' minimum height, which is derived from it.
+//
+// Pulled out of initializeGrid because an ONLINE match never calls that function — the
+// board arrives as a view from the host and is written straight into engine.state. So
+// the canvas kept its default size and the panels kept no minHeight at all, which is
+// why the side panels rendered about two thirds of their proper length online and
+// full length everywhere else.
+function SizeBoardAndPanels() {
     canvas.width = CANVAS_WIDTH_NORMAL;
     canvas.height = CANVAS_HEIGHT_NORMAL;
     document.querySelectorAll('.ui-panel').forEach(panel => {
         panel.style.minHeight = canvas.height + 'px';
     });
+}
+
+function initializeGrid(tileLayoutMap = null, customUnits = null, baseCampData = null) {
+    SizeBoardAndPanels();
 
     // Client-owned state resets
     ui.victoryMessage.style.display = 'none';

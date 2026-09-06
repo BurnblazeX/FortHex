@@ -57,19 +57,42 @@ function MakeResyncMessage(player, snapshot, stateVersion) {
 class LocalTransport {
     constructor(engineInstance) {
         this.engine = engineInstance;
-        this.subscribers = new Set();
+        this.connections = [];
         this.stateVersion = 0;
         this.connected = false;
     }
 
     // Client side: listen for server -> client messages.
+    //
+    // An OnMessage subscriber is OMNISCIENT — it receives the unfiltered event
+    // stream. That is correct for the one case it serves: local pass-device play,
+    // where a single browser draws the board for both humans and the handover is
+    // covered by showPassDeviceOverlay. Filtering here would blank out the player
+    // whose turn it is not, which is not a thing local play wants.
     OnMessage(handler) {
-        this.subscribers.add(handler);
-        return () => this.subscribers.delete(handler);
+        return this.AddConnection(null, handler);
     }
 
+    // B2: a recipient that IS a specific player. Everything it receives is passed
+    // through A2's filters first, and it gets a board view attached to each sync so
+    // it can actually draw the result rather than being told about it in prose.
+    //
+    // This is where A2's deferral comes due. FilterStateForPlayer and
+    // FilterEventsForPlayer were written in A2 and deliberately left unwired,
+    // because with one local recipient there was nothing to filter FROM. A remote
+    // player is that missing recipient.
+    AddConnection(player, handler) {
+        const connection = { player, handler };
+        this.connections.push(connection);
+        return () => {
+            this.connections = this.connections.filter(existing => existing !== connection);
+        };
+    }
+
+    // Unconditional fan-out, for messages that are already addressed — a resync is
+    // built for one player and delivered as-is. Per-recipient work happens in Flush.
     Deliver(message) {
-        this.subscribers.forEach(handler => handler(message));
+        this.connections.forEach(connection => connection.handler(message));
     }
 
     // Client side: send a client -> server message.
@@ -149,17 +172,50 @@ class LocalTransport {
         return { ...outcome, sync: this.Flush() };
     }
 
-    // Drain the engine's queue and push it out as a state-sync. This is the
-    // single drain point in the app: "drain and render" here, "drain and send
-    // over the wire" in Track B's adapters, same call.
+    // Drain the engine's queue and push it out as a state-sync. This is the single
+    // drain point in the app: "drain and render" for a local subscriber, "drain,
+    // filter and send over the wire" for a player-scoped one, same call.
+    //
+    // The queue is drained ONCE and then shaped per recipient. Draining per
+    // connection would hand the first one everything and the rest an empty queue.
     Flush() {
         const events = this.engine.DrainEvents();
         if (events.length === 0) return null;
 
         this.stateVersion++;
-        const sync = MakeStateSyncMessage(events, this.stateVersion);
-        this.Deliver(sync);
-        return sync;
+        const fog = this.engine.settings.fogOfWarEnabled;
+        let localSync = null;
+
+        this.connections.forEach(connection => {
+            if (connection.player === null) {
+                const sync = MakeStateSyncMessage(events, this.stateVersion);
+                localSync = localSync || sync;
+                connection.handler(sync);
+                return;
+            }
+
+            const sync = MakeStateSyncMessage(
+                FilterEventsForPlayer(events, connection.player, fog),
+                this.stateVersion
+            );
+
+            // The renderable half. Events say what happened; this says what the board
+            // now looks like from where this player is standing. A remote client that
+            // received only events could not draw a move — ApplyMoveAction emits LOG
+            // lines and nothing positional.
+            //
+            // A whole filtered view per action rather than a true diff: the board is
+            // small, the game is turn-based, and a snapshot cannot drift out of sync
+            // with the server the way an accumulated diff can. Revisit if it ever
+            // measures as a problem.
+            sync.view = BuildResyncSnapshot(connection.player);
+
+            connection.handler(sync);
+        });
+
+        // The return value is for the caller that triggered this, which is always
+        // the local side; a remote player's copy went out through their handler.
+        return localSync || MakeStateSyncMessage(events, this.stateVersion);
     }
 }
 

@@ -508,13 +508,26 @@ function InitializeGridDimensions(newRadius, baseCampRotation = '3') {
             if (engine.state.tiles.has(getTileKey(n_coord.q, n_coord.r))) {
                 const edgeKey = getEdgeKey(tile.q, tile.r, n_coord.q, n_coord.r);
                 if (!engine.state.edges.has(edgeKey)) {
-                    engine.state.edges.set(edgeKey, {
+                    // `units` is a live view, not stored data, and it must be
+                    // NON-ENUMERABLE. As a plain object-literal getter it was
+                    // enumerable, so spreading or JSON-ing an edge built here invoked
+                    // it and embedded full unit objects — which over a wire would
+                    // carry every unit past the per-recipient redaction in
+                    // js/server/state-filter.js. The other construction path
+                    // (js/server/match-setup.js) always defined it this way; this one
+                    // did not, and the two disagreeing is the actual bug.
+                    const newEdge = {
                         q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r,
-                        get units() {
+                        bridge: false, bridgeHp: null, isPathway: true
+                    };
+                    Object.defineProperty(newEdge, 'units', {
+                        get: function() {
                             return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey);
                         },
-                        bridge: false, bridgeHp: null, isPathway: true
+                        configurable: true,
+                        enumerable: false
                     });
+                    engine.state.edges.set(edgeKey, newEdge);
                 }
             }
         });

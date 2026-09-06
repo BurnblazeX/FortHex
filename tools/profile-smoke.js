@@ -175,6 +175,43 @@ const persistentStore = MakeStore();
     check('ClearProfile clears the engine copy', engineStub.localProfile === null);
 }
 
+// --- 7b. the avatar B1 added ----------------------------------------------
+// A preset portrait key, stored with the profile and chosen on the setup screen.
+// Two things worth asserting rather than assuming: it survives a reload like the
+// name does, and it does NOT leak into the engine copy that BuildSaveObject writes
+// into a file — a save records who wrote it, not what portrait they picked.
+{
+    const store = MakeStore();
+    const engineStub = {};
+    const page = LoadPage(store, engineStub);
+    const made = page.call("CreateProfile('Portrait', true, 'pikeman')");
+
+    check('an avatar is captured at creation', made.avatar === 'pikeman');
+    check('the avatar survives a reload',
+        LoadPage(store, {}).call('GetProfile()').avatar === 'pikeman');
+    check('the avatar does not travel with the engine copy',
+        engineStub.localProfile.avatar === undefined);
+
+    // A v1 profile written before B1 has no avatar field at all. It must read as
+    // null rather than undefined-and-crashing, and the UI falls back from there.
+    const legacy = MakeStore({
+        forthex_local_profile: JSON.stringify({ version: 1, id: 'legacy-id', name: 'Old', consent: true }),
+    });
+    const read = LoadPage(legacy, {}).call('GetProfile()');
+    check('a pre-B1 profile still loads', read !== null && read.id === 'legacy-id');
+    check('a pre-B1 profile reads as having no avatar', read.avatar === null);
+
+    // Every offered key must resolve to a file that actually exists — a broken
+    // portrait is the kind of thing nobody notices until a player sees it.
+    const presets = page.call('PROFILE_AVATARS');
+    check('four preset avatars are offered', presets.length === 4);
+    presets.forEach(a => {
+        check('avatar art exists: ' + a.src, fs.existsSync(path.join(ROOT, a.src)));
+    });
+    check('an unknown avatar key still resolves to art',
+        typeof page.call("GetAvatarSrc('no-such-avatar')") === 'string');
+}
+
 // --- 8. no crypto.randomUUID (plain http on a LAN) -------------------------
 // randomUUID is secure-context only. The fallback must still produce a real v4
 // from the same CSPRNG rather than failing profile creation outright.
@@ -210,3 +247,4 @@ console.log('  survives reload : same id across a fresh page context');
 console.log('  idempotent      : GetOrCreateProfile returns the existing profile');
 console.log('  consent         : plain boolean, captured at creation, persists both ways');
 console.log('  degrades        : corrupt store reads as absent; no randomUUID still works');
+console.log('  avatar          : B1 preset portrait persists, stays out of saves, art exists');

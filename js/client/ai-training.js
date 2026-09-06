@@ -19,7 +19,7 @@ function abortTrainingMode() {
     const blocker = document.getElementById('trainingInteractionBlocker');
     if (blocker) blocker.style.display = 'none';
 
-    showInstruction("Training Aborted. Brain Saved.", 3000);
+    ShowSuccess("Training Aborted. Brain Saved.");
     if (typeof saveAIBrain === 'function') saveAIBrain();
 
     // --- PROPER SETTINGS RESTORATION & DOM SYNC ---
@@ -53,14 +53,7 @@ function abortTrainingMode() {
         clearSelectionAndDebugState(); 
         initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
 
-        const modal = document.getElementById('gameMenuModal');
-        document.getElementById('mainMenuContent').style.display = 'block';
-        document.getElementById('singleplayerMenuContent').style.display = 'none';
-        document.getElementById('multiplayerMenuContent').style.display = 'none';
-        if (modal) {
-            modal.style.display = 'flex';
-            setTimeout(() => modal.classList.add('modal-visible'), 10);
-        }
+        ShowMainMenu('root');
     }, 100); 
 }
 
@@ -125,6 +118,10 @@ async function runTrainingHyperLoop() {
 function startTrainingMode() {
     exitMapMakerMode(); 
     hideAllModals(); 
+
+    // B1: training is reachable from the menu before any match has been played, and
+    // menu-first boot means the render loop is not running yet at that point.
+    EnsureGameLoopRunning();
 
     engine.state.isTrainingMode = true;
     engine.state.gameMode = 'singleplayer';

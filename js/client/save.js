@@ -75,6 +75,15 @@ function ApplyLoadedState(loadedState) {
     // pure. Everything written from B30 onward arrives with its own id and keeps it.
     if (!engine.state.matchId) engine.state.matchId = NewMatchId();
 
+    // B1. Both load paths (the file loader in js/client/modals.js and the autosave
+    // restore below) funnel through here, so this is the one place that has to know
+    // a match now exists. Under menu-first boot the render loop has not been started
+    // yet on a fresh page, and the menu is still covering the board — loading a save
+    // as the very first thing after launch would otherwise apply the state correctly
+    // and show nothing. Both calls are idempotent.
+    EnsureGameLoopRunning();
+    HideMainMenu();
+
     // A5. `profile` is not an ENGINE_SAVE_FIELD, so it survives the merge above
     // and sits on gameState as a record of who wrote the file. Nothing reads it
     // back into localStorage, and that is the point: a save is evidence of who
@@ -139,9 +148,15 @@ function loadColorPreferences() {
 
 function autoSaveGame(isSilent = false) {
     if (engine.state.isTrainingMode) return;
+
+    // Never autosave a hosted match. The local engine holds a FILTERED board — under
+    // fog it is missing every enemy unit — so writing it would silently overwrite the
+    // player's autosave slot with a corrupt position that looks like a real one. The
+    // authoritative save lives on the host; A4's disconnect flow is how it comes back.
+    if (typeof IsRemoteMatch === 'function' && IsRemoteMatch()) return;
     if (gameState.isDragging) {
         // console.log("[Autosave] Skipped: Unit is dragging."); // Optional spam reduction
-        if (!isSilent) showInstruction("Cannot save while dragging.", 2000);
+        if (!isSilent) ShowWarning("Cannot save while dragging.");
         return;
     }
     if (gameState.isTestingMap) {
@@ -167,12 +182,12 @@ function autoSaveGame(isSilent = false) {
 
         localStorage.setItem(saveKey, gameStateString);
         
-        if (!isSilent) { showInstruction("Game Saved!", 2000); }
+        if (!isSilent) { ShowSuccess("Game Saved!"); }
         console.log("Autosave successful.");
         console.groupEnd();
     } catch (error) {
         console.error("[Autosave] CRITICAL ERROR:", error);
-        showInstruction("Could not save game. See console.", 3000);
+        ShowAlert("Could not save game. See console.");
         console.groupEnd();
     }
 }
@@ -180,7 +195,7 @@ function autoSaveGame(isSilent = false) {
 function saveGameToFile() {
 
     if (gameState.isTestingMap) {
-        showInstruction("Cannot download saves while testing a map.", 2500);
+        ShowWarning("Cannot download saves while testing a map.");
         return;
     }
 
@@ -209,11 +224,11 @@ function saveGameToFile() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showInstruction("Save file downloaded!", 2500);
+        ShowSuccess("Save file downloaded!");
 
     } catch (error) {
         console.error("Error saving game to file:", error);
-        showInstruction("Could not create save file. See console.", 3000);
+        ShowAlert("Could not create save file. See console.");
     }
 }
 
@@ -246,7 +261,7 @@ function LoadThroughTestament(data) {
     // Repairs are worth saying out loud — the player's file was wrong and is not
     // any more. Warnings stay in the console; they are not the player's problem.
     if (report.corrections.length) {
-        showInstruction('Repaired ' + report.corrections.length + ' problem(s) in this file.', 3000);
+        ShowSuccess('Repaired ' + report.corrections.length + ' problem(s) in this file.');
     }
 
     // Back-compat for the rest of save.js, which predates the lean schema: a map
@@ -280,7 +295,7 @@ function loadAutoSave() {
     if (engine.state.mapMakerMode) {
         const savedMapString = localStorage.getItem(MAP_MAKER_AUTOSAVE_KEY);
         if (!savedMapString) {
-            showInstruction("No autosaved map found.", 2000);
+            ShowWarning("No autosaved map found.");
             console.groupEnd();
             return;
         }
@@ -289,7 +304,7 @@ function loadAutoSave() {
             loadMapFromDataObject(mapData);
         } catch (error) {
             console.error(error);
-            showInstruction("Map Load Error.", 3000);
+            ShowAlert("Map Load Error.");
         }
     } else {
         const saveKey = engine.state.gameMode === 'singleplayer' ? 'forthexSaveGame_sp' : 'forthexSaveGame';
@@ -297,7 +312,7 @@ function loadAutoSave() {
         
         const savedStateString = localStorage.getItem(saveKey);
         if (!savedStateString) {
-            showInstruction("No saved game found.", 2000);
+            ShowWarning("No saved game found.");
             console.groupEnd();
             return;
         }
@@ -348,14 +363,14 @@ function loadAutoSave() {
             }
 
             fullGameRedraw();
-            showInstruction("Game Loaded.", 2000);
+            ShowSuccess("Game Loaded.");
 
             // A4: singleplayer and online saves ask which side to continue on.
             // Local pass-device resumes on whoever was to move and never asks.
             MaybePromptForSide();
         } catch (error) {
             console.error("Load Critical Failure:", error);
-            showInstruction("Save File Corrupted.", 3000);
+            ShowAlert("Save File Corrupted.");
         }
     }
     console.groupEnd();
@@ -545,7 +560,7 @@ function loadMapFromDataObject(mapData) {
     }
 
     if (!mapData || mapData.saveVersion !== BUILD_VERSION) {
-        showInstruction("Map data is invalid.", 3000);
+        ShowAlert("Map data is invalid.");
         return false;
     }
 
@@ -642,7 +657,7 @@ function loadMapFromDataObject(mapData) {
     // resizeMapGrid built no longer necessarily matches the board.
     buildFineGridIndex();
 
-    showInstruction("Map loaded successfully!", 2000);
+    ShowSuccess("Map loaded successfully!");
     return true;
 }
 

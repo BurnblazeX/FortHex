@@ -141,19 +141,26 @@ files.sort().forEach(file => {
     if (after.tiles !== before.tiles) problems.push('tile count ' + before.tiles + ' -> ' + after.tiles);
     // Edges are deliberately not carried; the regeneration check below covers them.
 
-    // A5. Every fixture here predates the local profile, so none may arrive with
-    // one. This is the "known version, expected field missing" case the chain has
-    // always handled, and the v8->v9 step is a no-op precisely so it stays that way:
-    // an absent profile is the normal state, not a gap for a migration to fill.
-    if (data.profile !== undefined) {
+    // These two are about MIGRATION not inventing things, so they only apply to a file
+    // that was actually migrated. A save written by the current build legitimately
+    // carries both fields, and reading its presence as "invented" would report every
+    // fresh save as a failure — which is exactly what happened the first time a B30
+    // save landed in the fixtures folder.
+    const sourceVersion = detected;
+    const wasMigrated = report.steps.length > 0;
+
+    // A5. A file predating the local profile may not arrive with one. The v8->v9 step
+    // is a no-op precisely so that stays true: an absent profile is the normal state,
+    // not a gap for a migration to fill.
+    if (wasMigrated && sourceVersion < 9 && data.profile !== undefined) {
         problems.push('migration invented a profile on a pre-A5 file');
     }
 
-    // A6, same principle. A pre-A6 file has no match identity, and the v9->v10
-    // step must not mint one: a migration that produced a different file each time
-    // it ran would make every downstream comparison meaningless. Minting happens at
-    // load (ApplyLoadedState), once, where it can be seen.
-    if (data.matchId !== undefined) {
+    // A6, same principle. A pre-A6 file has no match identity, and the v9->v10 step
+    // must not mint one: a migration that produced a different file each time it ran
+    // would make every downstream comparison meaningless. Minting happens at load
+    // (ApplyLoadedState), once, where it can be seen.
+    if (wasMigrated && sourceVersion < 10 && data.matchId !== undefined) {
         problems.push('migration invented a matchId on a pre-A6 file');
     }
 
@@ -192,8 +199,17 @@ files.sort().forEach(file => {
 
     const expanded = ExpandSaveObject(data, { forPlayer: data.currentPlayer });
     const rebuiltKeys = new Set(expanded.edges.map(([k]) => k));
-    if (rebuiltKeys.size !== before.edges) {
+
+    // Only meaningful against a file that RECORDED edges. A lean save deliberately
+    // stores none and rebuilds them from the tiles, so comparing against its zero
+    // would assert that regeneration produces nothing — the opposite of the property
+    // this check exists to defend. For those files the real test is the one below:
+    // every edge the file references must exist in the rebuilt set.
+    if (before.edges > 0 && rebuiltKeys.size !== before.edges) {
         problems.push('regenerated ' + rebuiltKeys.size + ' edges, file had ' + before.edges);
+    }
+    if (before.edges === 0 && rebuiltKeys.size === 0) {
+        problems.push('regeneration produced no edges at all');
     }
     NormalizeEdgeKeys(raw).forEach(key => {
         if (!rebuiltKeys.has(key)) problems.push('regeneration lost edge ' + key);

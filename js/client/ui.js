@@ -18,7 +18,6 @@
             endTurnButton: document.getElementById('endTurnButton'),
             downloadButton: document.getElementById('downloadButton'),
             tutorialButton: document.getElementById('tutorialButton'), 
-            messageBox: document.getElementById('messageBox'),
             victoryMessage: document.getElementById('victoryMessage'),
             customConfirmModal: document.getElementById('customConfirmModal'),
             customConfirmOkButton: document.getElementById('customConfirmOkButton'),
@@ -446,11 +445,41 @@
             }
         }
 
+        // === Player-facing messages ===
+        //
+        // #messageBox is gone. It was one fixed red bar that every one of these calls
+        // wrote to, in the same alarm colour, so "Game Saved!" looked exactly like
+        // "Save File Corrupted." — and after B1's menu-first boot it also sat on the
+        // main menu announcing a turn in a match that did not exist.
+        //
+        // The replacement is the React toast stack (src/ui/components/Notifications.jsx),
+        // top-right, two severities and nothing else:
+        //
+        //   ShowAlert(msg)   red    — the player has lost something or an operation failed
+        //   ShowWarning(msg) yellow — the game refused what they just tried to do
+        //   ShowSuccess(msg) green  — an operation the player asked for succeeded
+        //
+        // showInstruction is deliberately SILENT and kept only so the ~100 narration
+        // call sites still compile and still reach the action log through logAction.
+        // "P1 Archer moved" does not need announcing over a board the player is looking
+        // at; the action log already has it. Promote a call to ShowAlert/ShowWarning
+        // when it is genuinely one of those two things, rather than reviving this.
         function showInstruction(message, duration = 3000) {
-            ui.messageBox.textContent = message.replace(/<br>/g, ' '); 
-            ui.messageBox.style.display = 'block';
-            if (ui.messageBox.timeoutId) clearTimeout(ui.messageBox.timeoutId);
-            ui.messageBox.timeoutId = setTimeout(() => { ui.messageBox.style.display = 'none'; }, duration);
+            // Intentionally does nothing on screen. See above.
+        }
+
+        function ShowAlert(message) {
+            if (window.FortHexUI) window.FortHexUI.Notify(String(message).replace(/<br>/g, ' '), 'error');
+            else console.error('[Alert]', message);
+        }
+
+        function ShowWarning(message) {
+            if (window.FortHexUI) window.FortHexUI.Notify(String(message).replace(/<br>/g, ' '), 'warn');
+            else console.warn('[Warning]', message);
+        }
+
+        function ShowSuccess(message) {
+            if (window.FortHexUI) window.FortHexUI.Notify(String(message).replace(/<br>/g, ' '), 'ok');
         }
 
         function logAction(message, player, duration = 3000) {
@@ -498,7 +527,11 @@
 
                 // --- FOG OF WAR FILTER ---
                 if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode) {
-                    const viewer = (engine.state.gameMode === 'singleplayer' && engine.state.playerSide) ? engine.state.playerSide : engine.state.currentPlayer;
+                    // Whose log this is written for. Same rule as the board's fog
+                    // perspective (getPerspectivePlayer): the side you play if you play
+                    // one, otherwise whoever's turn it is. Keyed off the mode string, an
+                    // online client filtered its log from the OPPONENT's viewpoint.
+                    const viewer = IsBoundToOneSide() ? engine.state.playerSide : engine.state.currentPlayer;
                     let isRelevant = false;
                     
                     // 1. Did the current player do it?
@@ -994,7 +1027,7 @@
                     consumeRespawnCharge(player);
                     hideRespawnModal();
                 } else {
-                    showInstruction("Base is blocked!", 2000);
+                    ShowWarning("Base is blocked!");
                 }
             }
         }
@@ -1035,7 +1068,7 @@
                     } 
                     else if (validTargets.length === 1) {
                         // Quality of Life: If there is only 1 valid edge, do it automatically
-                        showInstruction(`${unit.type.name} can no longer hold the fort!`, 3000);
+                        ShowWarning(`${unit.type.name} can no longer hold the fort!`);
                         completeUnfortify(unit, validTargets[0]);
                     } 
                     else {
@@ -1043,7 +1076,7 @@
                         gameState.mustUnfortify = true;
                         gameState.selectedUnit = unit;
                         handleUnfortifyActionLogic();
-                        showInstruction(`Defense critical! You MUST select an edge to retreat to.`, 4000);
+                        ShowWarning(`Defense critical! You MUST select an edge to retreat to.`);
                     }
                 }
             }
@@ -1067,8 +1100,8 @@
         const queue = engine.state.respawnQueue[queueKey];
         if (queue.length > 0 && queue[0].turnsRemaining <= 0) {
             // --- FIX: Prevent AI from opening the modal ---
-            if (engine.state.isTrainingMode || (engine.state.gameMode === 'singleplayer' && player !== engine.state.playerSide)) {
-                return; // AI handles its own loop
+            if (engine.state.isTrainingMode || IsForeignUnit({ player })) {
+                return; // not our unit to place — the AI or the other player handles it
             }
             // Re-open for next charge
             setTimeout(() => showRespawnModal(player), 500);
@@ -1227,7 +1260,7 @@
                         const blocker = document.getElementById('trainingInteractionBlocker');
                         if (blocker) blocker.style.display = 'none';
 
-                        showInstruction("Training Aborted. Brain Saved.", 3000);
+                        ShowSuccess("Training Aborted. Brain Saved.");
                         if (typeof saveAIBrain === 'function') saveAIBrain();
                         
                         // --- PROPER SETTINGS RESTORATION ---
@@ -1251,14 +1284,7 @@
                             // Re-build the grid properly for a human
                             initializeGrid(DEFAULT_MAP_LAYOUT_RADIUS_3);
                             
-                            const modal = document.getElementById('gameMenuModal');
-                            document.getElementById('mainMenuContent').style.display = 'block';
-                            document.getElementById('singleplayerMenuContent').style.display = 'none';
-                            document.getElementById('multiplayerMenuContent').style.display = 'none';
-                            if (modal) {
-                                modal.style.display = 'flex';
-                                setTimeout(() => modal.classList.add('modal-visible'), 10);
-                            }
+                            ShowMainMenu('root');
                         }, 100); // 100ms ensures the AI async loop has fully bled out before rebuilding
                     }
                 }

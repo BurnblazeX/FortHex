@@ -203,12 +203,30 @@ class ActionManager {
 
     Reject(message, error, detail) {
         console.warn('[Server] Rejected ' + message.action + ': ' + error + (detail ? ' (' + detail + ')' : ''));
+
+        // Attributed to whoever ASKED, not to whoever's turn it is. Those are the same
+        // player for a legal-but-refused action and different for the two cases that
+        // matter most: an out-of-turn request, and a client acting as someone else.
+        //
+        // It mattered less when there was one local recipient who saw every event. Over
+        // a wire, FilterEventsForPlayer delivers ACTION_REJECTED only to the player it
+        // names — so attributing it to currentPlayer meant the player who made the bad
+        // request was told nothing at all, while their OPPONENT was told that someone
+        // had tried something. Wrong player informed, wrong player left guessing.
+        //
+        // `message.player` is stamped by the host from the seat it recorded at join
+        // time (host/server.js), never taken from the client. Local play sends no
+        // player field and keeps the old behaviour.
+        const blamed = (message && message.player !== undefined && message.player !== null)
+            ? message.player
+            : this.engine.state.currentPlayer;
+
         this.engine.Emit({
             type: 'ACTION_REJECTED',
             action: message.action,
             error,
             detail: detail || null,
-            player: this.engine.state.currentPlayer
+            player: blamed
         });
         return { ok: false, error, detail: detail || null };
     }

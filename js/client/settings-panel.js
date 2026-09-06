@@ -30,45 +30,38 @@ function SyncSettingControls() {
     }
 }
 
-function WireSettingsModal() {
-    const settingsButton = document.getElementById('settingsButton');
+// Settings stays vanilla DOM — B4 adopts React for NEW screens and explicitly does
+// not retrofit working modals. What changed in B1 is only who opens it.
+//
+// The old handler faded the menu out, waited 350ms, then faded settings in, and the
+// Back button reversed that. None of it is needed now: .modal-overlay sits at
+// z-index 3000 and the React menu at 900, so the modal simply covers it and the menu
+// is still there underneath when it closes. That also removes the failure mode where
+// a mistimed Back left the player looking at neither.
+function OpenSettingsModal() {
+    clearSelectionAndDebugState();
+
     const settingsModal = document.getElementById('settingsModal');
-    const settingsBackButton = document.getElementById('settingsBackButton');
-    const gameMenuModal = document.getElementById('gameMenuModal');
+    if (!settingsModal) return;
 
-    settingsButton.addEventListener('click', () => {
-        clearSelectionAndDebugState();
-        if (gameMenuModal) {
-            gameMenuModal.classList.remove('modal-visible');
-            setTimeout(() => { gameMenuModal.style.display = 'none'; }, 300);
-        }
-        if (settingsModal) {
-            setTimeout(() => {
-                settingsModal.style.display = 'flex';
-                setTimeout(() => settingsModal.classList.add('modal-visible'), 10);
-            }, 350);
-        }
-    });
+    settingsModal.style.display = 'flex';
+    setTimeout(() => settingsModal.classList.add('modal-visible'), 10);
+}
 
-    settingsBackButton.addEventListener('click', () => {
-        if (settingsModal) {
-            settingsModal.classList.remove('modal-visible');
-            setTimeout(() => { settingsModal.style.display = 'none'; }, 300);
-        }
-        if (gameMenuModal) {
-             setTimeout(() => {
-                gameMenuModal.style.display = 'flex';
-                setTimeout(() => gameMenuModal.classList.add('modal-visible'), 10);
-            }, 350);
-        }
-    });
+function CloseSettingsModal() {
+    const settingsModal = document.getElementById('settingsModal');
+    if (!settingsModal) return;
 
+    settingsModal.classList.remove('modal-visible');
+    setTimeout(() => { settingsModal.style.display = 'none'; }, 300);
+}
+
+function WireSettingsModal() {
+    const settingsModal = document.getElementById('settingsModal');
+
+    document.getElementById('settingsBackButton').addEventListener('click', CloseSettingsModal);
     settingsModal.addEventListener('click', (e) => {
-        if (e.target.id === 'settingsModal') {
-            const modal = e.target;
-            modal.classList.remove('modal-visible');
-            setTimeout(() => modal.style.display = 'none', 300);
-        }
+        if (e.target.id === 'settingsModal') CloseSettingsModal();
     });
 }
 
@@ -157,7 +150,6 @@ function WireSettingControls() {
 
     // Set initial console visibility based on loaded settings
     const consoleModal = document.getElementById('debugConsoleModal');
-    const trainingBtn = document.getElementById('trainingModeButton'); // <-- ADD THIS
 
     if (gameSettings.debugModeEnabled) {
         consoleModal.style.display = 'flex';
@@ -167,31 +159,26 @@ function WireSettingControls() {
         consoleModal.style.left = 'auto';
 
         toggleCalibrationCard(true); 
-        if (trainingBtn) trainingBtn.style.display = 'block'; // <-- ADD THIS
     } else {
         consoleModal.style.display = 'none';
 
         toggleCalibrationCard(false);
-        if (trainingBtn) trainingBtn.style.display = 'none'; // <-- ADD THIS
     }
 
     debugModeCheckbox.addEventListener('change', (e) => {
         gameSettings.debugModeEnabled = e.target.checked;
         saveSettings();
-        const trainingBtn = document.getElementById('trainingModeButton'); 
 
         if (!gameSettings.debugModeEnabled) {
             clearSelectionAndDebugState(); 
             consoleModal.style.display = 'none';
             toggleCalibrationCard(false); 
-            if(trainingBtn) trainingBtn.style.display = 'none'; 
         } else {
             consoleModal.style.display = 'flex';
             consoleModal.style.top = '10px';
             consoleModal.style.right = '10px';
             consoleModal.style.left = 'auto';
             toggleCalibrationCard(true);
-            if(trainingBtn) trainingBtn.style.display = 'block'; 
         }
         console.log(`Debug Mode: ${gameSettings.debugModeEnabled ? 'ON' : 'OFF'}`);
     });

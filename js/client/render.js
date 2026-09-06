@@ -15,11 +15,14 @@ function DrawableUnitsOnEdge(edge) {
 }
 
 function getPerspectivePlayer() {
-    // In Singleplayer, always view from the human player's side
-    if (engine.state.gameMode === 'singleplayer' && engine.state.playerSide) {
-        return engine.state.playerSide;
-    }
-    // In Local Multiplayer, view from whoever's turn it currently is
+    // Whoever this client PLAYS, if it plays one side — singleplayer or online alike.
+    // This used to test gameMode === 'singleplayer', so an online client fell through
+    // to "whoever's turn it is" and, on the opponent's turn, computed fog from the
+    // OPPONENT's perspective. Same mistake as the ownership checks: the mode string was
+    // never the question, playerSide was.
+    if (IsBoundToOneSide()) return engine.state.playerSide;
+
+    // Hotseat: both players share a screen, so the view follows the turn.
     return engine.state.currentPlayer;
 }
         
@@ -1101,7 +1104,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 return;
             }
     
-            if (engine.state.gameMode === 'singleplayer' && unitForHighlights.player !== engine.state.playerSide) {
+            if (IsForeignUnit(unitForHighlights)) {
                 return;
             }
             
@@ -1782,6 +1785,27 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 
                 return false;
             });
+        }
+
+        // === B1: the loop is started by the first match, not by page load ===
+        //
+        // Menu-first boot means there is no board to draw until the player picks one,
+        // so js/main.js no longer calls gameLoop() at startup. Every match start goes
+        // through StartMatchFromMenu (js/client/game-flow.js), which calls this — and
+        // starting a second match must not stack a second requestAnimationFrame chain
+        // on top of the first, which is the whole reason this guard exists rather than
+        // the callers just calling gameLoop() directly.
+        let gameLoopRunning = false;
+
+        function EnsureGameLoopRunning() {
+            if (gameLoopRunning) return;
+            gameLoopRunning = true;
+
+            // The loop may have been idle since page load. Without this, the first frame
+            // computes a deltaTime of however long the player sat in the menu, which the
+            // arcade timer would spend all at once.
+            lastFrameTime = Date.now();
+            gameLoop();
         }
 
         function gameLoop() {
