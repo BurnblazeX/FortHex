@@ -270,8 +270,14 @@ class RoomRegistry {
 
             // Everyone is gone. Wait out the grace period from the MOST RECENT
             // departure, so the last player to leave still gets a full window back.
-            const latest = occupants.reduce((newest, o) => Math.max(newest, o.disconnectedAt || 0), 0);
-            if (latest && now - latest >= graceMs) abandoned.push(room);
+            // Fall back to the room's own age. An occupant who LEFT deliberately has no
+            // disconnectedAt — nothing recorded one, because nothing had dropped — so
+            // `latest` was 0 and the guard below never fired. That is how a finished
+            // match ended up sitting in the list forever, empty and unjoinable, until
+            // the host was restarted.
+            const latest = occupants.reduce((newest, o) => Math.max(newest, o.disconnectedAt || 0), 0)
+                || room.createdAt;
+            if (now - latest >= graceMs) abandoned.push(room);
         }
 
         return abandoned;

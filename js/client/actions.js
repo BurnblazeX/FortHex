@@ -166,6 +166,15 @@ function SendAction(action, payload) {
 // respawn log lines that used to be a direct logAction() call inside it.
 function spawnUnit(player, unitType) {
     const outcome = SendAction('spawn-unit', { player, unitTypeName: unitType.name });
+
+    // In a hosted match there is no local result to act on. SendAction posted a REQUEST;
+    // the host decides what happened and says so in the state-sync that follows, which
+    // ApplyRemoteView writes into engine.state. Reading outcome.result here meant reading
+    // fields off an ack that carries none — undefined.spearWalled and the like — which is
+    // why attacking and ending a turn threw while plain moves (which never awaited the
+    // ack) appeared to work.
+    if (IsRemoteMatch()) return true;
+
     return outcome.ok ? outcome.result : false;
 }
 
@@ -221,6 +230,7 @@ function attemptToResupplyForts(playerNum) {
 
 function applyUnitUpgrade(unit, statType) {
     const outcome = SendAction('upgrade-unit', { unitId: unit.id, statType });
+    if (IsRemoteMatch()) return;
     if (!outcome.ok) return false;
     const result = outcome.result;
     if (result.success) {
@@ -231,6 +241,7 @@ function applyUnitUpgrade(unit, statType) {
 
 function performSwap(unit, newType) {
     const outcome = SendAction('swap-class', { unitId: unit.id, newTypeName: newType.name });
+    if (IsRemoteMatch()) return;
     if (!outcome.ok) return;
     const result = outcome.result;
 
@@ -247,6 +258,7 @@ function handleMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
     // cost and path are deliberately not sent - the server recomputes both from
     // its own getPossibleMoves, which is also how it verifies the move is legal.
     const outcome = SendAction('move', { unitId: unitToMove.id, targetEdgeKey });
+    if (IsRemoteMatch()) return;
     if (!outcome.ok) return;
     const result = outcome.result;
     if (!result.unitFound) {
@@ -503,6 +515,19 @@ async function completeAttack(attackingUnit, targetUnitInfo, attackType) {
         attackType,
         duration
     });
+    if (IsRemoteMatch()) {
+
+    // In a hosted match there is no local result to act on. SendAction posted a REQUEST;
+    // the host decides what happened and says so in the state-sync that follows, which
+    // ApplyRemoteView writes into engine.state. Reading outcome.result here meant reading
+    // fields off an ack that carries none — undefined.spearWalled and the like — which is
+    // why attacking and ending a turn threw while plain moves (which never awaited the
+    // ack) appeared to work.
+        resetActionSelectionStates();
+        updateSelectedUnitInfoPanel();
+        return;
+    }
+
     if (!outcome.ok) return;
     const result = outcome.result;
 

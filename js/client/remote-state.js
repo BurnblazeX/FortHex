@@ -127,9 +127,28 @@ function ApplyRemoteView(view) {
     if (view.flags !== undefined) engine.state.flags = view.flags;
     if (view.gameOver !== undefined) engine.state.gameOver = view.gameOver;
 
-    // Vision is derived from unit positions, and those just changed wholesale.
-    engine.visionCache = null;
-    engine.visionDirty = true;
+    // Vision comes from the HOST, it is not recomputed here.
+    //
+    // The client was deriving fog from its own copy of the board — a board it has only
+    // been shown part of. That is the same mistake as adjudicating victory locally: the
+    // server already decided what this player can see (it had to, in order to know what
+    // to send), so recomputing could only ever agree by luck and disagree in the gaps.
+    //
+    // Writing it straight into visionCache with visionDirty cleared means render.js's
+    // existing "recompute if dirty or the perspective changed" test simply finds the
+    // answer already there, and nothing in the renderer had to change.
+    if (Array.isArray(view.visibleTiles) && Array.isArray(view.visibleEdges)) {
+        engine.visionCache = {
+            player: engine.state.playerSide,
+            tiles: new Set(view.visibleTiles),
+            edges: new Set(view.visibleEdges),
+        };
+        engine.visionDirty = false;
+    } else {
+        engine.visionCache = null;
+        engine.visionDirty = true;
+    }
+
     gameState.needsRedraw = true;
 
     // One line per board, so a match that stops updating is visible in the console as

@@ -217,7 +217,9 @@ async function Main() {
                 terrainIsObject: typeof [...engine.state.tiles.values()][0].type === 'object',
                 edgeUnitsEnumerable: Object.getOwnPropertyDescriptor(anyEdge, 'units').enumerable,
                 redrawRequested: gameState.needsRedraw,
-                visionInvalidated: engine.visionDirty === true,
+                visionFromHost: !!(engine.visionCache && engine.visionCache.tiles),
+                visionRecomputeSkipped: engine.visionDirty === false,
+                visibleTileCount: engine.visionCache ? engine.visionCache.tiles.size : -1,
             });
         })()`, client));
 
@@ -238,8 +240,13 @@ async function Main() {
         check('hidden units are dropped rather than drawn as stubs', rebuilt.units === visible);
 
         check('applying a view asks for a repaint', rebuilt.redrawRequested === true);
-        check('and invalidates vision, which is derived from positions',
-            rebuilt.visionInvalidated === true);
+
+        // Vision is TAKEN from the host, not recomputed. The client only holds part of
+        // the board, so deriving fog from it could agree only by luck — the server had
+        // to work the set out anyway in order to know what to send.
+        check('vision is taken from the host', rebuilt.visionFromHost === true);
+        check('and is not marked for local recomputation', rebuilt.visionRecomputeSkipped === true);
+        check('the host-supplied vision set is non-empty', rebuilt.visibleTileCount > 0);
     }
 
     // --- 6. a client only controls its own side ----------------------------

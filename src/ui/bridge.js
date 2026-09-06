@@ -9,7 +9,7 @@
           showInstruction, OpenSettingsModal, OpenChangelogModal, showLoadGameModal,
           fileLoadContext, gameSettings, engine, CreateWebSocketTransport,
           BUILD_VERSION, BeginOnlineMatchWith, SetOnlineContext, ClearOnlineContext,
-          UpdateStatusCorner */
+          UpdateStatusCorner, EndOnlineMatch */
 
 export function StartMatch(options) { StartMatchFromMenu(options); }
 export function GetMaps() { return GetSelectableMaps(); }
@@ -47,6 +47,13 @@ export function ClearMatchContext() {
 // it has to be told when that changes.
 export function RefreshStatusCorner() {
     UpdateStatusCorner();
+}
+
+// Hands the board back to the in-process engine. Without this the client kept posting
+// actions into a socket it had walked away from, and every one came back "you are not
+// in a room anymore".
+export function LeaveOnlineMatch() {
+    EndOnlineMatch();
 }
 
 export function GetBuildVersion() {

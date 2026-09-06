@@ -204,6 +204,7 @@ class WebSocketTransport {
             case 'room-update':
             case 'room-left':
             case 'room-error':
+            case 'match-ended':
             case 'match-error':
             case 'host-disconnected':
                 this.lobbySubscribers.forEach(handler => handler(message));

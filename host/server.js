@@ -405,7 +405,7 @@ function HandleLeaveRoom(clientId) {
         // waiting out the abandonment sweep for a room already known to be finished.
         if (room.state === 'in-progress' && registry.Occupants(room).length < 2) {
             Log('match ended early — a player left:', room.name);
-            EndMatch(room);
+            EndMatch(room, 'opponent_left');
         }
         ReapIfEmpty(room);
     }
@@ -611,12 +611,31 @@ function ReapIfEmpty(room) {
     Log('room reaped:', room.name);
 }
 
-function EndMatch(room) {
+function EndMatch(room, reason) {
     const match = matches.get(room.id);
     if (match) match.worker.terminate();
     matches.delete(room.id);
     room.state = 'finished';
-    ReapIfEmpty(room);
+
+    // Whoever is still sitting there needs telling. Without this the remaining player
+    // was left in a match against a ghost: their opponent had walked out, the worker
+    // was gone, and nothing on their screen said so.
+    registry.Occupants(room).forEach(occupant => {
+        Send(occupant.clientId, { type: 'match-ended', reason: reason || 'ended' });
+    });
+
+    // A finished room is not coming back, so free the seats rather than holding them
+    // for a reconnect that has nothing to reconnect to. Holding them was what left the
+    // room listed, empty and unjoinable, until the process restarted.
+    registry.Occupants(room).forEach(occupant => {
+        const seat = registry.SeatOf(room, occupant.clientId, occupant.profileId);
+        if (seat !== null) room.seats.set(seat, null);
+        const client = clients.get(occupant.clientId);
+        if (client) client.roomId = null;
+    });
+
+    registry.Destroy(room.id);
+    Log('room closed:', room.name, '(' + (reason || 'ended') + ')');
 }
 
 // --- boot ------------------------------------------------------------------

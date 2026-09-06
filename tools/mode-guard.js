@@ -102,6 +102,50 @@ files.forEach(file => {
     });
 });
 
+// --- second rule: never act on a LOCAL result during a hosted match -----------
+//
+// SendAction posts a request. In a local match the engine runs in-process, so the ack
+// carries the real outcome and the wrappers read `outcome.result` from it. In a hosted
+// match the engine is a worker on the server: the ack carries an acknowledgement and
+// nothing else, so `outcome.result` is undefined and reading a field off it throws.
+//
+// That is why attacking and ending a turn broke online while plain moves did not —
+// move never awaited the ack, so it never read the result it did not have. Every one
+// of these needs an IsRemoteMatch() bail-out before it touches outcome.result.
+const resultFailures = [];
+
+files.forEach(file => {
+    const rel = path.relative(ROOT, file).replace(/\\/g, '/');
+    if (EXEMPT_FILES.has(rel)) return;
+
+    // The map maker is local-only by definition — there is no hosted map editing.
+    if (rel === 'js/client/map-maker.js') return;
+
+    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    lines.forEach((line, index) => {
+        const code = line.replace(/\/\/.*$/, '');
+        if (!/\boutcome\.result\b/.test(code)) return;
+
+        // Look back a short way for the bail-out. Ten lines is enough to cover the
+        // await and any cleanup between it and the read.
+        const window = lines.slice(Math.max(0, index - 30), index).join('\n');
+        if (/IsRemoteMatch\(\)/.test(window)) return;
+
+        resultFailures.push(rel + ':' + (index + 1) + '  ' + line.trim());
+    });
+});
+
+if (resultFailures.length) {
+    console.error('FAIL — ' + resultFailures.length + ' unguarded local-result read(s).');
+    console.error('');
+    console.error('In a hosted match the ack carries no result — the host sends the');
+    console.error('consequences as a state-sync instead. Bail out first:');
+    console.error('  if (IsRemoteMatch()) return;   // the sync drives the UI from here');
+    console.error('');
+    resultFailures.forEach(f => console.error('  !! ' + f));
+    process.exit(1);
+}
+
 if (failures.length) {
     console.error('FAIL — ' + failures.length + ' unreviewed singleplayer check(s).');
     console.error('');
@@ -119,4 +163,5 @@ if (failures.length) {
 console.log('PASS — mode checks');
 console.log('  ownership : no client code decides who owns a side from the mode string');
 console.log('  allowed   : ' + ALLOWED.length + ' AI-specific checks, each with a recorded reason');
+console.log('  results   : no client code reads a local action result during a hosted match');
 console.log('  scanned   : ' + files.length + ' files');

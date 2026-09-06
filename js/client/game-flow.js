@@ -214,6 +214,23 @@ async function proceedToEndTurn() {
     }
 
     const outcome = await SendAction('end-turn', {});
+
+    if (IsRemoteMatch()) {
+
+    // In a hosted match there is no local result to act on. SendAction posted a REQUEST;
+    // the host decides what happened and says so in the state-sync that follows, which
+    // ApplyRemoteView writes into engine.state. Reading outcome.result here meant reading
+    // fields off an ack that carries none — undefined.spearWalled and the like — which is
+    // why attacking and ending a turn threw while plain moves (which never awaited the
+    // ack) appeared to work.
+        gameState.selectedUnit = null;
+        gameState.currentReachableMoves.clear();
+        gameState.hoveredUnitId = null;
+        canvas.style.cursor = 'default';
+        resetActionSelectionStates();
+        return;
+    }
+
     if (!outcome.ok) return;
     const result = outcome.result;
 

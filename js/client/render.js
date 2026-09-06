@@ -1845,7 +1845,13 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
 
             if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode) {
                 const perspectivePlayer = getPerspectivePlayer();
-                if (engine.visionDirty || !engine.visionCache || engine.visionCache.player !== perspectivePlayer) {
+                // A hosted match never recomputes: the host sent the vision set with the
+                // board (js/client/remote-state.js), and the local board is too partial
+                // to derive it from anyway.
+                const needsVision = !IsRemoteMatch()
+                    && (engine.visionDirty || !engine.visionCache || engine.visionCache.player !== perspectivePlayer);
+
+                if (needsVision) {
                     const newVision = computePlayerVision(perspectivePlayer);
                     engine.visionCache = {
                         player: perspectivePlayer,

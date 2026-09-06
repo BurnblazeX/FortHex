@@ -11,7 +11,7 @@
 
 import {
     CreateSocketTransport, GetLocalProfile, GetBuildVersion, BeginOnlineMatch,
-    SetMatchContext, ClearMatchContext,
+    SetMatchContext, ClearMatchContext, LeaveOnlineMatch,
 } from './bridge.js';
 import { Notify } from './notify-store.js';
 
@@ -89,6 +89,10 @@ export async function ConnectToLobby(url) {
 // on a room screen with no room to draw.
 export function LeaveRoom() {
     if (transport) transport.LeaveRoom();
+
+    // Give the board back to the local engine. Leaving the room without this left the
+    // client still submitting actions over a socket it was no longer seated on.
+    if (state.matchStarted) LeaveOnlineMatch();
     SetState({ room: null, seat: null, matchStarted: false, error: null });
     if (transport) transport.ListRooms();
 }
@@ -164,6 +168,16 @@ function HandleLobbyMessage(message) {
             SetState({ status: 'offline', room: null, seat: null, matchStarted: false,
                        error: 'Lost connection to the server.' });
             Notify('Lost connection to the server.', 'error');
+            break;
+
+        case 'match-ended':
+            LeaveOnlineMatch();
+            SetState({ room: null, seat: null, matchStarted: false });
+            ClearMatchContext();
+            Notify(message.reason === 'opponent_left'
+                ? 'Your opponent left the match.'
+                : 'The match ended.', 'warn');
+            if (transport) transport.ListRooms();
             break;
 
         case 'room-closed':
