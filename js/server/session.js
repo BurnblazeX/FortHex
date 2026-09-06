@@ -183,6 +183,30 @@ function BuildResyncSnapshot(player) {
         supplyPoints: { ...engine.state.supplyPoints },
         flags: engine.state.flags ? JSON.parse(JSON.stringify(engine.state.flags)) : null,
         gameOver: engine.state.gameOver,
+
+        // Everything below was missing, and each absence had already caused or was
+        // waiting to cause a bug. Found by comparing a rebuilt client against the
+        // server field by field (tools/state-parity.js) rather than one at a time as
+        // the symptoms turned up.
+        //
+        //   gridRadius            board extent and render scale
+        //   baseCampPositions     base camps, flag homes, and the fortify rules that
+        //                         refuse enemy base tiles — a rule, not decoration
+        //   respawnQueue          the respawn panel and its countdown
+        //   unitCounts            what the recruit UI is allowed to offer
+        //   playerActionTaken     gates whether a turn may be ended
+        //   playerColorSelections whose colours the board is drawn in
+        //   arcadeTotalTurns      the arcade turn cap
+        //   matchId               A6's archive identity, so a client archiving its own
+        //                         view files it under the same match as the host
+        gridRadius: engine.state.gridRadius,
+        baseCampPositions: JSON.parse(JSON.stringify(engine.state.baseCampPositions || null)),
+        respawnQueue: JSON.parse(JSON.stringify(engine.state.respawnQueue || { player1: [], player2: [] })),
+        unitCounts: engine.state.unitCounts ? JSON.parse(JSON.stringify(engine.state.unitCounts)) : null,
+        playerActionTaken: { ...engine.state.playerActionTaken },
+        playerColorSelections: { ...engine.state.playerColorSelections },
+        arcadeTotalTurns: engine.state.arcadeTotalTurns,
+        matchId: engine.state.matchId || null,
     };
 }
 

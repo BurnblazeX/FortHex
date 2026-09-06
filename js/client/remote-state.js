@@ -99,7 +99,13 @@ function ApplyRemoteView(view) {
     // call or need a special case in each one. The id is retained by the server so a
     // future "last known position" feature can use it; nothing draws it today.
     if (Array.isArray(view.units)) {
-        engine.state.units = view.units.filter(unit => !unit.hidden);
+        // `hidden` is a TRANSPORT annotation added by FilterStateForPlayer, not a
+        // property of a unit. It is stripped rather than carried: left on, it would sit
+        // on every unit in engine.state and eventually travel into a save as a field
+        // the schema knows nothing about.
+        engine.state.units = view.units
+            .filter(unit => !unit.hidden)
+            .map(({ hidden, ...unit }) => unit);
 
         // Every unit object was just REPLACED. Anything still pointing at one of the old
         // ones is holding a stale copy with a stale position — which is how a swordsman
@@ -135,6 +141,18 @@ function ApplyRemoteView(view) {
     buildFineGridIndex();
 
     // --- everything else the renderer reads ---
+    // Applied by name rather than by spreading the view: the view also carries things
+    // that are NOT engine state (player, filtered, visibleTiles), and a blind copy
+    // would push those onto engine.state and eventually into a save.
+    if (view.gridRadius !== undefined) engine.state.gridRadius = view.gridRadius;
+    if (view.baseCampPositions !== undefined) engine.state.baseCampPositions = view.baseCampPositions;
+    if (view.respawnQueue !== undefined) engine.state.respawnQueue = view.respawnQueue;
+    if (view.unitCounts !== undefined) engine.state.unitCounts = view.unitCounts;
+    if (view.playerActionTaken !== undefined) engine.state.playerActionTaken = view.playerActionTaken;
+    if (view.playerColorSelections !== undefined) engine.state.playerColorSelections = view.playerColorSelections;
+    if (view.arcadeTotalTurns !== undefined) engine.state.arcadeTotalTurns = view.arcadeTotalTurns;
+    if (view.matchId !== undefined) engine.state.matchId = view.matchId;
+
     if (view.currentPlayer !== undefined) engine.state.currentPlayer = view.currentPlayer;
     if (view.globalTurnNumber !== undefined) engine.state.globalTurnNumber = view.globalTurnNumber;
     if (view.supplyPoints) engine.state.supplyPoints = { ...view.supplyPoints };
