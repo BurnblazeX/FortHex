@@ -120,6 +120,20 @@ function ApplyRemoteView(view) {
         if (typeof resetActionSelectionStates === 'function') resetActionSelectionStates();
     }
 
+    // --- derived indexes ---
+    //
+    // The fine grid is not stored, it is DERIVED from tiles and edges — which is why
+    // every other path that replaces a board rebuilds it (match-setup.js after
+    // InitializeGrid, save.js after a load, map-generation.js after a resize). This path
+    // replaced the board and did not, so engine.state.fineGrid stayed empty.
+    //
+    // Everything spatial reads it. getAttackRangeCells returned zero cells, so the
+    // Attack button was permanently greyed out with an enemy standing right next to
+    // you: not an attack bug at all, a board that had no geometry.
+    //
+    // Anything else derived belongs here too, for the same reason.
+    buildFineGridIndex();
+
     // --- everything else the renderer reads ---
     if (view.currentPlayer !== undefined) engine.state.currentPlayer = view.currentPlayer;
     if (view.globalTurnNumber !== undefined) engine.state.globalTurnNumber = view.globalTurnNumber;
@@ -161,6 +175,17 @@ function ApplyRemoteView(view) {
 // Refreshes the panels that read state rather than being drawn on the canvas. Kept
 // separate from ApplyRemoteView so a burst of syncs can apply cheaply and repaint once.
 function RefreshRemoteUi() {
+    // Whose turn it is came from the host a moment ago, so the button follows it.
+    //
+    // Nothing was doing this online: the local turn lifecycle sets the button state in
+    // finalizeVisuals, and that whole path is skipped in a hosted match. So End Turn sat
+    // enabled for both players, and clicking it on your opponent's turn sent a request
+    // the server used to accept — it does not any more, but a button that is only
+    // stopped by the server is still a button that should have been greyed out.
+    if (ui && ui.endTurnButton) {
+        ui.endTurnButton.disabled = IsOpponentsTurn() || !!engine.state.gameOver;
+    }
+
     updateTurnDisplay();
     updateGlobalTurnDisplay();
     updateSelectedUnitInfoPanel();

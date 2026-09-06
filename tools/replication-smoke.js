@@ -289,6 +289,65 @@ async function Main() {
         check('and when it is', Ask(2, 2, 2).theirTurn === false);
     }
 
+    // --- 7. the rebuilt board must be SPATIALLY usable, not just present -----
+    //
+    // Having the right tiles, edges and units is not enough. engine.state.fineGrid is a
+    // DERIVED index, rebuilt by every other path that replaces a board — after
+    // InitializeGrid, after a load, after a resize. This path replaced the board and did
+    // not, so the index stayed empty and every spatial query returned nothing.
+    //
+    // It presented as "units cannot attack": the Attack button greys itself out when
+    // there are no valid targets, and with no fine grid there were never any targets,
+    // even with an enemy on the adjacent edge. The board looked perfect and had no
+    // geometry. Compared against the server rather than asserted as a number, because
+    // the only thing that matters is that the two agree.
+    {
+        const server = { console: { log() {}, warn() {}, error() {} } };
+        vm.createContext(server);
+        vm.runInContext(ReadBundle(), server);
+        vm.runInContext('globalThis.engine = CreateEngineInstance();'
+            + ' engine.settings.fogOfWarEnabled = false; InitializeGrid();', server);
+
+        // Put an enemy on an edge next to one of ours so an attack is genuinely legal.
+        const staged = JSON.parse(vm.runInContext([
+            "(() => {",
+            "  const a = engine.state.units.find(u => u.player === 1 && u.type.attackType === 'melee');",
+            "  const spot = getRotationallyAdjacentEdges(a.position)[0];",
+            "  const b = engine.state.units.find(u => u.player === 2 && u.type.attackType === 'melee');",
+            "  b.position = spot; b.positionType = 'edge';",
+            "  return JSON.stringify({ attacker: a.id });",
+            "})()",
+        ].join('\n'), server));
+
+        const ask = "(() => { const a = engine.state.units.find(u => u.id === '" + staged.attacker + "');"
+            + " return JSON.stringify({ targets: getValidMeleeAttackTargets(a).length,"
+            + " moves: getPossibleMoves(a).size, fineGrid: engine.state.fineGrid.size }); })()";
+
+        const onServer = JSON.parse(vm.runInContext(ask, server));
+        const snapshot = JSON.parse(vm.runInContext('JSON.stringify(BuildResyncSnapshot(1))', server));
+
+        const client = { console: { log() {}, warn() {}, error() {} } };
+        vm.createContext(client);
+        vm.runInContext(ReadBundle(), client);
+        vm.runInContext('globalThis.engine = CreateEngineInstance();'
+            + ' globalThis.gameState = { needsRedraw: false };', client);
+        vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/client/remote-state.js'), 'utf8'), client);
+        vm.runInContext('globalThis.incoming = ' + JSON.stringify(snapshot) + ';', client);
+        vm.runInContext('BeginRemoteMatch(1); ApplyRemoteView(incoming);', client);
+
+        const onClient = JSON.parse(vm.runInContext(ask, client));
+
+        check('the rebuilt board has a fine grid at all (' + onClient.fineGrid + ')',
+            onClient.fineGrid > 0);
+        check('the fine grid matches the server (' + onClient.fineGrid + ' vs ' + onServer.fineGrid + ')',
+            onClient.fineGrid === onServer.fineGrid);
+        check('an adjacent enemy IS attackable after a rebuild ('
+            + onClient.targets + ' vs ' + onServer.targets + ')',
+            onServer.targets > 0 && onClient.targets === onServer.targets);
+        check('legal moves match the server (' + onClient.moves + ' vs ' + onServer.moves + ')',
+            onServer.moves > 0 && onClient.moves === onServer.moves);
+    }
+
     check('nothing errored inside the worker' +
         (errors.length ? ' (' + errors.map(e => e.where + ': ' + e.error).join('; ') + ')' : ''),
         errors.length === 0);
@@ -310,6 +369,7 @@ async function Main() {
     console.log('  fog       : enemy units outside vision arrive redacted, without position');
     console.log('  rebuild   : a received view reconstructs a drawable board on a fresh client');
     console.log('  ownership : a seated client controls its own side only; hotseat controls both');
+    console.log('  geometry  : the rebuilt board answers attack range and movement like the server');
     console.log('  size      : ' + sizes.map(n => (n / 1024).toFixed(1) + 'KB').join(' / ') + ' per view');
 }
 

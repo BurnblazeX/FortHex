@@ -288,6 +288,7 @@ const ACTION_SPECS = {
     // note on CheckDisconnectDeadlines.
     'heartbeat': {
         turnGated: false,
+        anyPlayer: true, // asked by whoever is present, whenever
         required: [],
         Resolve() {
             return { resolved: {} };
@@ -301,6 +302,7 @@ const ACTION_SPECS = {
     // to submit at exactly the moment it's needed.
     'resolve-disconnect': {
         turnGated: false,
+        anyPlayer: true, // asked precisely when the turn has cycled to the absent player
         required: ['player', 'choice'],
         Resolve(payload) {
             // Requester identity comes off the payload because nothing carries
@@ -457,6 +459,29 @@ function ValidateAction(spec, message) {
 
     if (spec.turnGated && engine.state.gameOver) {
         return { ok: false, error: 'illegal_action', detail: 'match is over' };
+    }
+
+    // Who ASKED, checked against whose turn it is.
+    //
+    // Per-action turn gating was written as "does this unit belong to the current
+    // player", which is enough when only one client exists — and 'end-turn' was marked
+    // turnGated:false with the note that ending your own turn is in-turn by definition.
+    // With two networked clients that stopped being true: the opponent could end YOUR
+    // turn, because nothing compared the requester to the current player.
+    //
+    // `player` is stamped by the host from the seat it recorded at join (host/server.js)
+    // and is never taken from the client. Local play sends no player field, so this is
+    // inert there. `anyPlayer` opts out the session actions that must work precisely
+    // when it is not your turn.
+    if (!spec.anyPlayer
+        && message.player !== undefined && message.player !== null
+        && message.player !== engine.state.currentPlayer) {
+        return {
+            ok: false,
+            error: 'not_your_turn',
+            detail: 'player ' + message.player + ' asked during player '
+                + engine.state.currentPlayer + "'s turn",
+        };
     }
 
     const outcome = spec.Resolve(payload);
