@@ -303,8 +303,6 @@ canvas {
 #newMapButton { background-color: #FFC020; box-shadow: 0 3px #D0B000; }
 #newMapButton:hover:not(:disabled) { background-color: #D0B000; }
 
-#settingsButton:hover:not(:disabled) { background-color: #708080; }
-
 #saveGameButton:disabled, #loadGameButton:disabled, #newMapButton:disabled {
     background-color: #90A0A0;
     color: #bdc3c7;
@@ -567,19 +565,6 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
     align-items: center;
     gap: 15px;
 }
-#gameMenuTrigger {
-    background-color: #34495e;
-    border: 2px solid #F0F0F0;
-    border-radius: 8px;
-    padding: 6px 15px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 1.2em;
-    font-weight: bold;
-}
 
 #gameIconLink {
     background-color: transparent;
@@ -592,9 +577,6 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
     transition: background-color 0.3s;
 }
 
-#gameMenuTrigger:hover {
-    background-color: #4a6075;
-}
 #gameIconLink:hover {
     background-color: rgba(74, 96, 117, 0.5);
 }
@@ -653,7 +635,6 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
 #gameIcon.is-offline {
     background-color: var(--color-status-offline);
 }
-
 
 /* .message-box removed - the centred red bar is now the top-right toast stack in
  * src/ui/menu.css (.fh-toasts / .fh-toast). */
@@ -862,7 +843,6 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
 .fh-wordmark-trigger:hover { transform: scale(1.02); filter: drop-shadow(0 0 14px rgba(255, 192, 32, 0.7)); }
 .fh-wordmark-trigger:active { transform: scale(0.99); }
 .fh-wordmark-trigger:focus-visible { outline: 3px solid var(--color-warning); outline-offset: 6px; border-radius: 8px; }
-
 
 /* B3 - the disconnect countdown. Centred at the top, where the old message bar used
  * to sit: it is the one thing on screen that is genuinely urgent, and it stays until

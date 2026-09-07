@@ -181,6 +181,68 @@ const MIME = {
     '.webmanifest': 'application/manifest+json',
 };
 
+// === Security headers (2026-09-07) ===
+//
+// These lived in host/Caddyfile while Caddy was the origin. It is not in the path any
+// more - host/server.js serves the static site and /ws on one port and the tunnel points
+// straight at it - so the policy moved here, where it is actually applied.
+//
+// It is STRICTER than the Caddy version was. That one granted script-src 'unsafe-inline';
+// this build has zero inline <script> blocks and zero inline on* handlers, so the grant
+// was never needed and it is the single most valuable thing a CSP withholds. Verified by
+// counting, not assumed - if an inline script is ever added, it will fail loudly in the
+// console rather than silently weakening this.
+//
+// What each exception is actually for:
+//   script-src  cdn.tailwindcss.com   loaded by index.html
+//   style-src   'unsafe-inline'       196 inline style attributes, plus Tailwind's play
+//                                     CDN which writes styles at runtime. Removing these
+//                                     is Candidates F2 work, not a header change.
+//   style/font  fonts.googleapis.com / fonts.gstatic.com   the Exo 2 + Lexend Deca pair
+//   connect-src wss://forthex.xyz     the game socket. 'self' covers same-origin wss in
+//                                     current browsers, but the hosts are named because
+//                                     "current browsers" is doing a lot of work there.
+//   worker-src  'self'                js/client/p2p-worker.js, the P2P host's engine
+//
+// NOT set here: Strict-Transport-Security. Cloudflare terminates TLS and can set it at
+// the edge, and HSTS is close to irreversible once a browser has cached it - that is a
+// deliberate decision to make in the dashboard, not a side effect of a code change.
+const CONTENT_SECURITY_POLICY = [
+    "default-src 'self'",
+    "script-src 'self' https://cdn.tailwindcss.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self' wss://forthex.xyz wss://www.forthex.xyz",
+    "worker-src 'self'",
+    "manifest-src 'self'",
+
+    // Nothing in this game embeds anything, is embedded by anything, posts a form
+    // anywhere, or loads a plugin. Each of these closes a door rather than narrowing one.
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+].join('; ');
+
+const SECURITY_HEADERS = {
+    'Content-Security-Policy': CONTENT_SECURITY_POLICY,
+    // A .js served as text/plain is still executed if something can make the browser
+    // guess. This stops the guessing.
+    'X-Content-Type-Options': 'nosniff',
+    // frame-ancestors covers this for anything modern; kept for browsers that do not
+    // implement it.
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'same-origin',
+    // The game asks for none of these. Saying so is cheaper than auditing later whether
+    // some dependency started asking.
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=(), usb=()',
+};
+
+function WithSecurity(headers = {}) {
+    return { ...SECURITY_HEADERS, ...headers };
+}
+
 function ServeStatic(request, response) {
     const url = new URL(request.url, 'http://localhost');
     let rel = decodeURIComponent(url.pathname);
@@ -190,16 +252,16 @@ function ServeStatic(request, response) {
     // A path check on the raw string is what lets "..%2f.." through.
     const target = path.resolve(ROOT, '.' + rel);
     if (!target.startsWith(ROOT + path.sep) && target !== ROOT) {
-        response.writeHead(403).end('Forbidden');
+        response.writeHead(403, WithSecurity()).end('Forbidden');
         return;
     }
 
     fs.readFile(target, (error, data) => {
         if (error) {
-            response.writeHead(404).end('Not found');
+            response.writeHead(404, WithSecurity()).end('Not found');
             return;
         }
-        response.writeHead(200, {
+        response.writeHead(200, WithSecurity({
             'Content-Type': MIME[path.extname(target)] || 'application/octet-stream',
 
             // Never cache. This server exists for development, and a cached
@@ -209,7 +271,7 @@ function ServeStatic(request, response) {
             // The real deployment is Caddy, which sets its own sensible caching.
             'Cache-Control': 'no-store, must-revalidate',
             'Pragma': 'no-cache',
-        });
+        }));
         response.end(data);
     });
 }
@@ -221,7 +283,7 @@ const httpServer = http.createServer((request, response) => {
     if (request.url === '/build' || request.url.startsWith('/build?')) {
         const build = ComputeBuildHash();
         const wantFiles = request.url.includes('files=1');
-        response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        response.writeHead(200, WithSecurity({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }));
         response.end(JSON.stringify({
             hash: build.hash,
             version: BUILD_VERSION,
@@ -233,7 +295,7 @@ const httpServer = http.createServer((request, response) => {
     }
 
     if (request.url === '/health') {
-        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.writeHead(200, WithSecurity({ 'Content-Type': 'application/json' }));
         response.end(JSON.stringify({
             ok: true,
             rooms: registry.rooms.size,
@@ -245,7 +307,7 @@ const httpServer = http.createServer((request, response) => {
         return;
     }
     if (!SERVE_STATIC) {
-        response.writeHead(404).end('Not found');
+        response.writeHead(404, WithSecurity()).end('Not found');
         return;
     }
     ServeStatic(request, response);
