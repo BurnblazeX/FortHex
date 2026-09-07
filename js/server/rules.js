@@ -123,6 +123,11 @@ function BuildVertexIndex() {
 // shares a vertex with this one. Two edges are rotationally adjacent exactly
 // when they meet at a vertex, which is why these two functions agree - and
 // tools/vertex-parity.js is what proves they do rather than assuming it.
+//
+// SAME SET, DIFFERENT ORDER. This groups by vertex; the rotation walk groups by
+// pivot tile. Any caller that depends on WHICH equal-cost result it sees first
+// is therefore not a safe swap. findSupplyPath is exactly such a caller and is
+// deliberately left on the old function - see the note at its call site.
 function GetVertexAdjacentEdges(currentEdgeKey) {
     if (!engine.state.vertices) BuildVertexIndex();
     const out = new Set();
@@ -866,7 +871,7 @@ function getAttackRangeFineCells(unit) {
             } else {
                 // --- STANDARD MAP LOGIC (Radius 3) ---
                 // baseData is an edge key string
-                potentialSpawnEdges = getRotationallyAdjacentEdges(baseData);
+                potentialSpawnEdges = GetVertexAdjacentEdges(baseData);
             }
 
             // Find first valid edge in the potential list
@@ -1006,7 +1011,7 @@ function getAttackRangeFineCells(unit) {
 
         if (current.pathCost > (minCostsFound.get(current.edgeKey) || Infinity)) continue;
         
-        const rotationallyAdjacentEdges = getRotationallyAdjacentEdges(current.edgeKey);
+        const rotationallyAdjacentEdges = GetVertexAdjacentEdges(current.edgeKey);
 
         for (const nextAdjacentEdgeKey of rotationallyAdjacentEdges) {
             
@@ -1128,6 +1133,22 @@ function getAttackRangeFineCells(unit) {
                     return { path: visualPath, cost: Math.max(0, adjustedCost) }; // Ensure cost isn't negative
                 }
 
+                // DELIBERATELY still the rotation walk, not GetVertexAdjacentEdges.
+                // The two return the SAME SET in a DIFFERENT ORDER, and this search
+                // keeps the first path it finds at a given cost (strictly-less
+                // below), so order decides which of several equal-cost routes is
+                // stored. recalculatePlayerSupplyNetwork then charges each network
+                // only for roads it has not already paid for, so two units on
+                // routes that share edges cost less than two on disjoint ones.
+                // Swapping the order therefore moves supplyPoints - caught by
+                // tools/reference/default-opening.a2.json, which replayed to
+                // player1 supply 3 where the log recorded 4.
+                //
+                // That coupling is undocumented and fragile, but it is not this
+                // step's business to change it: the cutover is meant to preserve
+                // behaviour exactly. C1/C2 replace this accounting outright (the
+                // pool stops being derived from network cost), which is the
+                // deliberate place to make route choice order-independent.
                 const adjacentEdges = getRotationallyAdjacentEdges(current.edgeKey);
                 for (const neighborEdgeKey of adjacentEdges) {
                     if (!isRoad(neighborEdgeKey)) continue;
@@ -1343,7 +1364,7 @@ function getAttackRangeFineCells(unit) {
             }
 
             // 2. Check all ADJACENT edges (original logic)
-            const rotationallyAdjacentEdges = getRotationallyAdjacentEdges(unit.position);
+            const rotationallyAdjacentEdges = GetVertexAdjacentEdges(unit.position);
             rotationallyAdjacentEdges.forEach(adjEdgeKey => {
                 if (adjEdgeKey === unit.position) return;
                 const edgeData = engine.state.edges.get(adjEdgeKey);
