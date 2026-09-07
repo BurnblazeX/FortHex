@@ -37,6 +37,22 @@ function getEdgeMidpoint(q1, r1, q2, r2) {
     return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
 }
 
+// Where a vertex is on screen (Track C).
+//
+// axialToPixel is AFFINE - x and y are each a linear function of q and r plus a
+// fixed camera offset - so the pixel centroid of three tiles equals the pixel
+// position of their axial mean. GetVertexAxial hands back that mean, which means
+// a vertex's screen position falls out of its key alone and no geometry has to
+// be stored or kept in sync with the camera.
+//
+// This is what Track C's debugPathToDraw routes through as real waypoints
+// (edge -> vertex -> edge), and what Candidates G2 draws its triangles from.
+function GetVertexPixelPosition(vertexKey) {
+    const axial = GetVertexAxial(vertexKey);
+    if (!axial) return null;
+    return axialToPixel(axial.q, axial.r);
+}
+
 function calculateBaseCentroid(baseTileKeys) {
     if (!Array.isArray(baseTileKeys) || baseTileKeys.length !== 3) return null;
 

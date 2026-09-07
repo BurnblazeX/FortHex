@@ -78,7 +78,28 @@ function ProbeBoard() {
         }
     });
 
+    // A vertex key is the SUM of its three tile coordinates. Where all three are
+    // on the board, that has to hold exactly - it is the whole basis for
+    // GetVertexAxial deriving a position from the key alone. Rim vertices are
+    // skipped: their third tile is off the board, so the stored tiles sum to
+    // less than the key by exactly that missing tile.
+    let keySumBroken = 0, fullVertices = 0;
+    engine.state.vertices.forEach((entry, key) => {
+        if (entry.tiles.length !== 3) return;
+        fullVertices++;
+        let sq = 0, sr = 0;
+        for (const tileKey of entry.tiles) {
+            const parts = tileKey.split(',');
+            sq += Number(parts[0]); sr += Number(parts[1]);
+        }
+        if (key !== 'v:' + sq + ',' + sr) keySumBroken++;
+        const axial = GetVertexAxial(key);
+        if (!axial || Math.abs(axial.q - sq / 3) > 1e-9 || Math.abs(axial.r - sr / 3) > 1e-9) keySumBroken++;
+    });
+
     return JSON.stringify({
+        keySumBroken: keySumBroken,
+        fullVertices: fullVertices,
         edgeCount: edgeCount,
         mismatches: mismatches,
         degrees: degrees,
@@ -135,6 +156,9 @@ for (const board of BOARDS) {
     Check(label + ': every edge is listed back by both its vertices', r.backrefBroken === 0);
     Check(label + ': no edge has two identical or missing vertices', r.degenerateEnds === 0);
     Check(label + ': board has edges at all', r.edgeCount > 0);
+    Check(label + ': every full vertex key is the sum of its three tiles, and GetVertexAxial agrees',
+        r.keySumBroken === 0, r.keySumBroken + ' of ' + r.fullVertices + ' broken');
+    Check(label + ': the board has interior (three-tile) vertices', r.fullVertices > 0);
 
     if (verbose) {
         console.log('       ' + label + ': ' + r.edgeCount + ' edges, ' + r.vertexCount

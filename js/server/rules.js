@@ -103,20 +103,42 @@ function GetEdgeVertices(edgeKey) {
     return GetEdgeCornerTiles(h1, h2).map(c => GetVertexKey(h1, h2, c));
 }
 
-// vertexKey -> { edges: [...] }, built from the edges that actually exist. A rim
-// vertex holds one or two edges rather than three, which is what makes this
-// agree with getRotationallyAdjacentEdges at the board boundary.
+// vertexKey -> { edges: [...], tiles: [...] }, built from the edges that actually
+// exist. A rim vertex holds one or two edges rather than three, which is what
+// makes this agree with getRotationallyAdjacentEdges at the board boundary.
+//
+// tiles is the union of the tiles of those edges, so it is the tiles that are
+// really on the board rather than the conceptual three. Candidates G2 paints a
+// vertex as a triangle over exactly these.
 function BuildVertexIndex() {
     const index = new Map();
     engine.state.edges.forEach((edge, edgeKey) => {
         for (const vertexKey of GetEdgeVertices(edgeKey)) {
             let entry = index.get(vertexKey);
-            if (!entry) { entry = { edges: [] }; index.set(vertexKey, entry); }
+            if (!entry) { entry = { edges: [], tiles: [] }; index.set(vertexKey, entry); }
             entry.edges.push(edgeKey);
+            for (const tileKey of getTileKeysOfEdge(edgeKey)) {
+                if (entry.tiles.indexOf(tileKey) === -1) entry.tiles.push(tileKey);
+            }
         }
     });
     engine.state.vertices = index;
     return index;
+}
+
+// The axial coordinate a vertex sits at, as a fraction. The key stores the SUM
+// of its three tile coordinates, so a third of that sum is their mean - which is
+// the vertex's true position on the axial plane. Nothing needs to be stored for
+// this: the key already is the position, scaled by three.
+//
+// Returned unrounded on purpose. A vertex never lands on an integer axial
+// coordinate (that is what makes it a vertex rather than a tile), and rounding
+// here would collapse the six vertices around a tile onto the tile itself.
+function GetVertexAxial(vertexKey) {
+    const parts = String(vertexKey).replace(/^v:/, '').split(',');
+    const sq = Number(parts[0]), sr = Number(parts[1]);
+    if (!Number.isFinite(sq) || !Number.isFinite(sr)) return null;
+    return { q: sq / 3, r: sr / 3 };
 }
 
 // The fine-grid replacement for getRotationallyAdjacentEdges: every edge that
