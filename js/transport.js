@@ -114,7 +114,22 @@ class LocalTransport {
         // that in-process there was nothing to snapshot. That holds for a first
         // connect, but not for a RECONNECT: a returning player needs a complete
         // filtered view, so one gets built and delivered for that case only.
-        const claim = FindReturningPlayerSlot(message.profileId);
+        // A TAKEOVER is not a return, and does not go looking for one. Somebody with
+        // no history in this match is sitting down in an absent player's chair, so
+        // there is no profile to match against and asking for one would refuse every
+        // hot join. The seat is named explicitly because only the HOST knows which one
+        // was on offer - it applied the room's policy (public only, and only after the
+        // seat's own player has had a head start) before letting this message be sent.
+        //
+        // Trusting `message.player` here is safe for the same reason every other seat
+        // number is: host/server.js stamps it from what it recorded at join time, and a
+        // client cannot reach this code path by asking for it.
+        const takeover = message.takeover === true
+            && (message.player === 1 || message.player === 2);
+
+        const claim = takeover
+            ? { player: message.player, refused: null }
+            : FindReturningPlayerSlot(message.profileId);
         let resync = null;
 
         if (claim.refused) {
@@ -122,7 +137,9 @@ class LocalTransport {
             // rather than quietly reattaching them to a match that moved on.
             console.warn('[Server] Reconnect refused: ' + claim.refused);
         } else if (claim.player !== null) {
-            const outcome = ReconnectPlayer(claim.player, message.profileId);
+            const outcome = takeover
+                ? TakeOverPlayer(claim.player, message.profileId, message.name)
+                : ReconnectPlayer(claim.player, message.profileId);
             if (outcome.ok) {
                 resync = outcome.resync;
                 this.stateVersion++;

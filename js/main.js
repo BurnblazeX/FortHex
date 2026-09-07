@@ -113,7 +113,14 @@ function BeginOnlineMatchWith(socketTransport, seat, options = {}) {
     UpdateStatusCorner();
     FetchBuildHash();
     if (window.FortHexUI) window.FortHexUI.Hide();
-    ShowSuccess('Match started. You are ' + (seat === 1 ? 'Blue' : 'Red') + '.');
+
+    // Three ways to arrive at the same board, and telling somebody who has just walked
+    // back into a twenty-minute-old match that it has "started" is the kind of small
+    // lie that makes a player doubt the rest of the screen.
+    const side = seat === 1 ? 'Blue' : 'Red';
+    if (options.hotJoined) ShowSuccess('You have taken over ' + side + '. Match already in progress.');
+    else if (options.rejoined) ShowSuccess('Rejoined the match. You are ' + side + '.');
+    else ShowSuccess('Match started. You are ' + side + '.');
 }
 
 // Back to the in-process engine. Used when an online match ends or the socket drops -

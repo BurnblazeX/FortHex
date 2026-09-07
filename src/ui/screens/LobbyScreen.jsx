@@ -167,11 +167,18 @@ export function LobbyScreen({ onBack, onCreate, onDirect }) {
                         const full = room.players >= room.capacity;
                         const playing = room.state === 'in-progress';
 
-                        // A match in progress is closed to strangers, but the player
-                        // whose seat is still being held for them can walk back in.
-                        // Without this a disconnected player had nowhere to go: their
-                        // room was right there and refused them.
-                        const closed = !room.canRejoin && (full || playing);
+                        // Two different ways into a match that has already started.
+                        //
+                        // canRejoin is YOUR seat, still being held for you. Without it a
+                        // disconnected player had nowhere to go: their room was right
+                        // there and refused them.
+                        //
+                        // hotJoin is SOMEBODY ELSE'S empty seat, offered once its owner
+                        // has had their head start and only in a public room - the host
+                        // decides that (host/rooms.js HotJoinSeat) and the row just
+                        // reports it. It is what stops one player's wifi ending a match
+                        // for both of them.
+                        const closed = !room.canRejoin && !room.hotJoin && (full || playing);
 
                         return (
                             <button
@@ -179,17 +186,23 @@ export function LobbyScreen({ onBack, onCreate, onDirect }) {
                                 type="button"
                                 className={'fh-room'
                                     + (closed ? ' fh-room--closed' : '')
-                                    + (room.canRejoin ? ' fh-room--rejoin' : '')}
+                                    + (room.canRejoin || room.hotJoin ? ' fh-room--rejoin' : '')}
                                 disabled={closed}
                                 onClick={() => Join(room)}
                                 title={room.canRejoin
                                     ? 'Rejoin this match'
-                                    : (playing ? 'This match is already under way' : undefined)}
+                                    : (room.hotJoin
+                                        ? 'A player dropped out - take their side and finish the match'
+                                        : (playing ? 'This match is already under way' : undefined))}
                             >
                                 <span className="fh-room__name">{room.name}</span>
                                 <span className="fh-room__count">{room.players}/{room.capacity}</span>
                                 <span className="fh-room__privacy">
-                                    {room.canRejoin ? 'Rejoin' : (room.locked ? 'Private' : 'Public')}
+                                    {room.canRejoin
+                                        ? 'Rejoin'
+                                        : (room.hotJoin
+                                            ? 'Take over'
+                                            : (room.locked ? 'Private' : 'Public'))}
                                 </span>
                                 <span className="fh-room__version">{room.hostVersion || 'unknown'}</span>
                                 <SignalBars level={room.quality} />

@@ -156,6 +156,54 @@ function ReconnectPlayer(player, profileId = null) {
     return { ok: true, player, resync: BuildResyncSnapshot(player) };
 }
 
+// --- takeover (hot join) ---------------------------------------------------
+//
+// Somebody ELSE sitting down in an absent player's chair, mid-match. Deliberately a
+// separate function from ReconnectPlayer rather than a flag on it, because the two
+// disagree about the one thing that file is careful about: a reconnect PROVES it is
+// the same person (IsReturningPlayer checks the profile), and this proves the
+// opposite. Sharing a code path would mean the identity check had a way to be
+// skipped, which is exactly the check worth not having a way to skip.
+//
+// Whether a takeover is ALLOWED is not decided here and must not be - it is a
+// property of the room, not of the board (public only, and only after the seat's own
+// player has had a head start). host/rooms.js HotJoin owns that, and the host passes
+// the answer in as `takeover` on the connect message. This function does the part
+// only the engine can: stop the clock, re-identify the slot, and say so out loud.
+function TakeOverPlayer(player, profileId = null, name = null) {
+    const session = GetPlayerSession(player);
+    if (!session) return { ok: false, error: 'unknown_player' };
+    if (session.connected) return { ok: false, error: 'not_absent' };
+
+    // A window that was already answered stays answered. Everything else - including
+    // 'needed', where the remaining player is being asked what to do about an opponent
+    // who never came back - is better answered by somebody actually arriving to play.
+    if (session.resolutionState === 'resolved') return { ok: false, error: 'already_resolved' };
+
+    session.connected = true;
+    session.reason = null;
+    session.absentSince = null;
+    session.deadline = null;
+
+    // The slot's identity becomes the NEW player's. From here they are simply player
+    // N, and the original occupant coming back is a stranger to this match - which is
+    // the honest consequence of having given their seat away.
+    session.profileId = profileId === undefined ? null : profileId;
+    session.resolutionState = 'none';
+    session.resolution = null;
+
+    engine.Emit({ type: 'PLAYER_TAKEN_OVER', player, name: name || null });
+
+    engine.actionManager.RecordHistory({
+        type: 'PLAYER_TAKEN_OVER',
+        turn: engine.state.globalTurnNumber,
+        player,
+        payload: { name: name || null },
+    });
+
+    return { ok: true, player, resync: BuildResyncSnapshot(player) };
+}
+
 // A returning client missed whatever happened while it was away, and the event
 // queue can't tell it - that queue is "since the last flush", not a history log.
 // So rebuild its whole view from current state instead of replaying anything.
@@ -190,6 +238,12 @@ function BuildResyncSnapshot(player) {
         supplyPoints: { ...engine.state.supplyPoints },
         flags: engine.state.flags ? JSON.parse(JSON.stringify(engine.state.flags)) : null,
         gameOver: engine.state.gameOver,
+
+        // Who won, and in what words. gameOver on its own tells a remote client the
+        // match stopped but not why, and "why" is the entire content of a victory
+        // screen. Rides with every view rather than only with the VICTORY event,
+        // because a player who rejoins after the fact never sees that event.
+        victory: engine.matchVerdict || null,
 
         // Everything below was missing, and each absence had already caused or was
         // waiting to cause a bug. Found by comparing a rebuilt client against the

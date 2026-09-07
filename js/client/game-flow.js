@@ -107,7 +107,7 @@ function ApplySingleplayerMatchOutcome(result) {
 // The rest of the two victory screens still differs on purpose - arcade sets
 // gameOver itself and skips the newMapButton/actionsPanel bits - so only the
 // genuinely identical part is shared here.
-function AwaitVictoryRestart() {
+function AwaitVictoryRestart(onDismiss = null) {
     const interactionBlocker = document.getElementById('victoryInteractionBlocker');
     interactionBlocker.style.display = 'block';
 
@@ -117,11 +117,89 @@ function AwaitVictoryRestart() {
             window.removeEventListener('click', restartGameOnClick);
             window.removeEventListener('touchend', restartGameOnClick);
             interactionBlocker.style.display = 'none';
-            location.reload();
+            // Reloading is right for a LOCAL match - the page is the match, and there
+            // is nothing else holding state. It is wrong for an online one: the socket,
+            // the room and the seat all die with the page, so a player who just won
+            // would have to reconnect from scratch to play a second match. That path
+            // passes a dismissal of its own instead.
+            if (onDismiss) onDismiss();
+            else location.reload();
         };
         window.addEventListener('click', restartGameOnClick);
         window.addEventListener('touchend', restartGameOnClick);
-        showInstruction("Click anywhere to play again.", CONFETTI_DURATION);
+        showInstruction(onDismiss
+            ? "Click anywhere to return to the menu."
+            : "Click anywhere to play again.", CONFETTI_DURATION);
+    });
+}
+
+// === The victory screen itself =============================================
+//
+// Split out of checkVictoryCondition because an online match needs to draw it and
+// cannot use anything else in that function: every line above this point in the
+// local path adjudicates, and a remote client is in no position to adjudicate.
+//
+// Idempotent, and that is the point rather than a nicety. Online, the same verdict
+// arrives twice by design - once as a VICTORY event, once as `gameOver` in the board
+// view that follows it - and a rejoining player gets ONLY the second. Both call this;
+// the first one through wins and the other is a no-op.
+let victoryScreenShown = false;
+
+function ResetVictoryScreen() {
+    victoryScreenShown = false;
+    if (ui && ui.victoryMessage) {
+        ui.victoryMessage.style.display = 'none';
+        ui.victoryMessage.textContent = '';
+    }
+    const blocker = document.getElementById('victoryInteractionBlocker');
+    if (blocker) blocker.style.display = 'none';
+}
+
+function ShowVictoryScreen(victoryText, onDismiss = null) {
+    if (victoryScreenShown) return false;
+    victoryScreenShown = true;
+
+    ui.victoryMessage.textContent = victoryText;
+    ui.victoryMessage.style.display = 'block';
+    triggerConfetti();
+    gameState.currentActionState = ACTION_STATES.IDLE;
+    ui.endTurnButton.disabled = true;
+
+    const newMapButton = document.getElementById('newMapButton');
+    if (newMapButton) newMapButton.disabled = false;
+
+    if (gameState.selectedUnit) {
+        ui.actionsPanel.style.display = 'none';
+    }
+    canvas.style.cursor = 'default';
+    gameState.selectedUnit = null;
+    gameState.currentReachableMoves.clear();
+    updateSelectedUnitInfoPanel();
+
+    AwaitVictoryRestart(onDismiss);
+    return true;
+}
+
+// The online entry point. THE bug this exists to fix: the host decided the match was
+// over, said so twice, and the client did nothing with either message - so a
+// capture-the-flag win looked exactly like the game freezing mid-turn.
+//
+// checkVictoryCondition deliberately refuses to adjudicate remotely (see its own
+// comment) and the no-op VICTORY case in js/client/actions.js said the event was
+// there for Track B - but nothing was ever written to consume it. This is that.
+function ShowRemoteVictory(verdict) {
+    if (!IsRemoteMatch()) return false;
+
+    const text = (verdict && verdict.text) || 'The match is over.';
+    return ShowVictoryScreen(text, () => {
+        // Out of the match and back to the room list, rather than reloading the page
+        // and losing the socket. LeaveOnlineRoom is the lobby's own teardown - it
+        // hands the board back, releases the seat and puts the menu on the lobby.
+        if (window.FortHexUI && window.FortHexUI.LeaveOnlineRoom) {
+            window.FortHexUI.LeaveOnlineRoom();
+        } else {
+            location.reload();
+        }
     });
 }
 
@@ -176,21 +254,7 @@ function checkVictoryCondition() {
     }
 
     // --- STANDARD VICTORY LOGIC ---
-    ui.victoryMessage.textContent = result.victoryText;
-    ui.victoryMessage.style.display = 'block';
-    triggerConfetti();
-    gameState.currentActionState = ACTION_STATES.IDLE;
-    ui.endTurnButton.disabled = true;
-    document.getElementById('newMapButton').disabled = false;
-    if (gameState.selectedUnit) {
-        ui.actionsPanel.style.display = 'none';
-    }
-    canvas.style.cursor = 'default';
-    gameState.selectedUnit = null;
-    gameState.currentReachableMoves.clear();
-    updateSelectedUnitInfoPanel();
-
-    AwaitVictoryRestart();
+    ShowVictoryScreen(result.victoryText);
 
     return true;
 }
@@ -355,17 +419,10 @@ function checkArcadeVictoryCondition() {
     // renders the result.
     const result = CheckArcadeTimeLimitVictory();
 
-    ui.victoryMessage.textContent = result.victoryText;
-    ui.victoryMessage.style.display = 'block';
-    gameState.currentActionState = ACTION_STATES.IDLE;
-    gameState.selectedUnit = null;
-    gameState.currentReachableMoves.clear();
-    ui.endTurnButton.disabled = true;
-    canvas.style.cursor = 'default';
-    triggerConfetti();
-    
-    // Block interaction immediately
-    AwaitVictoryRestart();
+    // Was a near-copy of the standard tail, flagged as such in this file's own header.
+    // The two differed only in the newMapButton and actionsPanel lines, which are
+    // harmless here - the arcade cap ends the match as thoroughly as annihilation does.
+    ShowVictoryScreen(result.victoryText);
 
     return true;
 }

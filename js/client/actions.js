@@ -48,11 +48,23 @@ function HandleActionEvent(event) {
             triggerDamageVisual(event.unit, event.attackStatus);
             break;
         case 'VICTORY':
-            // Deliberately nothing. The victory screen is rendered by
+            // LOCAL match: deliberately nothing. The victory screen is rendered by
             // checkVictoryCondition (js/client/game-flow.js) from the verdict the
-            // server holds on engine.pendingVictory - handling it here as well
-            // would draw it twice. The event exists for Track B's transports,
-            // where a remote client has no verdict to consume.
+            // server holds on engine.pendingVictory, and drawing it here as well
+            // would draw it twice.
+            //
+            // ONLINE match: this event IS the verdict. pendingVictory lives in the
+            // host's worker and never crosses the wire, and checkVictoryCondition
+            // refuses to adjudicate remotely - correctly, it is looking at a filtered
+            // board. So without this line the host decided the match was over and no
+            // client ever said so: the board simply stopped responding, which is
+            // exactly how a capture-the-flag win presented in playtesting.
+            //
+            // ShowRemoteVictory is idempotent; the board view carrying `gameOver`
+            // arrives moments later and calls it too.
+            if (typeof IsRemoteMatch === 'function' && IsRemoteMatch()) {
+                ShowRemoteVictory({ text: event.text, winner: event.winner, isDraw: event.isDraw });
+            }
             break;
         // --- A6 archive ---------------------------------------------------
         // The server decided this moment is worth recording and that consent
@@ -86,6 +98,26 @@ function HandleActionEvent(event) {
             ShowDisconnectCountdown(event.player, event.deadline);
             ShowWarning('Player ' + event.player + ' disconnected.');
             break;
+        case 'PLAYER_TAKEN_OVER': {
+            // Hot join: somebody NEW is now playing that side. Deliberately worded as a
+            // different thing from a reconnect, because it is one - the player who
+            // dropped is not coming back to this match, and the person left behind is
+            // playing a stranger from here on.
+            const who = event.name || 'Someone new';
+            console.info('[Client] Player ' + event.player + ' taken over by ' + who + '.');
+            HideDisconnectCountdown();
+            // The "your opponent did not return" question, if it was asked, has just
+            // been answered by somebody turning up.
+            if (window.FortHexUI && window.FortHexUI.CloseResolution) {
+                window.FortHexUI.CloseResolution();
+            }
+            // Not to the person who just did it - BeginOnlineMatchWith already told
+            // them, in the second person, which is the version that reads properly.
+            if (event.player !== engine.state.playerSide) {
+                ShowSuccess(who + ' took over player ' + event.player + '.');
+            }
+            break;
+        }
         case 'PLAYER_RECONNECTED':
             console.info(`[Client] Player ${event.player} reconnected.`);
             HideDisconnectCountdown();

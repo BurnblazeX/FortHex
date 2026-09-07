@@ -2,7 +2,7 @@
   "name": "forthex",
   "version": "0.0.0",
   "private": true,
-  "description": "FortHex — build tooling only. The game itself is plain scripts in js/; this exists solely to compile the React UI in src/ui/ into dist/ui-bundle.js.",
+  "description": "FortHex - build tooling only. The game itself is plain scripts in js/; this exists solely to compile the React UI in src/ui/ into dist/ui-bundle.js.",
   "scripts": {
     "build": "node tools/build-ui.js",
     "watch": "node tools/build-ui.js --watch"

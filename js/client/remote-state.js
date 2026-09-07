@@ -19,6 +19,12 @@
 let renderingRemoteMatch = false;
 let remoteSeat = null;
 
+// The host's verdict for the match being drawn, as it last arrived. Null until the
+// match ends. A player who rejoins a finished match gets it on their very first view,
+// which is the case the VICTORY event cannot cover - that event fired while they
+// were away.
+let remoteVerdict = null;
+
 // Host or guest, held explicitly rather than inferred. They are genuinely different
 // roles - the host owns the match (starting it, the map, the save) and a guest is a
 // participant in someone else's - and every rule that differs between them should read
@@ -40,13 +46,21 @@ function BeginRemoteMatch(seat, isHost = false) {
     engine.state.gameMode = 'online';
     engine.state.playerSide = seat;
     engine.state.gameOver = false;
+    remoteVerdict = null;
+
+    // A second match in the same session must not open under the first one's victory
+    // overlay. Burn played two consecutive matches; this is the line that keeps the
+    // second one clean.
+    if (typeof ResetVictoryScreen === 'function') ResetVictoryScreen();
 }
 
 function EndRemoteMatch() {
     renderingRemoteMatch = false;
     remoteSeat = null;
     remoteIsHost = false;
+    remoteVerdict = null;
     HideDisconnectCountdown();
+    if (typeof ResetVictoryScreen === 'function') ResetVictoryScreen();
 
     // Hand the match-level controls back. They are disabled every frame while a guest
     // is in a hosted match; without this they would stay dead in the local game the
@@ -189,6 +203,11 @@ function ApplyRemoteView(view) {
     if (view.flags !== undefined) engine.state.flags = view.flags;
     if (view.gameOver !== undefined) engine.state.gameOver = view.gameOver;
 
+    // The host's verdict, kept so RefreshRemoteUi can draw it. Held rather than acted
+    // on here: this function writes state, and putting a full-screen overlay up from
+    // inside it would fire in the middle of a board being rebuilt.
+    if (view.victory !== undefined) remoteVerdict = view.victory;
+
     // Vision comes from the HOST, it is not recomputed here.
     //
     // The client was deriving fog from its own copy of the board - a board it has only
@@ -243,6 +262,19 @@ function RefreshRemoteUi() {
     // The reinforcements panel reads engine.state.respawnQueue, which arrives with every
     // view - but nothing here was redrawing it, so it sat empty for the whole match.
     updateRespawnQueueDisplay();
+
+    // The match is over and the host said so. checkVictoryCondition is DELIBERATELY
+    // still not called (see below) - the verdict is not being WORKED OUT here, it is
+    // being read off the view that carried it. That distinction is the whole of why
+    // this is safe and adjudicating locally is not.
+    //
+    // This is the path that covers a player who rejoins after the fact: they never saw
+    // the VICTORY event, and their first board view is the only thing that can tell
+    // them. ShowRemoteVictory is idempotent, so the common case - event first, view a
+    // moment later - still draws exactly one screen.
+    if (engine.state.gameOver && typeof ShowRemoteVictory === 'function') {
+        ShowRemoteVictory(remoteVerdict);
+    }
 
     // checkVictoryCondition is DELIBERATELY not called here.
     //

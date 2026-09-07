@@ -14,7 +14,7 @@
 
 const vm = require('vm');
 const WebSocket = require('ws');
-const { RoomRegistry } = require('../host/rooms.js');
+const { RoomRegistry, HOT_JOIN_GRACE_MS } = require('../host/rooms.js');
 const { ReadBundle } = require('../host/server-bundle.js');
 
 const failures = [];
@@ -635,6 +635,123 @@ async function Main() {
             registry.FindAbandoned(id => id === 'h', 0).length === 0);
     }
 
+    // --- 4d. hot join: somebody else's empty chair (Burn, 2026-09-07) ------
+    //
+    // The rule has two halves and they pull against each other, which is why both are
+    // asserted here rather than one being assumed:
+    //
+    //   a dropped player's seat is THEIRS for HOT_JOIN_GRACE_MS, and
+    //   after that, in a PUBLIC room, anybody may take it.
+    //
+    // Get the first half wrong and A3's reconnect window is a race nobody can win.
+    // Get the second wrong and one player's wifi ends the match for both of them.
+    {
+        const registry = new RoomRegistry();
+        const now = Date.now();
+
+        const pub = registry.Create({ name: 'Open', hostClientId: 'h', hostName: 'Host' });
+        registry.Join({ roomId: pub.id, clientId: 'g', profileId: 'p-guest', name: 'Guest' });
+        pub.state = 'in-progress';
+
+        check('a running match with both players present admits nobody',
+            registry.Join({ roomId: pub.id, clientId: 'x', name: 'Stranger' }).error === 'match_in_progress');
+
+        registry.MarkDisconnected(pub, 'g');
+
+        // Still inside the head start.
+        check('a dropped seat is not offered to a stranger during its head start',
+            registry.Join({ roomId: pub.id, clientId: 'x', name: 'Stranger' }).error === 'seat_still_held');
+        check('the listing does not advertise a seat that is still held',
+            registry.PublicList().find(r => r.id === pub.id).hotJoin === false);
+
+        // ...and the seat's own player walks back in regardless, which is the point of
+        // the head start existing at all.
+        const back = registry.Join({ roomId: pub.id, clientId: 'g2', profileId: 'p-guest' });
+        check('the original player reclaims their held seat during the head start',
+            back.ok && back.rejoined === true && back.seat === 2);
+
+        // Drop them again and wind the clock past the head start.
+        registry.MarkDisconnected(pub, 'g2');
+        pub.seats.get(2).disconnectedAt = now - HOT_JOIN_GRACE_MS - 1000;
+
+        check('the listing advertises a seat once its head start has run out',
+            registry.PublicList().find(r => r.id === pub.id).hotJoin === true);
+
+        const taken = registry.Join({ roomId: pub.id, clientId: 'x', profileId: 'p-x', name: 'Stranger' });
+        check('a stranger takes over an abandoned seat in a public match',
+            taken.ok && taken.hotJoined === true && taken.seat === 2);
+        check('the taken-over seat now names its new occupant',
+            pub.seats.get(2).name === 'Stranger' && !pub.seats.get(2).disconnectedAt);
+
+        // --- private: closed to strangers, code or no code -----------------
+        const priv = registry.Create({
+            name: 'Ours', visibility: 'private', hostClientId: 'ph', hostProfileId: 'p-ph', hostName: 'Host',
+        });
+        registry.Join({ roomId: priv.id, code: priv.joinCode, clientId: 'pg', profileId: 'p-pg', name: 'Friend' });
+        priv.state = 'in-progress';
+        registry.MarkDisconnected(priv, 'pg');
+        priv.seats.get(2).disconnectedAt = now - HOT_JOIN_GRACE_MS - 1000;
+
+        check('a private match refuses a stranger holding the right code',
+            registry.Join({ roomId: priv.id, code: priv.joinCode, clientId: 'y', name: 'Nosy' }).error
+                === 'private_match');
+        check('a private match is never advertised as hot joinable',
+            registry.PublicList().find(r => r.id === priv.id).hotJoin === false);
+        check('the players who started a private match still walk back in',
+            registry.Join({ roomId: priv.id, code: priv.joinCode, clientId: 'pg2', profileId: 'p-pg' }).ok === true);
+
+        // --- direct: this process has no worker to hand anyone -------------
+        const direct = registry.Create({ name: 'P2P', hostClientId: 'dh', hostName: 'Host', hosting: 'direct' });
+        registry.Join({ roomId: direct.id, clientId: 'dg', profileId: 'p-dg' });
+        direct.state = 'in-progress';
+        registry.MarkDisconnected(direct, 'dg');
+        direct.seats.get(2).disconnectedAt = now - HOT_JOIN_GRACE_MS - 1000;
+
+        check('a direct match refuses a hot join - there is no worker here to join',
+            registry.Join({ roomId: direct.id, clientId: 'z' }).error === 'match_in_progress');
+        check('a direct match is never advertised as hot joinable',
+            registry.PublicList().find(r => r.id === direct.id).hotJoin === false);
+    }
+
+    // --- 4d2. a client cannot declare its own takeover ---------------------
+    //
+    // 'connect' is a message clients are allowed to send, and `takeover` tells the
+    // engine to hand a seat over WITHOUT checking the profile. Whether that is allowed
+    // is the room's decision, never the asker's, so the forwarding path must strip it.
+    // Source check: the flag is consumed inside a worker, and reaching it from here
+    // would mean building a match just to prove a line exists.
+    {
+        const source = require('fs').readFileSync(
+            require('path').join(__dirname, '..', 'host', 'server.js'), 'utf8');
+        const forward = source.slice(source.indexOf('function ForwardToMatch'),
+                                     source.indexOf('function HandleSocketClose'));
+        check('a forwarded client message cannot carry its own takeover flag',
+            /takeover:\s*false/.test(forward.replace(/\/\/.*$/gm, '')));
+    }
+
+    // --- 4e. a reconnecting host is still the host -------------------------
+    //
+    // IsHost has always answered by profile, so the returning host's SCREEN drew the
+    // host controls correctly. The two handlers behind those controls compared the
+    // socket instead, and a socket does not survive a drop - so Start Match and Swap
+    // Sides were refused to the one person allowed to use them.
+    {
+        const registry = new RoomRegistry();
+        const room = registry.Create({
+            name: 'Mine', hostClientId: 'sock-1', hostProfileId: 'p-host', hostName: 'Host',
+        });
+        registry.Join({ roomId: room.id, clientId: 'g', profileId: 'p-guest' });
+        registry.MarkDisconnected(room, 'sock-1');
+
+        registry.MarkConnected(room, 'sock-2', 'p-host');
+        check('a reconnected host is recognised by profile',
+            registry.IsHost(room, 'sock-2', 'p-host') === true);
+        check('the room follows its host onto their new socket',
+            room.hostClientId === 'sock-2');
+        check('the room stops pointing at the socket that died',
+            registry.Occupants(room).every(o => o.clientId !== 'sock-1'));
+    }
+
     // --- 5. capacity is enforced where it costs money ----------------------
     {
         const registry = new RoomRegistry({ maxConcurrentMatches: 1 });
@@ -669,6 +786,8 @@ async function Main() {
     console.log('  opening   : both players receive a full board when the match starts');
     console.log('  rejoin    : a dropped player finds their held seat and gets a full board');
     console.log('  roles     : host survives a reconnect; leaving holds the room, not ends it');
+    console.log('  hotjoin   : a dropped seat is held, then public-only and stranger-takeable');
+    console.log('  private   : a private match refuses strangers holding the right code');
     console.log('  lapse     : host gone closes the room; guest gone reopens it for someone new');
     console.log('  abandoned : a match nobody is left in is reaped, worker and all');
     console.log('  match     : a move over a real socket reached both players, each filtered');

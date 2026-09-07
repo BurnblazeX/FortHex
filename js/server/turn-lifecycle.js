@@ -148,6 +148,7 @@ function CheckArcadeTimeLimitVictory() {
     else                  { victoryText = "Time Limit! It's a Draw!"; }
 
     engine.state.gameOver = true;
+    engine.matchVerdict = { text: victoryText, winner, isDraw: winner === null };
 
     return { victory: true, victoryText, winner, isDraw: winner === null, p1HP, p2HP };
 }
@@ -213,6 +214,11 @@ function CheckVictoryCondition() {
         winningPlayer,
         isDraw,
     };
+
+    // Kept for anyone who asks later. pendingVictory below is consumed by the first
+    // caller; this is not, which is what lets a rejoining client be told the result
+    // of a match that ended while they were away.
+    engine.matchVerdict = { text: victoryText, winner: winningPlayer, isDraw };
 
     engine.Emit({ type: 'VICTORY', text: victoryText, winner: winningPlayer, isDraw });
     engine.actionManager.RecordHistory({

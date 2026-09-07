@@ -26,6 +26,22 @@ const SEATS = [1, 2];
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no I/L/O/0/1
 const ROOM_CODE_LENGTH = 6;
 
+// === Hot join (Burn, 2026-09-07) ===========================================
+//
+// How long a disconnected player's seat is theirs and nobody else's. After it, a
+// stranger may take the seat over and the match carries on with a new opponent
+// instead of dying when somebody's wifi drops.
+//
+// Why a head start at all, rather than opening the seat the instant it empties: the
+// whole of A3 exists to give a dropped player their match back, and a seat that can
+// be taken in the first three seconds is not a reconnect window, it is a race. Thirty
+// seconds is long enough that walking back in beats being replaced, and it still
+// leaves seventy of A3's hundred with the seat genuinely open - the match is alive
+// that entire time, which is the only window a takeover could ever happen in. Once
+// the hundred lapse the match is torn down (see 'resolution-needed' in
+// host/server.js), so there is no "after" to hot join into.
+const HOT_JOIN_GRACE_MS = 30000;
+
 function NewRoomCode() {
     const bytes = crypto.randomBytes(ROOM_CODE_LENGTH);
     let code = '';
@@ -194,6 +210,11 @@ class RoomRegistry {
         const held = this.SeatOf(room, clientId, profileId);
         if (held !== null) return { ok: true, room, seat: held, rejoined: true };
 
+        // Everyone still here is a STRANGER to this room - the two lines above already
+        // handed every returning player their own seat back. A running match has no
+        // free seats to offer a stranger unless somebody has dropped out of one.
+        if (room.state === 'in-progress') return this.HotJoin(room, { clientId, profileId, name });
+
         const wanted = Number(preferSeat);
         const free = (SEATS.includes(wanted) && room.seats.get(wanted) === null)
             ? wanted
@@ -202,6 +223,58 @@ class RoomRegistry {
 
         room.seats.set(free, { clientId, profileId: profileId || null, name: name || 'Player' });
         return { ok: true, room, seat: free, rejoined: false };
+    }
+
+    // Taking over an empty chair in a match that is already running.
+    //
+    // Reached only from Join, and only for somebody with no seat in this room - which
+    // is what makes the private rule below a rule about STRANGERS rather than about
+    // everybody.
+    HotJoin(room, { clientId, profileId, name, now = Date.now() } = {}) {
+        // A private match is closed to strangers, code or no code (Burn, 2026-09-07).
+        // The code is how you invite the person you meant to play with; it is not a
+        // claim on a seat, and the people who started a private game chose each other.
+        // The two of them can still come and go freely - Join returned their held seat
+        // before this function was ever called.
+        if (room.visibility === 'private') return { ok: false, error: 'private_match' };
+
+        // A DIRECT match runs in the host player's browser and this process is not in
+        // it - there is no worker here to hand a newcomer, and the two peers have
+        // already finished signalling. Seating someone would put them in a room whose
+        // match they have no connection to and no way to get one.
+        if (room.hosting === 'direct') return { ok: false, error: 'match_in_progress' };
+
+        const claimable = this.HotJoinSeat(room, now);
+        if (claimable.seat === null) {
+            // Distinguished on purpose. "Somebody dropped and the seat is still theirs
+            // for another twenty seconds" and "both players are sitting right there"
+            // are different answers, and a player staring at a room they cannot enter
+            // deserves the one that tells them whether waiting will help.
+            return { ok: false, error: claimable.openAt !== null ? 'seat_still_held' : 'match_in_progress' };
+        }
+
+        room.seats.set(claimable.seat, { clientId, profileId: profileId || null, name: name || 'Player' });
+        return { ok: true, room, seat: claimable.seat, hotJoined: true };
+    }
+
+    // The seat a stranger could take, and when. `seat` is non-null once a held seat's
+    // head start has run out; `openAt` is when the earliest one does, so a lobby can
+    // count down to it rather than showing a door that silently unlocks.
+    HotJoinSeat(room, now = Date.now()) {
+        if (room.state !== 'in-progress') return { seat: null, openAt: null };
+        if (room.visibility === 'private') return { seat: null, openAt: null };
+        if (room.hosting === 'direct') return { seat: null, openAt: null };
+
+        let openAt = null;
+        for (const seat of SEATS) {
+            const occupant = room.seats.get(seat);
+            if (!occupant || !occupant.disconnectedAt) continue;
+
+            const opens = occupant.disconnectedAt + HOT_JOIN_GRACE_MS;
+            if (now >= opens) return { seat, openAt: opens };
+            if (openAt === null || opens < openAt) openAt = opens;
+        }
+        return { seat: null, openAt };
     }
 
     // Which seat this client holds, if any. profileId is checked as well as
@@ -288,6 +361,16 @@ class RoomRegistry {
         const occupant = room.seats.get(seat);
         occupant.clientId = clientId;
         delete occupant.disconnectedAt;
+
+        // A host who dropped comes back on a NEW socket, and room.hostClientId still
+        // named the dead one. Everything that identifies a host by PROFILE followed
+        // them home (IsHost, SeatOf, RoomView); everything that compares the socket
+        // did not - which meant a reconnected host was refused Start Match and Swap
+        // Sides in their own room, and the room listed their latency as unmeasured.
+        // Anchoring the socket here, at the one place a return is recorded, fixes all
+        // of them at once.
+        if (this.IsHost(room, clientId, profileId)) room.hostClientId = clientId;
+
         return seat;
     }
 
@@ -392,6 +475,8 @@ class RoomRegistry {
         for (const room of this.rooms.values()) {
             if (room.state === 'finished') continue;
 
+            const hotJoin = this.HotJoinSeat(room);
+
             listing.push({
                 id: room.id,
                 name: room.name,
@@ -407,6 +492,13 @@ class RoomRegistry {
                 mapName: DescribeRoomBoard(room),
                 resuming: !!room.settings.resumeSave,
                 quality: QualityBars(rttOf ? rttOf(room.hostClientId) : null),
+
+                // A running match with an empty chair in it. Without these two the
+                // lobby had no way to tell "closed, both players present" from
+                // "somebody dropped and you can take their place", and drew both as
+                // the same greyed-out row.
+                hotJoin: hotJoin.seat !== null,
+                hotJoinAt: hotJoin.openAt,
                 createdAt: room.createdAt,
             });
         }
@@ -474,4 +566,4 @@ function QualityBars(rttMs) {
     return 1;
 }
 
-module.exports = { RoomRegistry, SEATS, NewRoomCode, QualityBars };
+module.exports = { RoomRegistry, SEATS, NewRoomCode, QualityBars, HOT_JOIN_GRACE_MS };

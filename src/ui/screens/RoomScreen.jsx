@@ -358,12 +358,21 @@ export function RoomScreen() {
                                     + (seat.filled ? ' fh-seat--filled' : '')
                                     + (canPick ? ' fh-seat--pickable' : '')}
                             >
+                                {/* The pip is the side, in the side's own colour, and
+                                    P1/P2 says which is which. Naming the colour in
+                                    words as well was three ways of telling you the
+                                    same thing, in the one row where the interesting
+                                    fact - who is sitting there - was missing (Burn,
+                                    2026-09-07). The name takes the label. */}
                                 <span className={'fh-seat__pip fh-seat__pip--p' + seat.seat} />
+                                <span className="fh-seat__side">P{seat.seat}</span>
                                 <span className="fh-seat__label">
-                                    {seat.seat === 1 ? 'Blue (P1)' : 'Red (P2)'}
+                                    {seat.filled ? seat.name : 'Open seat'}
                                 </span>
                                 <span className="fh-seat__who">
-                                    {seat.you ? 'You' : (seat.filled ? 'Ready' : 'Waiting…')}
+                                    {!seat.filled ? 'Waiting…'
+                                        : (seat.connected === false ? 'Disconnected'
+                                            : (seat.you ? 'You' : 'Ready'))}
                                 </span>
                             </Tag>
                         );
@@ -399,7 +408,7 @@ export function RoomScreen() {
 
             <p className="fh-menu__note">
                 {room.isHost
-                    ? 'Click the other side to switch. Blue moves first.'
+                    ? 'Click the other side to switch. P1 moves first.'
                     : 'Waiting for the host to start the match.'}
             </p>
         </div>

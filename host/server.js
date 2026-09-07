@@ -194,6 +194,12 @@ const MIME = {
 // console rather than silently weakening this.
 //
 // What each exception is actually for:
+//   script-src  static.cloudflareinsights.com   Cloudflare Web Analytics, which the
+//                                     edge INJECTS into the page - it is not in index.html and
+//                                     cannot be found by reading this repo. Blocking it broke
+//                                     nothing except the traffic numbers, which Burn wants.
+//                                     Beacon results post to cloudflareinsights.com, hence the
+//                                     connect-src entry as well.
 //   style-src   'unsafe-inline'       196 inline style attributes. Removing those is
 //                                     Candidates F2 work, not a header change. Tailwind
 //                                     used to need this too and no longer exists here.
@@ -208,11 +214,11 @@ const MIME = {
 // deliberate decision to make in the dashboard, not a side effect of a code change.
 const CONTENT_SECURITY_POLICY = [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' https://static.cloudflareinsights.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data:",
-    "connect-src 'self' wss://forthex.xyz wss://www.forthex.xyz",
+    "connect-src 'self' wss://forthex.xyz wss://www.forthex.xyz https://cloudflareinsights.com",
     "worker-src 'self'",
     "manifest-src 'self'",
 
@@ -556,22 +562,45 @@ function HandleJoinRoom(clientId, message) {
     // what stops the abandonment sweep counting them as gone.
     if (result.rejoined) registry.MarkConnected(result.room, clientId, client.profileId);
 
-    // Walking back into a match that is still running: tell the engine the player is
-    // back (which stops the countdown for everyone) and push them a full board, since
-    // they have missed everything that happened while they were away.
+    // Walking into a match that is still running - either back into your own seat, or
+    // into somebody else's empty one. Tell the engine (which stops the countdown for
+    // everyone) and push a full board, since this client has missed everything that
+    // happened while the seat was empty.
     const live = matches.get(result.room.id);
     if (live && result.room.state === 'in-progress') {
         live.worker.postMessage({
             kind: 'client-message',
             requestId: clientId + ':reconnect',
-            message: { type: 'connect', profileId: client.profileId, player: result.seat },
+            message: {
+                type: 'connect',
+                profileId: client.profileId,
+                player: result.seat,
+                name: client.name,
+                // The engine cannot work this out and must not try: whether a stranger
+                // may sit here is a property of the ROOM (public only, past the seat's
+                // head start), and registry.Join is what applied that rule. This is the
+                // answer being carried, not asked again.
+                takeover: !!result.hotJoined,
+            },
         });
+
+        // ONE message, not a match-started chased by a room-joined. The second was
+        // redundant - match-started already carries the room and the seat - and it
+        // arrived after the client had handed its board to the socket and hidden the
+        // menu, which is a strange moment to be told about a room.
         Send(clientId, {
             type: 'match-started',
             room: registry.RoomView(result.room, clientId, client.profileId),
             seat: result.seat,
+            // So the client can say "Rejoined" rather than "Match started" over a match
+            // that has been running for twenty minutes.
+            rejoined: !result.hotJoined,
+            hotJoined: !!result.hotJoined,
         });
+
         live.worker.postMessage({ kind: 'resync' });
+        BroadcastRoom(result.room);
+        return;
     }
 
     Send(clientId, {
@@ -630,7 +659,11 @@ function HandleSwapSeats(clientId) {
 
     const room = registry.Get(client.roomId);
     if (!room) return Fail(clientId, 'no_such_room');
-    if (room.hostClientId !== clientId) return Fail(clientId, 'not_host');
+    // IsHost, not a socket comparison. A host who dropped and came back is on a new
+    // clientId, and comparing sockets told them they were not the host of their own
+    // room - while their screen, which asks RoomView the same question by PROFILE,
+    // went on showing them the host's controls.
+    if (!registry.IsHost(room, clientId, client.profileId)) return Fail(clientId, 'not_host');
 
     const result = registry.SwapSeats(room);
     if (!result.ok) return Fail(clientId, result.error);
@@ -647,7 +680,7 @@ function HandleStartMatch(clientId) {
 
     const room = registry.Get(client.roomId);
     if (!room) return Fail(clientId, 'no_such_room');
-    if (room.hostClientId !== clientId) return Fail(clientId, 'not_host');
+    if (!registry.IsHost(room, clientId, client.profileId)) return Fail(clientId, 'not_host');
     if (room.state === 'in-progress') return Fail(clientId, 'already_started');
     if (!registry.IsReady(room)) return Fail(clientId, 'room_not_full');
 
@@ -790,6 +823,50 @@ function HandleWorkerMessage(room, m) {
             break;
         }
 
+        case 'match-over': {
+            // A match that FINISHED, as opposed to one that died. The difference
+            // decides everything below.
+            //
+            // Deliberately not EndMatch(): that sends 'match-ended', which tears the
+            // client's board down on the spot - and the board is the surface the
+            // victory screen is drawn over. A match that reached a verdict ends on the
+            // player's own click instead (ShowRemoteVictory, js/client/game-flow.js).
+            //
+            // What happens here is the bookkeeping neither player can see: the room
+            // stops being listed (PublicList skips 'finished'), the seats are released
+            // so both of them can make or join a new room the moment they leave, and
+            // the worker is put on a timer.
+            if (room.state === 'finished') break;
+            room.state = 'finished';
+            Log('match complete:', room.name, '-',
+                (m.verdict && m.verdict.text) || 'verdict not recorded');
+
+            registry.Occupants(room).forEach(occupant => {
+                const client = clients.get(occupant.clientId);
+                if (client) client.roomId = null;
+                const seat = registry.SeatOf(room, occupant.clientId, occupant.profileId);
+                if (seat !== null) room.seats.set(seat, null);
+            });
+
+            // The worker outlives the verdict by a little. Nothing needs it - the
+            // result is already on both screens - but a player whose socket blinked at
+            // the exact moment the match ended should get the finished board back
+            // rather than "that match is not running".
+            const finished = matches.get(room.id);
+            if (finished) {
+                const linger = setTimeout(() => {
+                    finished.worker.terminate();      // ~12.4 MB back
+                    matches.delete(room.id);
+                    registry.Destroy(room.id);
+                    Log('room cleared after completion:', room.name);
+                }, MATCH_OVER_LINGER_MS);
+                linger.unref();
+            } else {
+                registry.Destroy(room.id);
+            }
+            break;
+        }
+
         case 'resolution-needed': {
             // The window closed. Whoever is left is taken out of the match - the modal
             // asking what to do with it is already on their screen - and the room's fate
@@ -861,7 +938,16 @@ function ForwardToMatch(clientId, message) {
     // recorded when it joined, and that is what goes to the engine - a client that
     // claims `player: 2` while sitting in seat 1 is asking to move someone else's
     // units, and A2's whole model depends on that not being taken at face value.
-    const stamped = { ...message, player: seat, profileId: client.profileId };
+    //
+    // `takeover` is stamped OFF for the same reason. 'connect' is a message a client
+    // may send, and the flag tells the engine to hand a seat to whoever is asking
+    // without checking the profile - which is safe only because the room, not the
+    // client, decides when that is allowed. Overwriting `player` above already made a
+    // forged flag useless (it can only ever name the sender's own seat), but "useless
+    // because of how another line happens to work" is not the same as refused. The one
+    // place a takeover is legitimate builds its message by hand, in HandleJoinRoom, and
+    // does not come through here.
+    const stamped = { ...message, player: seat, profileId: client.profileId, takeover: false };
 
     match.worker.postMessage({
         kind: 'client-message',
@@ -911,6 +997,11 @@ function HandleSocketClose(clientId) {
 // to come back, and the room has to outlive them by at least as much.
 const ABANDON_GRACE_MS = 100000;
 const ABANDON_SWEEP_MS = 15000;
+
+// How long a COMPLETED match's worker is kept before it is terminated. Short, because
+// nothing is playing on it - it exists only so a socket that blinked as the last move
+// landed has something to reconnect to.
+const MATCH_OVER_LINGER_MS = 20000;
 
 // Drives every live match's clock. Without this nothing ever looks at a disconnect
 // deadline in a hosted match - see the 'tick' case in host/match-worker.js.

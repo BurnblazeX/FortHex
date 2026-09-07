@@ -186,9 +186,16 @@ function HandleLobbyMessage(message) {
             SetState({ room: message.room, seat: message.seat, matchStarted: true });
             // Hands the board over to the socket. Until this existed, pressing Start
             // did everything on the server and nothing the player could see.
+            //
+            // The same message also arrives for a player walking BACK into a match
+            // that has been running for twenty minutes - either their own seat, or
+            // somebody else's empty one. Same handover either way; only the sentence
+            // it announces itself with differs.
             BeginOnlineMatch(transport, message.seat, {
                 fogOfWar: !!(message.room && message.room.fogOfWar),
                 isHost: !!(message.room && message.room.isHost),
+                rejoined: !!message.rejoined,
+                hotJoined: !!message.hotJoined,
             });
             PushMatchContext(message.room);
             break;
@@ -294,6 +301,9 @@ function DescribeError(code) {
         case 'bad_json':          return 'The server could not read that message.';
         case 'internal_error':    return 'The server hit an error.';
         case 'room_full':         return 'That room is already full.';
+        case 'private_match':     return 'That is a private match. Only the players who started it can join.';
+        case 'seat_still_held':   return 'Someone dropped out of that match. Their seat is held for a few more seconds.';
+        case 'match_in_progress': return 'That match is under way with both players present.';
         case 'no_such_room':      return 'That room no longer exists.';
         case 'room_finished':     return 'That match has already ended.';
         case 'already_in_room':   return 'You are already in a room.';

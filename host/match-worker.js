@@ -86,6 +86,23 @@ const hostedPlayers = Array.isArray(workerData.players) ? workerData.players : n
 // One report per lapse - 'tick' runs every second and the state persists.
 let reportedLapse = false;
 
+// Same shape, for the match ENDING. The parent has no other way to learn it: it sees
+// wire bytes it does not decode and acks it does not read, so a match that reached a
+// verdict looked identical to one still in progress. That is why a finished room sat
+// there listed as live, holding its ~12.4 MB worker until the abandonment sweep
+// eventually noticed nobody was connected.
+let reportedMatchOver = false;
+
+function ReportMatchOver() {
+    if (reportedMatchOver || !engine.state.gameOver) return;
+    reportedMatchOver = true;
+    // Posted AFTER whatever produced it: the wire messages carrying the VICTORY event
+    // and the final board are already queued to the parent by the time this runs, and
+    // postMessage preserves order. So both players are told they lost or won before
+    // the parent is told to start winding the room down.
+    parentPort.postMessage({ type: 'match-over', verdict: engine.matchVerdict || null });
+}
+
 if (hostedPlayers && hostedPlayers.length) {
     hostedPlayers.forEach(player => {
         transport.AddConnection(player, (message) => SendToParent(message, player));
@@ -106,8 +123,12 @@ parentPort.on('message', (envelope) => {
                     requestId: envelope.requestId,
                     outcome: Sanitize(value),
                 });
-                if (outcome && typeof outcome.then === 'function') outcome.then(settle);
-                else settle(outcome);
+                if (outcome && typeof outcome.then === 'function') {
+                    outcome.then(value => { settle(value); ReportMatchOver(); });
+                } else {
+                    settle(outcome);
+                    ReportMatchOver();
+                }
                 break;
             }
 
@@ -193,6 +214,11 @@ parentPort.on('message', (envelope) => {
                 // clock, so it does. Flush pushes whatever that produced.
                 CheckDisconnectDeadlines();
                 transport.Flush();
+
+                // A match can end without a client message - the arcade turn cap and a
+                // lapsed disconnect both settle on the clock. Cheap to ask, and it is
+                // the only thing covering those paths.
+                ReportMatchOver();
 
                 // The engine raises DISCONNECT_RESOLUTION_NEEDED to the PLAYERS, but the
                 // host process also has a decision to make - whether the room survives -

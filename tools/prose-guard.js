@@ -18,7 +18,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 const SEARCH_DIRS = ['js', 'host', 'src', 'tools', 'css'];
-const SEARCH_FILES = ['index.html', 'sw.js', 'README.md'];
+const SEARCH_FILES = ['index.html', 'sw.js', 'README.md', 'package.json', 'manifest.json'];
 const EXTENSIONS = new Set(['.js', '.jsx', '.css', '.html', '.json', '.md']);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist']);
 

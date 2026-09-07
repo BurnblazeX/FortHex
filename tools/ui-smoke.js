@@ -114,6 +114,66 @@ function Walk(dir) {
         offenders.length === 0);
 }
 
+// --- 5. the seat picker names people, not colours --------------------------
+//
+// The room's two seats ARE the side picker, and they used to read "Blue (P1)" and
+// "Red (P2)" - three ways of saying the side (the pip's colour, the number, and the
+// word) in the one row where the interesting fact was missing entirely: who is
+// sitting there (Burn, 2026-09-07). The seat's `name` has always crossed the wire;
+// nothing was drawing it.
+{
+    const room = fs.readFileSync(path.join(ROOT, 'src/ui/screens/RoomScreen.jsx'), 'utf8');
+
+    check('the seat picker draws the occupant name', /seat\.name/.test(room));
+    check('the seat picker no longer names the colour',
+        !/'Blue \(P1\)'/.test(room) && !/'Red \(P2\)'/.test(room));
+    check('the seat still says which side it is', /P\{seat\.seat\}/.test(room));
+    // A held seat looks identical to an occupied one without this, which is exactly
+    // the state hot join exists to act on.
+    check('the seat picker distinguishes a disconnected occupant',
+        /seat\.connected/.test(room));
+}
+
+// --- 6. the victory screen's cross-file calls still resolve ----------------
+//
+// remote-state.js reaches ShowRemoteVictory and ResetVictoryScreen through a
+// `typeof x === 'function'` guard, because the headless parity harnesses load that
+// file without game-flow.js. The guard is what keeps those tools runnable, and it is
+// also what would let a rename turn the whole victory path into a silent no-op.
+{
+    const flow = fs.readFileSync(path.join(ROOT, 'js/client/game-flow.js'), 'utf8');
+    const remote = fs.readFileSync(path.join(ROOT, 'js/client/remote-state.js'), 'utf8');
+
+    ['ShowRemoteVictory', 'ResetVictoryScreen'].forEach(name => {
+        const guarded = new RegExp("typeof " + name + " === 'function'").test(remote);
+        const defined = new RegExp('function ' + name + '\\s*\\(').test(flow);
+        check('remote-state.js guards its call to ' + name, guarded);
+        check('game-flow.js still defines ' + name + ', which that guard would silently skip',
+            defined);
+    });
+}
+
+// --- 7. the service worker stays out of the way ----------------------------
+//
+// sw.js exists only to make the app installable, and a fetch handler has to EXIST for
+// that - it does not have to answer anything. The version that did answer, described
+// in its own comment as "just a pass-through", was not one: re-issuing a cross-origin
+// request inside a worker yields an OPAQUE response, so the Google Fonts stylesheet
+// arrived with zero rules and Exo 2 fell back to sans-serif on every browser. Its
+// catch was worse - a failed request became a fake 200 serving the string "Offline"
+// in place of whatever had been asked for.
+{
+    const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+    const code = sw.replace(/\/\/.*$/gm, '');
+
+    check('sw.js still registers a fetch handler, which is what makes the app installable',
+        /addEventListener\(\s*'fetch'/.test(code));
+    check('sw.js does not answer requests itself (that is what broke the fonts)',
+        !/respondWith/.test(code));
+    check('sw.js never fabricates a response for a request that failed',
+        !/new Response\s*\(/.test(code));
+}
+
 // --- report ----------------------------------------------------------------
 if (failures.length) {
     console.error('FAIL - ' + failures.length + ' check(s)');
@@ -125,3 +185,6 @@ console.log('  freshness : the bundle is newer than every source it was built fr
 console.log('  wiring    : index.html mounts #menuRoot and loads the bundle after main.js');
 console.log('  departure : none of the old menu markup survives');
 console.log('  seam      : every global the bridge calls exists, and only it calls them');
+console.log('  seats     : the side picker names the player, not the colour');
+console.log('  victory   : the guarded victory calls in remote-state.js still resolve');
+console.log('  worker    : sw.js is installable without intercepting a single request');

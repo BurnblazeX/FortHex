@@ -521,8 +521,26 @@
 .fh-seat--pickable:hover { border-color: var(--color-warning); background: rgba(255, 192, 32, 0.1); }
 .fh-seat--pickable:focus-visible { outline: 2px solid var(--color-warning); outline-offset: 2px; }
 
-.fh-seat__label { font-weight: bold; }
-.fh-seat__who { margin-left: auto; color: var(--color-text-muted); font-size: 0.88em; }
+/* Which side, in two characters. The pip beside it already carries the colour, so
+   this only has to disambiguate P1 from P2 - and it leaves the label free for the
+   thing a player actually wants to read there, which is who is sitting in the seat. */
+.fh-seat__side {
+    font-size: 0.72em;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    min-width: 1.6em;
+}
+
+.fh-seat__label {
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fh-seat__who { margin-left: auto; color: var(--color-text-muted); font-size: 0.88em; flex-shrink: 0; }
 
 /* --- side picker --- */
 

@@ -12,9 +12,10 @@ import { ResolveDisconnect } from './components/ResolveDisconnect.jsx';
 import { MigratePrompt } from './components/MigratePrompt.jsx';
 import { ShowMenu, HideMenu, GetSnapshot } from './menu-store.js';
 import { Notify } from './notify-store.js';
-import { OpenResolution } from './resolve-store.js';
+import { OpenResolution, CloseResolution } from './resolve-store.js';
 import { AskAboutModernising } from './migrate-store.js';
 import { EndDirectMatch } from './direct-store.js';
+import { LeaveRoom } from './net-store.js';
 import { Reset as EndManualMatch } from './manual-store.js';
 import './menu.css';
 
@@ -51,6 +52,11 @@ window.FortHexUI = {
     // B3. Raised by the DISCONNECT_RESOLUTION_NEEDED event (js/client/actions.js).
     OpenResolution,
 
+    // ...and taken back down when the question answers itself. Somebody hot joining
+    // the empty seat is a better outcome than either choice the modal offers, so the
+    // modal has to go rather than sit there over a match that has resumed.
+    CloseResolution,
+
     // Testament's load path awaits this when an older save would change on
     // modernisation. Resolves true (modernise) or false (load faithfully).
     AskAboutModernising,
@@ -64,4 +70,14 @@ window.FortHexUI = {
     // direct match to play locally left a Web Worker running an engine and an open
     // data channel, with nothing left holding a reference to either.
     EndDirectSession: () => { EndDirectMatch(); EndManualMatch(); },
+
+    // Dismissing the victory screen at the end of an ONLINE match. The local screen
+    // reloads the page, which cannot be right here: the socket, the room and the seat
+    // all die with the page, so a player who had just won would have to reconnect from
+    // scratch to play a second match. Leaving properly and landing on the room list is
+    // the same two steps a player would take by hand, and puts them one click from the
+    // next game.
+    //
+    // Called from ShowRemoteVictory (js/client/game-flow.js).
+    LeaveOnlineRoom: () => { LeaveRoom(); ShowMenu('lobby'); },
 };

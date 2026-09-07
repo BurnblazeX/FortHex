@@ -39,6 +39,11 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
     engine.state.units = [];
     engine.state.gameOver = false;
     engine.state.currentPlayer = 1;
+    // A new board is a new match, so last match's verdict is not this match's.
+    // Missed here, the second match of a session would open already announcing
+    // that somebody had won the first.
+    engine.matchVerdict = null;
+    engine.pendingVictory = null;
     engine.state.globalTurnNumber = 1;
     engine.state.actionLog = [];
     engine.state.matchHistory = [];

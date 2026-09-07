@@ -76,6 +76,17 @@ class FortHexEngine {
         this.visionCache = null;
         this.visionDirty = true;
 
+        // The verdict, kept rather than consumed. pendingVictory is a ONE-SHOT
+        // handoff - the first caller of CheckVictoryCondition takes it and leaves
+        // null behind - which is exactly wrong for a hosted match, where the
+        // clients that need the verdict are not the thing that asked for it and may
+        // not have been connected when it was decided. This one is written once and
+        // read as often as anybody likes, and rides out in every board view
+        // (js/server/session.js) so a player who rejoins a finished match is still
+        // told who won. Instance, not state: it never reaches a save file, because
+        // pendingVictory already carries that job (A4 §7.1).
+        this.matchVerdict = null;
+
         // Who is currently connected, and if not, how long they have to come
         // back (A3). Same category as pendingVictory: session truth, not match
         // truth, so it sits on the instance and never reaches a save file.
