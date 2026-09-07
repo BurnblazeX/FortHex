@@ -1203,11 +1203,32 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
 
-            const points = pathEdgeKeysArray.map(edgeKey => {
+            // Edge -> vertex -> edge (Track C). This used to join edge midpoints
+            // directly, which cut the corner across a tile a unit never enters. A
+            // move actually pivots around the vertex the two edges share, so the
+            // vertex is a real waypoint rather than a drawing flourish, and the
+            // drawn path now follows the route the movement model actually took.
+            //
+            // It is also the shape Candidates G2 renders the board in, so the
+            // debug path and the eventual rhombitrihexagonal board agree by
+            // construction instead of being tuned to look similar.
+            //
+            // A missing shared vertex is skipped rather than treated as an error:
+            // the path is a debug overlay, and half a line is better than none.
+            const points = [];
+            for (let i = 0; i < pathEdgeKeysArray.length; i++) {
+                const edgeKey = pathEdgeKeysArray[i];
                 const edge = engine.state.edges.get(edgeKey);
-                if (!edge) return null;
-                return getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
-            }).filter(p => p !== null);
+                if (!edge) continue;
+                points.push(getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2));
+
+                const nextKey = pathEdgeKeysArray[i + 1];
+                if (!nextKey || !engine.state.edges.get(nextKey)) continue;
+                const sharedVertex = GetSharedVertex(edgeKey, nextKey);
+                if (!sharedVertex) continue;
+                const vertexPoint = GetVertexPixelPosition(sharedVertex);
+                if (vertexPoint) points.push(vertexPoint);
+            }
 
             if (points.length < 2) { ctx.restore(); return; }
 

@@ -159,6 +159,19 @@ function GetVertexAxial(vertexKey) {
     return { q: sq / 3, r: sr / 3 };
 }
 
+// The single vertex two adjacent edges meet at, or null if they do not touch.
+// Two edges that are neighbours share exactly one vertex - that is what makes
+// them neighbours - so a second match would mean the index is malformed rather
+// than that the geometry is ambiguous.
+function GetSharedVertex(edgeKeyA, edgeKeyB) {
+    const a = GetEdgeVertices(edgeKeyA);
+    const b = GetEdgeVertices(edgeKeyB);
+    for (const vertexKey of a) {
+        if (b.indexOf(vertexKey) !== -1) return vertexKey;
+    }
+    return null;
+}
+
 // The fine-grid replacement for getRotationallyAdjacentEdges: every edge that
 // shares a vertex with this one. Two edges are rotationally adjacent exactly
 // when they meet at a vertex, which is why these two functions agree - and
@@ -576,7 +589,10 @@ function getAttackRangeFineCells(unit) {
 
             if (!tile1 || !tile2) return false;
 
-            return !(tile1.type === TILE_TYPES.WATER && tile2.type === TILE_TYPES.WATER);
+            // Asked as "impassable", not as "water", so a future impassable terrain
+            // inherits the rule. Third of the three places this same question was
+            // spelled out separately; getEdgeCost was the first.
+            return !(IsImpassableTile(tile1) && IsImpassableTile(tile2));
         }
 
         function isEdgePlaceable(edgeKey) {
@@ -593,7 +609,7 @@ function getAttackRangeFineCells(unit) {
             const tile2 = engine.state.tiles.get(getTileKey(edge.q2, edge.r2));
             if (!tile1 || !tile2) return false; // Should not happen on a valid map
 
-            if (tile1.type === TILE_TYPES.WATER && tile2.type === TILE_TYPES.WATER) {
+            if (IsImpassableTile(tile1) && IsImpassableTile(tile2)) {
                 return false;
             }
 
