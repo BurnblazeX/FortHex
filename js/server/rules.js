@@ -44,6 +44,96 @@ function buildFineGridIndex() {
         const fr = edge.r1 + edge.r2;
         engine.state.fineGrid.set(`${fq},${fr}`, { type: 'edge', key: edgeKey });
     });
+
+    // Vertices ride along with the fine grid rather than having their own six
+    // call sites. buildFineGridIndex is already called from six places
+    // (save.js x2, remote-state.js, match-setup.js x2, map-generation.js) and a
+    // second index needing the same six would be a trap, not a design.
+    BuildVertexIndex();
+}
+
+// === Vertex identity (Track C) ===
+//
+// A vertex is the point where three tiles meet. Until now they existed only as
+// leftover geometry - drawFogOfWar computed trapezoid corners and threw them
+// away - and nothing could name one. Track C needs them named for two reasons:
+// movement is being re-expressed as edge -> vertex -> edge, and Candidates G2
+// paints vertices as triangles and must reuse this identity rather than invent
+// a second one.
+//
+// THE KEY IS THE SUM OF THE THREE TILE COORDINATES, and it is unique: the sum is
+// three times the centroid, distinct vertices have distinct centroids, so
+// distinct vertices have distinct sums.
+//
+// It carries a 'v:' prefix, and that prefix is load-bearing rather than
+// decorative. The existing fine grid puts tiles at (2q, 2r) and edges at
+// (q1+q2, r1+r2); a raw vertex sum collides with those numerically. The vertex
+// of tiles (0,0), (1,0), (0,1) sums to (1,1), and the edge between (0,1) and
+// (1,0) - which are adjacent - also has fine coordinate (1,1). Sharing one key
+// space without a prefix would silently alias a vertex onto an edge.
+//
+// NOT DONE, deliberately: unifying vertices into engine.state.fineGrid itself.
+// That needs a common denominator (tiles x6, edges x3, vertices x2), which
+// changes every existing fine coordinate and so touches attack range, vision
+// and the debug overlay - none of which have headless coverage. Left as a
+// separate index; see the report.
+function GetVertexKey(a, b, c) {
+    return `v:${a.q + b.q + c.q},${a.r + b.r + c.r}`;
+}
+
+// The two tiles adjacent to BOTH ends of this edge. They are the edge's two
+// endpoints, and they need not exist on the board: an edge on the rim still has
+// two vertices, one of which simply has no third tile and fewer edges meeting
+// at it.
+function GetEdgeCornerTiles(h1, h2) {
+    const corners = [];
+    for (const dir of AXIAL_DIRECTIONS) {
+        const c = { q: h1.q + dir.q, r: h1.r + dir.r };
+        if (c.q === h2.q && c.r === h2.r) continue;
+        const dq = c.q - h2.q, dr = c.r - h2.r;
+        if (findDirectionIndex({ q: dq, r: dr }) !== -1) corners.push(c);
+    }
+    return corners;
+}
+
+// The two vertex keys at the ends of an edge.
+function GetEdgeVertices(edgeKey) {
+    const [h1, h2] = parseEdgeKey(edgeKey);
+    if (isNaN(h1.q) || isNaN(h2.q)) return [];
+    return GetEdgeCornerTiles(h1, h2).map(c => GetVertexKey(h1, h2, c));
+}
+
+// vertexKey -> { edges: [...] }, built from the edges that actually exist. A rim
+// vertex holds one or two edges rather than three, which is what makes this
+// agree with getRotationallyAdjacentEdges at the board boundary.
+function BuildVertexIndex() {
+    const index = new Map();
+    engine.state.edges.forEach((edge, edgeKey) => {
+        for (const vertexKey of GetEdgeVertices(edgeKey)) {
+            let entry = index.get(vertexKey);
+            if (!entry) { entry = { edges: [] }; index.set(vertexKey, entry); }
+            entry.edges.push(edgeKey);
+        }
+    });
+    engine.state.vertices = index;
+    return index;
+}
+
+// The fine-grid replacement for getRotationallyAdjacentEdges: every edge that
+// shares a vertex with this one. Two edges are rotationally adjacent exactly
+// when they meet at a vertex, which is why these two functions agree - and
+// tools/vertex-parity.js is what proves they do rather than assuming it.
+function GetVertexAdjacentEdges(currentEdgeKey) {
+    if (!engine.state.vertices) BuildVertexIndex();
+    const out = new Set();
+    for (const vertexKey of GetEdgeVertices(currentEdgeKey)) {
+        const entry = engine.state.vertices.get(vertexKey);
+        if (!entry) continue;
+        for (const edgeKey of entry.edges) {
+            if (edgeKey !== currentEdgeKey) out.add(edgeKey);
+        }
+    }
+    return Array.from(out);
 }
 
 function getFineCoordForTile(tileKey) {

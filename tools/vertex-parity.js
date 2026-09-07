@@ -1,0 +1,159 @@
+// FortHex - vertex adjacency IS rotational adjacency  (Track C, step 2)
+//
+//   node tools/vertex-parity.js
+//   node tools/vertex-parity.js --verbose
+//
+// Track C re-expresses movement as edge -> vertex -> edge instead of the
+// edge-rotation walk in getRotationallyAdjacentEdges. That rewrite is only safe
+// if the two produce the same neighbours, and "they should, geometrically" is
+// exactly the kind of assumption this project has been bitten by before.
+//
+// The claim under test: two edges are rotationally adjacent if and only if they
+// meet at a vertex. getRotationallyAdjacentEdges pivots around each of an edge's
+// two tiles and takes the clockwise and counter-clockwise neighbour of each, so
+// it returns up to four edges. An edge has two vertices and each vertex joins
+// three edges, so vertex adjacency also returns up to four. Same count is
+// suggestive, not proof - this checks the actual sets, edge by edge, on every
+// board the game can produce.
+//
+// It also checks the BOUNDARY, which is where the two models could most easily
+// disagree: a rim edge has a vertex with no third tile, so fewer edges meet
+// there. If every edge in the sweep had four neighbours, this file would be
+// asserting nothing about rims, so it fails when that happens.
+//
+// Exit code 0 = pass.
+
+const vm = require('vm');
+const { ReadBundle } = require('../host/server-bundle.js');
+
+const verbose = process.argv.includes('--verbose');
+const failures = [];
+
+const BOARDS = [
+    { kind: 'preset', name: 'Standard' },
+    { kind: 'preset', name: 'Alpha Grounds' },
+    { kind: 'preset', name: 'River Fork' },
+    { kind: 'preset', name: 'Volcano Island' },
+    { kind: 'generated', radius: 2, seed: 1001 },
+    { kind: 'generated', radius: 3, seed: 1002 },
+    { kind: 'generated', radius: 4, seed: 1003 },
+    { kind: 'generated', radius: 3, seed: 2024 },
+];
+
+const PROBE = `
+function ProbeBoard() {
+    const mismatches = [];
+    const degrees = {};
+    let edgeCount = 0;
+
+    engine.state.edges.forEach((edge, edgeKey) => {
+        edgeCount++;
+        const rotational = getRotationallyAdjacentEdges(edgeKey).slice().sort();
+        const viaVertex = GetVertexAdjacentEdges(edgeKey).slice().sort();
+        if (JSON.stringify(rotational) !== JSON.stringify(viaVertex)) {
+            mismatches.push({ edgeKey: edgeKey, rotational: rotational, viaVertex: viaVertex });
+        }
+        degrees[rotational.length] = (degrees[rotational.length] || 0) + 1;
+    });
+
+    // Every vertex must hold between one and three edges. Three is an interior
+    // vertex; one or two means a rim vertex whose third tile is off the board.
+    const vertexSizes = {};
+    let malformed = 0;
+    engine.state.vertices.forEach(entry => {
+        const n = entry.edges.length;
+        vertexSizes[n] = (vertexSizes[n] || 0) + 1;
+        if (n < 1 || n > 3) malformed++;
+        if (new Set(entry.edges).size !== entry.edges.length) malformed++;
+    });
+
+    // An edge's two vertices must be distinct, and each must list that edge back.
+    let backrefBroken = 0, degenerateEnds = 0;
+    engine.state.edges.forEach((edge, edgeKey) => {
+        const vs = GetEdgeVertices(edgeKey);
+        if (vs.length !== 2 || vs[0] === vs[1]) { degenerateEnds++; return; }
+        for (const v of vs) {
+            const entry = engine.state.vertices.get(v);
+            if (!entry || entry.edges.indexOf(edgeKey) === -1) backrefBroken++;
+        }
+    });
+
+    return JSON.stringify({
+        edgeCount: edgeCount,
+        mismatches: mismatches,
+        degrees: degrees,
+        vertexCount: engine.state.vertices.size,
+        vertexSizes: vertexSizes,
+        malformed: malformed,
+        backrefBroken: backrefBroken,
+        degenerateEnds: degenerateEnds,
+    });
+}
+`;
+
+function Boot(board) {
+    const ctx = { console: { log() {}, warn() {}, error() {} } };
+    vm.createContext(ctx);
+    vm.runInContext(ReadBundle(), ctx);
+    vm.runInContext(PROBE, ctx);
+    if (board.kind === 'preset') {
+        vm.runInContext('globalThis.engine = CreateEngineInstance();'
+            + ' const m = FindSelectableMap(' + JSON.stringify(board.name) + ');'
+            + ' SetGridMode(m.radius); InitializeGridDimensions(m.radius);'
+            + ' const bc = m.baseCampPositions;'
+            + ' InitializeGrid(m.tiles, m.units, (bc && (bc.player1 || bc.player2)) ? bc : null);', ctx);
+    } else {
+        vm.runInContext('globalThis.engine = CreateEngineInstance();'
+            + ' SetGridMode(' + board.radius + '); InitializeGridDimensions(' + board.radius + ');'
+            + ' InitializeGrid(GenerateImprovedMap(' + board.radius + ', ' + board.seed + '));', ctx);
+    }
+    return ctx;
+}
+
+function Check(label, condition, detail) {
+    if (condition) {
+        if (verbose) console.log('  ok   ' + label);
+    } else {
+        failures.push(label);
+        console.error('  FAIL ' + label + (detail ? '\n         ' + detail : ''));
+    }
+}
+
+let totalEdges = 0;
+const degreesSeen = new Set();
+
+for (const board of BOARDS) {
+    const label = board.kind === 'preset' ? board.name : ('generated r' + board.radius + ' s' + board.seed);
+    const r = JSON.parse(vm.runInContext('ProbeBoard()', Boot(board)));
+    totalEdges += r.edgeCount;
+    Object.keys(r.degrees).forEach(d => degreesSeen.add(Number(d)));
+
+    Check(label + ': vertex adjacency matches rotational adjacency on all ' + r.edgeCount + ' edges',
+        r.mismatches.length === 0,
+        r.mismatches.length ? JSON.stringify(r.mismatches[0]) : null);
+    Check(label + ': every vertex holds 1-3 distinct edges', r.malformed === 0);
+    Check(label + ': every edge is listed back by both its vertices', r.backrefBroken === 0);
+    Check(label + ': no edge has two identical or missing vertices', r.degenerateEnds === 0);
+    Check(label + ': board has edges at all', r.edgeCount > 0);
+
+    if (verbose) {
+        console.log('       ' + label + ': ' + r.edgeCount + ' edges, ' + r.vertexCount
+            + ' vertices, neighbour counts ' + JSON.stringify(r.degrees)
+            + ', vertex sizes ' + JSON.stringify(r.vertexSizes));
+    }
+}
+
+// If every edge had four neighbours, nothing above would have tested the board
+// boundary - where a vertex has no third tile and the two models are most
+// likely to disagree. The sweep has to contain rim edges to be worth running.
+Check('the sweep contains boundary edges, not only interior ones',
+    degreesSeen.size > 1,
+    'every edge had the same neighbour count: ' + [...degreesSeen]);
+Check('interior edges are present too', degreesSeen.has(4));
+
+if (failures.length) {
+    console.error('\nvertex-parity: ' + failures.length + ' failure(s)');
+    process.exit(1);
+}
+console.log('vertex-parity: ok - ' + totalEdges + ' edges across ' + BOARDS.length
+    + ' boards, vertex adjacency is identical to rotational adjacency');
