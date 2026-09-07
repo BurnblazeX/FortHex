@@ -17,7 +17,42 @@
 //                               control rebuild between setting the radius and
 //                               building the grid (see those functions' notes).
 
-function GenerateImprovedMap(radius) {
+// === Deterministic randomness (Track C) ===
+//
+// Map generation used bare Math.random() in eight places, so no generated board
+// was ever reproducible - which made "validate the fine-grid migration against
+// arbitrary generated maps" impossible to do twice with the same input.
+//
+// mulberry32: self-contained and bit-identical under Node worker_threads and a
+// browser Web Worker, which this file runs in both of. Nothing platform-supplied
+// is allowed in this path for exactly that reason.
+function CreateRng(seed) {
+    let a = (seed >>> 0) || 1;
+    return function () {
+        a = (a + 0x6D2B79F5) >>> 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+// A seed for a generation nobody supplied one for. This is the ONE place a
+// platform random is still read, once per generated map, and the value it
+// produces is recorded - so a board nobody could predict in advance is still
+// reproducible afterwards.
+function NewMapSeed() {
+    return (Math.random() * 0x100000000) >>> 0;
+}
+
+function GenerateImprovedMap(radius, seed) {
+    // Every random decision below draws from this stream, so one seed always
+    // yields one board. Recorded on the ENGINE, not on engine.state: it is
+    // per-device generation input rather than match state, and a new
+    // engine.state field that does not travel would read as a transmission gap
+    // to tools/state-parity.js. Same precedent as engine.archiveConsent.
+    const mapSeed = (seed === undefined) ? NewMapSeed() : (seed >>> 0);
+    engine.mapSeed = mapSeed;
+    const rng = CreateRng(mapSeed);
     const tempTiles = new Map();
     const allHexCoords = [];
     for (let q = -radius; q <= radius; q++) {
@@ -58,11 +93,11 @@ function GenerateImprovedMap(radius) {
 
     // --- 2. Generate Water Archetype ---
     const archetypes = ['coastline', 'river'];
-    const chosenArchetype = archetypes[Math.floor(Math.random() * archetypes.length)];
+    const chosenArchetype = archetypes[Math.floor(rng() * archetypes.length)];
     console.log(`Generating map (R=${radius}) with archetype: ${chosenArchetype}`);
 
     if (chosenArchetype === 'coastline') {
-        const side = Math.floor(Math.random() * 6);
+        const side = Math.floor(rng() * 6);
         const direction = AXIAL_DIRECTIONS[side];
         allHexCoords.forEach(coord => {
             const projection = coord.q * direction.q + coord.r * direction.r;
@@ -73,7 +108,7 @@ function GenerateImprovedMap(radius) {
     } else if (chosenArchetype === 'river') {
         // River logic adapted for dynamic radius
         const edgeCoords = allHexCoords.filter(c => axialDistance(c.q, c.r, 0, 0) === radius);
-        let current = edgeCoords[Math.floor(Math.random() * edgeCoords.length)];
+        let current = edgeCoords[Math.floor(rng() * edgeCoords.length)];
         let riverPath = new Set();
         
         for(let i = 0; i < radius * 2.5; i++) {
@@ -83,8 +118,8 @@ function GenerateImprovedMap(radius) {
              tempTiles.set(key, TILE_TYPES.WATER);
 
              const neighbors = getNeighbors(current.q, current.r).filter(n => checkRadius(getTileKey(n.q, n.r)));
-             if(neighbors.length > 0 && Math.random() > 0.4) {
-                 const randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
+             if(neighbors.length > 0 && rng() > 0.4) {
+                 const randomNeighbor = neighbors[Math.floor(rng() * neighbors.length)];
                  const neighborKey = getTileKey(randomNeighbor.q, randomNeighbor.r);
                  if(!riverPath.has(neighborKey)) {
                      riverPath.add(neighborKey);
@@ -105,7 +140,7 @@ function GenerateImprovedMap(radius) {
     // --- 3. Generate Mountains ---
     allHexCoords.forEach(coord => {
         const key = getTileKey(coord.q, coord.r);
-        if (!tempTiles.has(key) && Math.random() < 0.18) {
+        if (!tempTiles.has(key) && rng() < 0.18) {
             tempTiles.set(key, TILE_TYPES.MOUNTAIN);
         }
     });
@@ -123,7 +158,7 @@ function GenerateImprovedMap(radius) {
     allHexCoords.forEach(coord => {
         const key = getTileKey(coord.q, coord.r);
         if (!tempTiles.has(key)) {
-            tempTiles.set(key, Math.random() < 0.45 ? TILE_TYPES.FOREST : TILE_TYPES.PLAINS);
+            tempTiles.set(key, rng() < 0.45 ? TILE_TYPES.FOREST : TILE_TYPES.PLAINS);
         }
     });
 
@@ -210,6 +245,12 @@ function ReconstructPath(cameFrom, currentKey) {
 }
 
 function PlaceUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
+    // A SEPARATE stream from the one that drew the terrain, derived from the same
+    // seed. Sharing one stream would make each function's output depend on
+    // whether the other had run first, which is not reproducibility worth having.
+    // Falls back to a fresh seed when there is no generated map behind this
+    // board (a preset or a loaded save), where there is nothing to reproduce.
+    const rng = CreateRng(((engine.mapSeed >>> 0) || NewMapSeed()) ^ 0x9E3779B9);
     const landEdges = [];
     engine.state.edges.forEach((edgeData, edgeKey) => {
         // Use the new, more accurate isRoad() definition
@@ -234,7 +275,13 @@ function PlaceUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
 
     if (landEdges.length < unitLimit * 2) {
         console.error(`CRITICAL: Not enough land edges (${landEdges.length}). Placing randomly.`);
-        landEdges.sort(() => 0.5 - Math.random());
+        // Fisher-Yates. The old `sort(() => 0.5 - Math.random())` was not just
+        // unseeded but biased - a random comparator is not a shuffle, and its
+        // result varies by engine sort implementation.
+        for (let i = landEdges.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            const swap = landEdges[i]; landEdges[i] = landEdges[j]; landEdges[j] = swap;
+        }
         const usedEdgesFallback = new Set();
         const allUnitTypes = [UNIT_TYPES.MELEE, UNIT_TYPES.ARCHER, UNIT_TYPES.PIKEMAN, UNIT_TYPES.HORSEMAN];
 
