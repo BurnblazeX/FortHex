@@ -120,6 +120,105 @@ function BuildBoard(board) {
     return board.radius;
 }
 
+// Every board in this sweep is at turn one: nothing is fortified, no two enemies
+// are adjacent, and no archer shares an edge with a swordsman. So Zone of
+// Control, Spear Wall, combined arms and attack targeting ALL answer false or
+// zero on every unit of every board, and recording them from the opening
+// position would produce a baseline that compares equal forever while checking
+// nothing. AssertNotDegenerate says exactly that, out loud, when it happens.
+//
+// This builds the positions those rules actually need. It is deliberately
+// hand-placed rather than played forward: a scripted opening would still only
+// visit whatever the AI happened to do, and the point is to visit the branches.
+function RuleAnswers(unit) {
+    const Safe = (fn) => { try { return fn(); } catch (e) { return 'ERR:' + String(e && e.message || e); } };
+    return {
+        spearWalled: Safe(() => !!isEdgeAdjacentToSpearWall(unit, unit.position)),
+        combinedArms: Safe(() => !!hasCombinedArmsSupport(unit)),
+        zocSuppressed: Safe(() => !!isZoCSuppressed(unit)),
+        fortifyTargets: Safe(() => [...GetValidFortifyTargets(unit)].sort().join(',')),
+        unfortifyTargets: Safe(() => [...getPotentialUnfortifyTargets(unit)].sort().join(',')),
+        bridgeTargets: Safe(() => [...getPotentialBridgeTargets(unit)].sort().join(',')),
+        attackRange: Safe(() => {
+            const cells = getAttackRangeCells(unit);
+            return cells && cells.size !== undefined ? cells.size : (cells ? cells.length : 0);
+        }),
+        meleeTargets: Safe(() => (getValidMeleeAttackTargets(unit) || []).length),
+        archerTargets: Safe(() => (getValidArcherAttackTargets(unit) || []).length),
+    };
+}
+
+function BuildRulesScenario() {
+    const crossable = [];
+    engine.state.edges.forEach((edge, edgeKey) => {
+        const tiles = getTileKeysOfEdge(edgeKey).map(k => engine.state.tiles.get(k));
+        if (tiles.length !== 2 || !tiles[0] || !tiles[1]) return;
+        if (tiles.some(t => !t.type || t.type.crossable === false)) return;
+        crossable.push(edgeKey);
+    });
+    crossable.sort();
+
+    // A pair of adjacent edges, so the two sides can actually reach each other.
+    let home = null, front = null;
+    for (const edgeKey of crossable) {
+        const neighbours = GetVertexAdjacentEdges(edgeKey).filter(k => crossable.indexOf(k) !== -1).sort();
+        if (neighbours.length) { home = edgeKey; front = neighbours[0]; break; }
+    }
+    if (!home) return null;
+
+    engine.state.units.length = 0;
+    engine.state.tiles.forEach(tile => { tile.fortifiedByPlayer = null; });
+
+    const placed = [];
+    const Place = (player, typeKey, edgeKey) => {
+        const unit = createUnit(player, UNIT_TYPES[typeKey], edgeKey);
+        engine.state.units.push(unit);
+        placed.push(unit.id);
+        return unit;
+    };
+
+    // Archer plus a melee partner on one edge is the combined-arms pairing.
+    Place(1, 'ARCHER', home);
+    Place(1, 'MELEE', home);
+    // An enemy on the adjacent edge gives both sides real attack targets.
+    Place(2, 'MELEE', front);
+
+    // A fortified enemy on a tile of that edge is what Spear Wall and Zone of
+    // Control key off. Fortification is a tile flag plus a unit that has moved
+    // to the tile centre, so both halves have to be set.
+    const frontTiles = getTileKeysOfEdge(front);
+    const fortifyTileKey = frontTiles.find(k => {
+        const tile = engine.state.tiles.get(k);
+        return tile && tile.type && tile.type.canFortify;
+    });
+    if (fortifyTileKey) {
+        const defender = Place(2, 'PIKEMAN', front);
+        defender.isFortified = true;
+        defender.positionType = 'center';
+        defender.position = fortifyTileKey;
+        defender.fortifiedTileKey = fortifyTileKey;
+        engine.state.tiles.get(fortifyTileKey).fortifiedByPlayer = 2;
+
+        // Zone of Control needs TWO enemies across TWO different edges - two on
+        // one edge is not suppression (rules.js: totalEnemyCount >= 2 AND
+        // occupiedEdgesCount >= 2). The pair placed above share an edge because
+        // combined arms requires that, so without a third unit on a separate
+        // edge touching the fortified tile, zocSuppressed answers false on every
+        // board and that half of the baseline records nothing.
+        let flankEdge = null;
+        engine.state.edges.forEach((edge, edgeKey) => {
+            if (flankEdge || edgeKey === home || edgeKey === front) return;
+            if (crossable.indexOf(edgeKey) === -1) return;
+            if (getTileKeysOfEdge(edgeKey).indexOf(fortifyTileKey) !== -1) flankEdge = edgeKey;
+        });
+        if (flankEdge) Place(1, 'PIKEMAN', flankEdge);
+    }
+
+    buildFineGridIndex();
+    engine.visionCache = null;
+    return { home: home, front: front, fortifyTileKey: fortifyTileKey || null, unitIds: placed };
+}
+
 function RunSweep(board, variants) {
     const radius = BuildBoard(board);
     const out = { id: board.id, radius: radius, moves: {}, edgeCosts: {}, supply: {} };
@@ -185,8 +284,18 @@ function RunSweep(board, variants) {
                     edges[key] = v.cost;
                     paths[key] = PathSummary(v.path);
                 }
+                // The rest of the systems the roadmap lists for this track: Zone
+                // of Control, Spear Wall, combined arms, fortification legality
+                // and attack targeting. None of them moved in this cutover, but
+                // C1 and C2 change all of them, and recording what they answer
+                // NOW is the only chance to record it before the model that
+                // answers changes. Kept compact - counts and booleans, plus a
+                // sorted key list for targets - because the point is to detect a
+                // difference, and the live code can always be asked for detail.
+                const rules = RuleAnswers(unit);
+
                 const caseId = board.id + '|' + (fog ? 'fog' : 'clear') + '|' + unitId + '|' + variant.id;
-                out.moves[caseId] = { n: Object.keys(edges).length, edges: edges, paths: paths, error: error };
+                out.moves[caseId] = { n: Object.keys(edges).length, edges: edges, paths: paths, error: error, rules: rules };
 
                 for (const key of Object.keys(saved)) unit[key] = saved[key];
                 engine.visionCache = null;
@@ -194,6 +303,24 @@ function RunSweep(board, variants) {
         }
     }
     engine.settings.fogOfWarEnabled = false;
+
+    // --- the engineered positions -------------------------------------------
+    const scenario = BuildRulesScenario();
+    out.scenario = scenario ? { setup: scenario, cases: {} } : null;
+    if (scenario) {
+        for (const fog of [false, true]) {
+            engine.settings.fogOfWarEnabled = fog;
+            for (const unitId of scenario.unitIds) {
+                const unit = engine.state.units.find(u => u.id === unitId);
+                if (!unit) continue;
+                engine.visionCache = fog ? computePlayerVision(unit.player) : null;
+                const key = (fog ? 'fog' : 'clear') + '|' + unitId;
+                out.scenario.cases[key] = RuleAnswers(unit);
+                engine.visionCache = null;
+            }
+        }
+        engine.settings.fogOfWarEnabled = false;
+    }
     return out;
 }
 `;
@@ -222,6 +349,7 @@ function Sweep() {
 // passed a suite that only compared values to themselves.
 function AssertNotDegenerate(boards) {
     const problems = [];
+    const degenerateRules = [];
     const shapes = new Set();
     let totalCases = 0, nonEmpty = 0;
 
@@ -238,13 +366,49 @@ function AssertNotDegenerate(boards) {
         if (counts.size < 2) {
             problems.push(id + ': every unit reaches the same number of edges (' + [...counts] + ')');
         }
+        // A rules block where every field answers the same thing for every unit
+        // on every board would compare equal forever while proving nothing - the
+        // same trap the reachable-set check above exists for.
+        const ruleAnswers = {};
+        for (const caseId of Object.keys(b.moves)) {
+            const r = b.moves[caseId].rules || {};
+            for (const key of Object.keys(r)) {
+                (ruleAnswers[key] = ruleAnswers[key] || new Set()).add(JSON.stringify(r[key]));
+            }
+        }
+        for (const key of Object.keys(ruleAnswers)) {
+            if (ruleAnswers[key].size < 2 && Object.keys(b.moves).length > 20) {
+                degenerateRules.push(id + '.' + key + '=' + [...ruleAnswers[key]][0]);
+            }
+        }
         const costs = new Set(Object.values(b.edgeCosts.p1));
         if (costs.size < 2) problems.push(id + ': every edge costs the same (' + [...costs] + ')');
     }
+    // The whole reason the scenario exists is to make these answer something
+    // other than false. If it does not, it has stopped working and the rules
+    // half of this baseline is decorative.
+    const fired = new Set();
+    for (const id of Object.keys(boards)) {
+        const sc = boards[id].scenario;
+        if (!sc) continue;
+        for (const key of Object.keys(sc.cases)) {
+            const r = sc.cases[key];
+            for (const field of Object.keys(r)) {
+                const v = r[field];
+                if (v === true || (typeof v === 'number' && v > 0) || (typeof v === 'string' && v !== '' && !v.startsWith('ERR:'))) {
+                    fired.add(field);
+                }
+            }
+        }
+    }
+    for (const needed of ['spearWalled', 'combinedArms', 'meleeTargets', 'attackRange', 'zocSuppressed']) {
+        if (!fired.has(needed)) problems.push('the engineered scenario never made ' + needed + ' fire');
+    }
+
     if (nonEmpty === 0) problems.push('no case anywhere produced a reachable edge');
     if (nonEmpty === totalCases) problems.push('every case produced a reachable edge - the blocking variants did nothing');
     if (shapes.size < 10) problems.push('only ' + shapes.size + ' distinct reachable sets across the whole sweep');
-    return { problems, totalCases, nonEmpty, distinct: shapes.size };
+    return { problems, totalCases, nonEmpty, distinct: shapes.size, degenerateRules };
 }
 
 // --- comparison ------------------------------------------------------------
@@ -280,6 +444,17 @@ function DiffBoards(before, after) {
             }
         }
 
+        const sa = (a.scenario && a.scenario.cases) || {}, sb = (b.scenario && b.scenario.cases) || {};
+        for (const key of new Set([...Object.keys(sa), ...Object.keys(sb)])) {
+            if (JSON.stringify(sa[key]) !== JSON.stringify(sb[key])) {
+                const before = sa[key] || {}, after = sb[key] || {};
+                const changed = Object.keys(Object.assign({}, before, after))
+                    .filter(k => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+                hard.push({ id, case: 'scenario|' + key, what: 'rules differ: ' + changed.map(k =>
+                    k + ' ' + JSON.stringify(before[k]) + ' -> ' + JSON.stringify(after[k])).join(', ') });
+            }
+        }
+
         const caseIds = new Set([...Object.keys(a.moves), ...Object.keys(b.moves)]);
         for (const caseId of caseIds) {
             const ca = a.moves[caseId], cb = b.moves[caseId];
@@ -295,7 +470,16 @@ function DiffBoards(before, after) {
                     + (lost.length ? ', -' + lost.length : '')
                     + (recosted.length ? ', ' + recosted.length + ' recosted (e.g. ' + recosted[0]
                         + ' ' + ca.edges[recosted[0]] + ' -> ' + cb.edges[recosted[0]] + ')' : '') });
-            } else if (JSON.stringify(ca.paths) !== JSON.stringify(cb.paths)) {
+            }
+            if (JSON.stringify(ca.rules || null) !== JSON.stringify(cb.rules || null)) {
+                const before = ca.rules || {}, after = cb.rules || {};
+                const changed = Object.keys(Object.assign({}, before, after))
+                    .filter(k => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+                hard.push({ id, case: caseId, what: 'rules differ: ' + changed.map(k =>
+                    k + ' ' + JSON.stringify(before[k]) + ' -> ' + JSON.stringify(after[k])).join(', ') });
+            }
+            if (JSON.stringify(ca.edges) === JSON.stringify(cb.edges)
+                && JSON.stringify(ca.paths) !== JSON.stringify(cb.paths)) {
                 const n = Object.keys(ca.paths).filter(k => ca.paths[k] !== cb.paths[k]).length;
                 soft.push({ id, case: caseId, what: n + ' path(s) respelled, same edges at the same costs' });
             }
@@ -325,6 +509,13 @@ if (health.problems.length) {
     console.error('move-parity: the sweep is degenerate and would prove nothing:');
     health.problems.forEach(p => console.error('  - ' + p));
     process.exit(1);
+}
+
+if (verbose && health.degenerateRules.length) {
+    console.log('note: these rule fields answered identically across a whole board.');
+    console.log('      Expected for some (no forest means no combined arms); worth a look if a');
+    console.log('      field is constant on EVERY board, which would mean it is untested here.');
+    for (const d of health.degenerateRules) console.log('      ' + d);
 }
 
 if (recording) {
