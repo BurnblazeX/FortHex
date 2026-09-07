@@ -52,6 +52,24 @@ function buildFineGridIndex() {
     BuildVertexIndex();
 }
 
+// A tile's movement weight, with a defined answer for a tile whose type predates
+// the field (Testament reconstructs era-7 tiles as bare Plains). Falls back to
+// Plains rather than to zero: a zero-weight tile would be free to cross.
+// Whether a tile blocks movement outright. A tile with no type at all is NOT
+// impassable, which matters: the map-maker and worker paths can hand getEdgeCost
+// a tile whose type has not been attached yet, and the cascade this replaced
+// treated such a tile as plains because every one of its === comparisons against
+// a known type simply came out false. Reading .crossable off an absent type
+// threw instead, which broke map-setup-smoke and victory-smoke.
+function IsImpassableTile(tile) {
+    return !!(tile && tile.type && tile.type.crossable === false);
+}
+
+function MoveWeightOfTile(tile) {
+    const weight = tile && tile.type && tile.type.moveWeight;
+    return Number.isFinite(weight) ? weight : TILE_TYPES.PLAINS.moveWeight;
+}
+
 // === Vertex identity (Track C) ===
 //
 // A vertex is the point where three tiles meet. Until now they existed only as
@@ -940,24 +958,20 @@ function getAttackRangeFineCells(unit) {
             let baseCost;
 
             if (edge.bridge) {
-        baseCost = 1;
+                baseCost = BRIDGE_MOVE_COST;
+            } else if (IsImpassableTile(tile1) && IsImpassableTile(tile2)) {
+                // Both sides impassable and no bridge. Stated as a property of the
+                // terrain rather than as "is it water", so a future impassable
+                // terrain gets this for free.
+                return Infinity;
             } else {
-                const isT1Water = tile1.type === TILE_TYPES.WATER;
-                const isT2Water = tile2.type === TILE_TYPES.WATER;
-
-                if (isT1Water && isT2Water) {
-                    return Infinity; 
-                } else if (isT1Water || isT2Water) {
-                    baseCost = 3; 
-                } else {
-                    if (tile1.type === TILE_TYPES.MOUNTAIN || tile2.type === TILE_TYPES.MOUNTAIN) {
-                        baseCost = TILE_TYPES.MOUNTAIN.baseMoveCost;
-                    } else if (tile1.type === TILE_TYPES.FOREST || tile2.type === TILE_TYPES.FOREST) {
-                        baseCost = TILE_TYPES.FOREST.baseMoveCost;
-                    } else {
-                        baseCost = TILE_TYPES.PLAINS.baseMoveCost;
-                    }
-                }
+                // One number per terrain, combined by EDGE_COST_MODEL. This replaced
+                // a hardcoded mountain-then-forest-then-plains cascade with a water
+                // special case in front of it. That cascade was Math.max over the
+                // weights all along, which is why swapping in the data-driven form
+                // moved nothing - tools/move-parity.js is the proof.
+                baseCost = EDGE_COST_MODEL.combine(
+                    MoveWeightOfTile(tile1), MoveWeightOfTile(tile2));
             }
     
             // Apply fortification penalty

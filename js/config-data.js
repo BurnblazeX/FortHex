@@ -80,12 +80,53 @@
 
         // Tile Definitions
         // Visibility: 3=High (All), 2=Medium (Blocked Opposite), 1=Low (Melee/Adjacent Only), 0=None
+        // moveWeight is Track C's replacement for the hardcoded terrain cascade in
+        // getEdgeCost. One number per terrain - "what it costs to leave or enter
+        // this tile" - and the edge cost is a function of the pair. See
+        // EDGE_COST_MODEL below for why that is a table's worth of information in
+        // a single field, and what adding a new terrain now costs.
+        //
+        // baseMoveCost is kept because Testament's era-7 fallback still writes it
+        // onto reconstructed tiles. Nothing reads it for movement any more.
         const TILE_TYPES = {
-            PLAINS:   { name: 'Plains',   color: '#90EE90', baseMoveCost: 1, canFortify: true, visibility: 3 },
-            FOREST:   { name: 'Forest',   color: '#228B22', baseMoveCost: 2, canFortify: true, visibility: 1 },
-            WATER:    { name: 'Water',    color: '#87CEEB', baseMoveCost: Infinity, crossable: false, canFortify: false, visibility: 3 },
-            MOUNTAIN: { name: 'Mountain', color: '#808080', baseMoveCost: 3, canFortify: false, blocksLOS: true, visibility: 0 }
+            PLAINS:   { name: 'Plains',   color: '#90EE90', baseMoveCost: 1, moveWeight: 1, canFortify: true, visibility: 3 },
+            FOREST:   { name: 'Forest',   color: '#228B22', baseMoveCost: 2, moveWeight: 2, canFortify: true, visibility: 1 },
+            WATER:    { name: 'Water',    color: '#87CEEB', baseMoveCost: Infinity, moveWeight: 3, crossable: false, canFortify: false, visibility: 3 },
+            MOUNTAIN: { name: 'Mountain', color: '#808080', baseMoveCost: 3, moveWeight: 3, canFortify: false, blocksLOS: true, visibility: 0 }
         };
+
+        // How the two tiles an edge borders combine into a movement cost.
+        //
+        // TODAY the game charges the harder of the two terrains: a plains-forest
+        // edge costs 2, a forest-mountain edge costs 3. That is Math.max over the
+        // weights above, and this object reproduces it EXACTLY - Track C's cutover
+        // is not allowed to move a single number.
+        //
+        // C1 REPLACES IT WITH THE MEAN, and the roadmap's proposed cost matrix
+        // turns out to be exactly that with weights 1/3/5/5:
+        //
+        //     combine: (a, b) => (a + b) / 2
+        //     weights: Plains 1, Forest 3, Mountain 5, Water 5
+        //
+        // which yields P+P=1, P+F=2, P+M=3, F+F=3, F+M=4, M+M=5, W+P=3, W+F=4,
+        // W+M=5 - every cell of that table, from one scalar per terrain. Every
+        // weight is odd, so any pair sums even and halves to an integer.
+        //
+        // The point of the shape is what a NEW TERRAIN costs to add: one number,
+        // not a new row and a new column.
+        //
+        // WARNING for whoever flips this: MAX_MOVEMENT_COST is 3 and clamps the
+        // final cost. Under the C1 weights, costs run to 5, so leaving that cap
+        // where it is would silently discard the entire rebalance above plains
+        // and forest. It has to move in the same commit.
+        const EDGE_COST_MODEL = {
+            combine: (a, b) => Math.max(a, b),
+        };
+
+        // A bridge replaces the terrain underneath it for movement purposes, so it
+        // is a flat cost rather than a weight. Was an unnamed literal 1 inside
+        // getEdgeCost.
+        const BRIDGE_MOVE_COST = 1;
 
         // Unit Definitions (Templates)
         const UNIT_TYPES = {
