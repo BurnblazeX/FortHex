@@ -194,10 +194,9 @@ const MIME = {
 // console rather than silently weakening this.
 //
 // What each exception is actually for:
-//   script-src  cdn.tailwindcss.com   loaded by index.html
-//   style-src   'unsafe-inline'       196 inline style attributes, plus Tailwind's play
-//                                     CDN which writes styles at runtime. Removing these
-//                                     is Candidates F2 work, not a header change.
+//   style-src   'unsafe-inline'       196 inline style attributes. Removing those is
+//                                     Candidates F2 work, not a header change. Tailwind
+//                                     used to need this too and no longer exists here.
 //   style/font  fonts.googleapis.com / fonts.gstatic.com   the Exo 2 + Lexend Deca pair
 //   connect-src wss://forthex.xyz     the game socket. 'self' covers same-origin wss in
 //                                     current browsers, but the hosts are named because
@@ -209,7 +208,7 @@ const MIME = {
 // deliberate decision to make in the dashboard, not a side effect of a code change.
 const CONTENT_SECURITY_POLICY = [
     "default-src 'self'",
-    "script-src 'self' https://cdn.tailwindcss.com",
+    "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data:",

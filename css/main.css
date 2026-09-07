@@ -74,6 +74,20 @@ body {
     box-sizing: border-box;
 }
 
+/* The whole of what Tailwind was being loaded for.
+
+   cdn.tailwindcss.com was a ~3MB runtime that compiled utility classes in the
+   browser on every page load, and this build used exactly ONE of them, four times.
+   It also injected inline <style> and <script> elements, which is what the CSP was
+   catching: the page's own markup has no inline scripts, but Tailwind's runtime adds
+   some. Removing it removes the violation, the CSP exception, and the download.
+
+   Building Tailwind properly was the other option. It would have produced a
+   stylesheet containing this rule. */
+.text-center {
+    text-align: center;
+}
+
 h1.text-4xl {
     font-family: 'Lexend Deca', 'Exo 2', sans-serif;
 }
