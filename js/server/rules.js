@@ -70,6 +70,61 @@ function MoveWeightOfTile(tile) {
     return Number.isFinite(weight) ? weight : TILE_TYPES.PLAINS.moveWeight;
 }
 
+// === The fine grid as the movement space (Track C, Burn's model) ===
+//
+// The fine grid is drawn OVER the board and treated as a volume. Every cell in
+// it is one of exactly two things:
+//
+//   hexCENTER - sits precisely on top of a tile's centre. Carries that tile's
+//               terrain, and is NOT pathable. A unit on one is fortified.
+//   hexPATH   - everything else. Always sits between exactly two hexCenters,
+//               which is what gives it a cost. This is what the code still calls
+//               an "edge"; hexPath is the name from here on.
+//
+// "Sits on top of a tile centre" needs no geometry: tiles map to (2q, 2r) so
+// both coordinates are even, while a hexPath is the sum of two tiles that differ
+// by a unit direction, so at least one coordinate is odd. Measured on every
+// board: no centre has an odd coordinate, no path has both even, and there is no
+// third category - a radius-3 board is 127 cells, exactly 37 centres and 90
+// paths.
+// A cost is usable only if it is a real, finite number. Guards the two ways
+// getEdgeCost declines: null (not a real hexPath) and Infinity (real but
+// impassable). Written as one predicate because `cost === Infinity` alone let
+// null through, and null + a number is that number - a non-existent rim path
+// would have costed ZERO and been the cheapest route on the board.
+function IsTraversableCost(cost) {
+    return typeof cost === 'number' && Number.isFinite(cost);
+}
+
+function IsHexCenterCoord(fq, fr) {
+    return (fq % 2 === 0) && (fr % 2 === 0);
+}
+
+// A hexPath's neighbours: walk the fine grid's own six directions and drop
+// anything that lands on a hexCenter. Interior paths keep four, rim paths two.
+//
+// This replaces GetVertexAdjacentEdges in the movement path. The two agree
+// exactly - a fine cell's non-centre neighbours ARE the paths meeting at its two
+// vertices - and tools/vertex-parity.js checks all three models against each
+// other on every run rather than taking that on faith.
+function GetHexPathNeighbours(pathKey) {
+    const coord = getFineCoordForEdge(pathKey);
+    if (!coord || isNaN(coord.fq)) return [];
+    const out = [];
+    for (const dir of AXIAL_DIRECTIONS) {
+        const fq = coord.fq + dir.q, fr = coord.fr + dir.r;
+        if (IsHexCenterCoord(fq, fr)) continue;
+        const cell = engine.state.fineGrid.get(`${fq},${fr}`);
+        // Absent means the cell is not a real hexPath: one of the two
+        // hexCenters it would sit between is off the board. Those are rejected
+        // here rather than costed, which is what stops a unit pathing off the
+        // rim onto a half-real cell.
+        if (!cell || cell.type !== 'edge') continue;
+        out.push(cell.key);
+    }
+    return out;
+}
+
 // === Vertex identity (Track C) ===
 //
 // A vertex is the point where three tiles meet. Until now they existed only as
@@ -927,7 +982,7 @@ function getAttackRangeFineCells(unit) {
             } else {
                 // --- STANDARD MAP LOGIC (Radius 3) ---
                 // baseData is an edge key string
-                potentialSpawnEdges = GetVertexAdjacentEdges(baseData);
+                potentialSpawnEdges = GetHexPathNeighbours(baseData);
             }
 
             // Find first valid edge in the potential list
@@ -969,7 +1024,12 @@ function getAttackRangeFineCells(unit) {
             const tileCoords = parseEdgeKey(edgeKey);
             const tile1 = engine.state.tiles.get(getTileKey(tileCoords[0].q, tileCoords[0].r));
             const tile2 = engine.state.tiles.get(getTileKey(tileCoords[1].q, tileCoords[1].r));
-            if (!tile1 || !tile2) return Infinity;
+            // NULL, not Infinity, and the difference is meaningful. Infinity says
+            // "a real hexPath you cannot cross" - water to water. Null says "not a
+            // hexPath at all", because one of its two hexCenters is off the board.
+            // Rim cells are the whole reason this distinction exists. Callers must
+            // treat null as impassable; IsTraversableCost is how.
+            if (!tile1 || !tile2) return null;
 
             let baseCost;
 
@@ -1063,7 +1123,7 @@ function getAttackRangeFineCells(unit) {
 
         if (current.pathCost > (minCostsFound.get(current.edgeKey) || Infinity)) continue;
         
-        const rotationallyAdjacentEdges = GetVertexAdjacentEdges(current.edgeKey);
+        const rotationallyAdjacentEdges = GetHexPathNeighbours(current.edgeKey);
 
         for (const nextAdjacentEdgeKey of rotationallyAdjacentEdges) {
             
@@ -1108,7 +1168,8 @@ function getAttackRangeFineCells(unit) {
             if (enemyBlocks) continue;
             const friendlyUnitsOnNext = nextAdjacentEdgeObject.units.filter(u => u.player === unit.player);
             if (friendlyUnitsOnNext.length >= 2 && !friendlyUnitsOnNext.find(u => u.id === unit.id)) continue;
-            const costToTraverseNextEdge = getEdgeCost(unit, nextAdjacentEdgeKey); if (costToTraverseNextEdge === Infinity) continue;
+            const costToTraverseNextEdge = getEdgeCost(unit, nextAdjacentEdgeKey);
+            if (!IsTraversableCost(costToTraverseNextEdge)) continue;
             const newTotalPathCost = current.pathCost + costToTraverseNextEdge;
             if (newTotalPathCost <= unit.currentMove) {
                 const knownMinCost = minCostsFound.get(nextAdjacentEdgeKey) || Infinity;
@@ -1206,6 +1267,7 @@ function getAttackRangeFineCells(unit) {
                     if (!isRoad(neighborEdgeKey)) continue;
 
                     const costToNeighbor = getEdgeCost({ player }, neighborEdgeKey);
+                    if (!IsTraversableCost(costToNeighbor)) continue;
                     const newCost = current.cost + costToNeighbor;
 
                     if (!visited.has(neighborEdgeKey) || newCost < visited.get(neighborEdgeKey).cost) {
@@ -1301,7 +1363,9 @@ function getAttackRangeFineCells(unit) {
                 let incrementalCost = 0;
                 pathEdges.forEach(road => {
                     if (!allUsedRoads.has(road)) {
-                        incrementalCost += getEdgeCost({ player: playerNum }, road);
+                        const roadCost = getEdgeCost({ player: playerNum }, road);
+                        if (!IsTraversableCost(roadCost)) return;
+                        incrementalCost += roadCost;
                     }
                 });
 
@@ -1416,7 +1480,7 @@ function getAttackRangeFineCells(unit) {
             }
 
             // 2. Check all ADJACENT edges (original logic)
-            const rotationallyAdjacentEdges = GetVertexAdjacentEdges(unit.position);
+            const rotationallyAdjacentEdges = GetHexPathNeighbours(unit.position);
             rotationallyAdjacentEdges.forEach(adjEdgeKey => {
                 if (adjEdgeKey === unit.position) return;
                 const edgeData = engine.state.edges.get(adjEdgeKey);

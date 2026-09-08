@@ -50,8 +50,16 @@ function ProbeBoard() {
         edgeCount++;
         const rotational = getRotationallyAdjacentEdges(edgeKey).slice().sort();
         const viaVertex = GetVertexAdjacentEdges(edgeKey).slice().sort();
+        // The third model, and the one movement actually runs on now: walk the
+        // fine grid's own six neighbours and drop the hexCenters. All three must
+        // agree - the legacy walk is the oracle, the vertex index is what proved
+        // the geometry, and the fine-grid walk is what ships.
+        const viaFineGrid = GetHexPathNeighbours(edgeKey).slice().sort();
         if (JSON.stringify(rotational) !== JSON.stringify(viaVertex)) {
-            mismatches.push({ edgeKey: edgeKey, rotational: rotational, viaVertex: viaVertex });
+            mismatches.push({ edgeKey: edgeKey, model: 'vertex', rotational: rotational, got: viaVertex });
+        }
+        if (JSON.stringify(rotational) !== JSON.stringify(viaFineGrid)) {
+            mismatches.push({ edgeKey: edgeKey, model: 'fineGrid', rotational: rotational, got: viaFineGrid });
         }
         degrees[rotational.length] = (degrees[rotational.length] || 0) + 1;
     });
@@ -78,6 +86,18 @@ function ProbeBoard() {
         }
     });
 
+    // Every fine cell must be a hexCenter or a hexPath, with no third category
+    // and no misclassification. This is the parity claim Burn'"'"'s model rests on:
+    // both coordinates even means it sits on a tile centre.
+    let centres = 0, paths = 0, misclassified = 0;
+    engine.state.fineGrid.forEach((cell, key) => {
+        const parts = key.split(',');
+        const isCentreCoord = IsHexCenterCoord(Number(parts[0]), Number(parts[1]));
+        if (cell.type === 'tile') { centres++; if (!isCentreCoord) misclassified++; }
+        else if (cell.type === 'edge') { paths++; if (isCentreCoord) misclassified++; }
+        else misclassified++;
+    });
+
     // A vertex key is the SUM of its three tile coordinates. Where all three are
     // on the board, that has to hold exactly - it is the whole basis for
     // GetVertexAxial deriving a position from the key alone. Rim vertices are
@@ -98,6 +118,7 @@ function ProbeBoard() {
     });
 
     return JSON.stringify({
+        centres: centres, paths: paths, misclassified: misclassified,
         keySumBroken: keySumBroken,
         fullVertices: fullVertices,
         edgeCount: edgeCount,
@@ -149,7 +170,7 @@ for (const board of BOARDS) {
     totalEdges += r.edgeCount;
     Object.keys(r.degrees).forEach(d => degreesSeen.add(Number(d)));
 
-    Check(label + ': vertex adjacency matches rotational adjacency on all ' + r.edgeCount + ' edges',
+    Check(label + ': vertex AND fine-grid adjacency both match rotational adjacency on all ' + r.edgeCount + ' hexPaths',
         r.mismatches.length === 0,
         r.mismatches.length ? JSON.stringify(r.mismatches[0]) : null);
     Check(label + ': every vertex holds 1-3 distinct edges', r.malformed === 0);
@@ -159,6 +180,9 @@ for (const board of BOARDS) {
     Check(label + ': every full vertex key is the sum of its three tiles, and GetVertexAxial agrees',
         r.keySumBroken === 0, r.keySumBroken + ' of ' + r.fullVertices + ' broken');
     Check(label + ': the board has interior (three-tile) vertices', r.fullVertices > 0);
+    Check(label + ': every fine cell is a hexCenter or a hexPath, and the even/even parity rule classifies it correctly',
+        r.misclassified === 0, r.misclassified + ' misclassified of ' + (r.centres + r.paths));
+    Check(label + ': the fine grid holds both centres and paths', r.centres > 0 && r.paths > 0);
 
     if (verbose) {
         console.log('       ' + label + ': ' + r.edgeCount + ' edges, ' + r.vertexCount
