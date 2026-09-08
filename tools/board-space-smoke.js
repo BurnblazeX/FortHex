@@ -107,6 +107,16 @@ function AuditVisionKeys() {
                 problems.push({ player, why: 'vision names a tile that does not exist', key: tileKey });
             }
         });
+        // Rim cells are named by fine coordinate and must resolve to an actual
+        // rim cell. A real edge or a tile centre turning up in this set would
+        // mean the boundary ring had leaked into ordinary vision.
+        (vis.rim || new Set()).forEach(fineKey => {
+            const cell = engine.state.fineGrid.get(fineKey);
+            if (!cell || cell.type !== 'rim') {
+                problems.push({ player, why: 'vision names a rim cell that is not one',
+                    key: fineKey, actualType: cell ? cell.type : 'absent' });
+            }
+        });
     }
     return problems;
 }

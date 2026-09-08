@@ -233,6 +233,9 @@ function BuildResyncSnapshot(player) {
         edges: board.edges,
         visibleTiles: [...view.visibleTiles],
         visibleEdges: [...view.visibleEdges],
+        // Rim cells are named by fine coordinate, not by an edge key - they have
+        // no edge behind them to name.
+        visibleRim: [...(view.visibleRim || [])],
         currentPlayer: engine.state.currentPlayer,
         globalTurnNumber: engine.state.globalTurnNumber,
         supplyPoints: { ...engine.state.supplyPoints },

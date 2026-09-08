@@ -28,6 +28,16 @@ function FilterStateForPlayer(state, recipientPlayer, fogOfWarEnabled) {
             units: state.units.map(u => ({ ...u, hidden: false })),
             visibleTiles: new Set(state.tiles.keys()),
             visibleEdges: new Set(state.edges.keys()),
+            // Fog off: every rim cell is visible too, so the boundary ring draws
+            // clear rather than being the one thing still fogged on an unfogged
+            // board.
+            // Guarded: a view can be built before buildFineGridIndex has run, and
+            // a throw here kills the match rather than degrading it. No rim
+            // simply means no boundary cells are named, which the renderer
+            // already handles.
+            visibleRim: state.fineGrid
+                ? new Set([...state.fineGrid.keys()].filter(k => state.fineGrid.get(k).type === 'rim'))
+                : new Set(),
         };
     }
 
@@ -52,6 +62,7 @@ function FilterStateForPlayer(state, recipientPlayer, fogOfWarEnabled) {
         units,
         visibleTiles: vision.tiles,
         visibleEdges: vision.edges,
+        visibleRim: vision.rim,
     };
 }
 

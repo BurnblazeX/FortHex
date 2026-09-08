@@ -223,6 +223,10 @@ function ApplyRemoteView(view) {
             player: engine.state.playerSide,
             tiles: new Set(view.visibleTiles),
             edges: new Set(view.visibleEdges),
+            // Absent from an older host, so default to empty rather than
+            // undefined: drawFogOfWar asks this every frame for every border
+            // slot on the board.
+            rim: new Set(view.visibleRim || []),
         };
         engine.visionDirty = false;
     } else {

@@ -386,10 +386,21 @@ function resolveFineCoord(fq, fr) {
     return cell;
 }
 
+// options.includeRim brings the boundary ring into the result. It is OFF by
+// default and must stay off for attack range: a rim cell is not a position, so
+// nothing can be attacked there. Vision is different - you can SEE the edge of
+// the world - and that is the only caller that asks for it.
+//
+// Rim cells are recorded but never expanded FROM. There is nothing beyond the
+// board, so sight that reaches the rim stops there rather than continuing
+// around it, which would let a unit see along the outside of the map.
 function fineRangeQuery(startFine, maxRange, options = {}) {
     const visited = new Map();
     const startKeyStr = `${startFine.fq},${startFine.fr}`;
-    const startEntity = resolveFineCoord(startFine.fq, startFine.fr);
+    const LookUp = options.includeRim
+        ? ((fq, fr) => engine.state.fineGrid.get(`${fq},${fr}`) || null)
+        : ((fq, fr) => resolveFineCoord(fq, fr));
+    const startEntity = LookUp(startFine.fq, startFine.fr);
 
     // If the starting coordinate is off-board, return empty immediately
     if (!startEntity) return visited;
@@ -410,6 +421,11 @@ function fineRangeQuery(startFine, maxRange, options = {}) {
         // (It is still included in `visited`, but its neighbors won't be queued).
         if (options.blocksBeyond && options.blocksBeyond(entity, distance)) {
             continue;
+        }
+
+        // The rim is the end of the world: visible, but nothing lies past it.
+        if (entity.type === 'rim') {
+            continue;
         }       
 
         // Stop expanding if we've reached max range
@@ -424,7 +440,7 @@ function fineRangeQuery(startFine, maxRange, options = {}) {
             const neighborKeyStr = `${neighbor.fq},${neighbor.fr}`;
 
             if (!visited.has(neighborKeyStr)) {
-                const neighborEntity = resolveFineCoord(neighbor.fq, neighbor.fr);
+                const neighborEntity = LookUp(neighbor.fq, neighbor.fr);
                 
                 // Only add if it's on the board
                 if (neighborEntity) {
@@ -446,7 +462,7 @@ function fineRangeQuery(startFine, maxRange, options = {}) {
 // Returns an object containing Sets of visible EdgeKeys and TileKeys, computed on the
 // fine grid (every tile centre and every edge is its own subHex).
 function getVisibleKeysFromUnit(unit) {
-    if (!unit) return { edges: new Set(), tiles: new Set() };
+    if (!unit) return { edges: new Set(), tiles: new Set(), rim: new Set() };
 
     // An archer fortified on a mountain peak sees 3 instead of 2, and is high enough
     // that forests no longer block it. Other mountains still do.
@@ -480,21 +496,29 @@ function getVisibleKeysFromUnit(unit) {
         if (entity.type === 'tile') {
             return isForestTile(entity.key) || isMountainTile(entity.key);
         }
+        // A rim cell has no edge behind it and so no key to resolve tiles from.
+        // It never blocks, which costs nothing: sight already stops at the rim.
+        if (entity.type === 'rim') return false;
         return getTileKeysOfEdge(entity.key).some(k => isForestTile(k) || isMountainTile(k));
     };
 
     const blocksBeyond = (entity, distance) => distance > 0 && blocksSight(entity);
 
-    const rangeResult = fineRangeQuery(startCoord, VISIBILITY_RANGE, { blocksBeyond });
+    const rangeResult = fineRangeQuery(startCoord, VISIBILITY_RANGE, { blocksBeyond, includeRim: true });
 
     const visibleEdges = new Set();
     const visibleTiles = new Set();
+    // Rim cells are keyed by their fine coordinate, not by an edge key, because
+    // they have no edge behind them to name.
+    const visibleRim = new Set();
 
-    rangeResult.forEach((data) => {
+    rangeResult.forEach((data, fineKey) => {
         if (data.type === 'edge') {
             visibleEdges.add(data.key);
         } else if (data.type === 'tile') {
             visibleTiles.add(data.key);
+        } else if (data.type === 'rim') {
+            visibleRim.add(fineKey);
         }
     });
 
@@ -525,7 +549,7 @@ function getVisibleKeysFromUnit(unit) {
         }
     }
 
-    return { edges: visibleEdges, tiles: visibleTiles };
+    return { edges: visibleEdges, tiles: visibleTiles, rim: visibleRim };
 }
 
 // The tile keys an edge subHex sits between.
@@ -891,6 +915,7 @@ function getAttackRangeFineCells(unit) {
         function getBaseVisibility(player) {
             const visibleEdges = new Set();
             const visibleTiles = new Set();
+            const visibleRim = new Set();
             
             // 1. Identify Base Tiles
             const baseData = engine.state.baseCampPositions[`player${player}`];
@@ -933,9 +958,10 @@ function getAttackRangeFineCells(unit) {
                 const vis = getVisibleKeysFromUnit(dummyUnit);
                 vis.edges.forEach(e => visibleEdges.add(e));
                 vis.tiles.forEach(t => visibleTiles.add(t));
+                vis.rim.forEach(k => visibleRim.add(k));
             });
 
-            return { edges: visibleEdges, tiles: visibleTiles };
+            return { edges: visibleEdges, tiles: visibleTiles, rim: visibleRim };
         }
 
         function isInternalBaseEdge(edgeKey) {
@@ -1709,6 +1735,7 @@ function getAttackRangeFineCells(unit) {
 function computePlayerVision(player) {
     const visibleTiles = new Set();
     const visibleEdges = new Set();
+    const visibleRim = new Set();
 
     // 1. Add Base Camp Visibility (Force fully visible)
     const baseData = engine.state.baseCampPositions[`player${player}`];
@@ -1738,6 +1765,7 @@ function computePlayerVision(player) {
     const baseVis = getBaseVisibility(player);
     baseVis.tiles.forEach(t => visibleTiles.add(t));
     baseVis.edges.forEach(e => visibleEdges.add(e));
+    baseVis.rim.forEach(k => visibleRim.add(k));
 
     // 2. Add Unit Visibility
     engine.state.units.forEach(unit => {
@@ -1761,8 +1789,9 @@ function computePlayerVision(player) {
             const vis = getVisibleKeysFromUnit(unit);
             vis.tiles.forEach(t => visibleTiles.add(t));
             vis.edges.forEach(e => visibleEdges.add(e));
+            vis.rim.forEach(k => visibleRim.add(k));
         }
     });
 
-    return { tiles: visibleTiles, edges: visibleEdges };
+    return { tiles: visibleTiles, edges: visibleEdges, rim: visibleRim };
 }

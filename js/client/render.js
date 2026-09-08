@@ -320,8 +320,18 @@ function getPerspectivePlayer() {
                         const edgeKey = getEdgeKey(q, r, q + neighborDir.q, r + neighborDir.r);
                         
                         if (!engine.state.edges.has(edgeKey)) {
-                            // If the edge doesn't exist on the map (it's an outer boundary), 
-                            if (engine.visionCache.tiles.has(tileKey)) {
+                            // An outer boundary slot: there is no edge here, but
+                            // there IS a rim cell on the fine grid, and it has its
+                            // own visibility now.
+                            //
+                            // This used to clear from the TILE CENTRE - if you could
+                            // see the tile, its whole boundary lit up at once. That
+                            // is what read as unnatural: the map edge brightened in
+                            // a block the moment a unit saw any part of the tile.
+                            // Vision propagates to the rim cell itself now, so the
+                            // boundary lights the same way everything else does.
+                            const rimKey = `${2 * q + neighborDir.q},${2 * r + neighborDir.r}`;
+                            if (engine.visionCache.rim && engine.visionCache.rim.has(rimKey)) {
                                 targetEdges[k] = 0.0;
                             }
                         } else if (engine.visionCache.edges.has(edgeKey)) {
@@ -1935,7 +1945,8 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     engine.visionCache = {
                         player: perspectivePlayer,
                         tiles: newVision.tiles,
-                        edges: newVision.edges
+                        edges: newVision.edges,
+                        rim: newVision.rim || new Set()
                     };
                     engine.visionDirty = false;
                     gameState.needsRedraw = true; 
