@@ -88,6 +88,31 @@ let fileLoadContext = 'game_save';
 // entire idea.
 
 // True when this client plays one specific side rather than both.
+// Is an action animation still playing?
+//
+// While one is, the board is showing something that has already happened on the
+// server, and a unit's drawn position is not where it is. Picking up or tapping
+// a unit in that window acts on a board the player is not looking at.
+//
+// MEASURED BY WALL CLOCK, not by whether the animation is still in the array,
+// and that is deliberate. gameState.activeAnimations is only drained inside
+// drawAnimations, so a frame that never lands - a hidden tab, a throw inside an
+// onComplete - would leave an entry there forever and lock input permanently.
+// Every animation carries startTime and duration, so asking whether it COULD
+// still be running cannot deadlock: the lock expires on its own even if nothing
+// ever cleans the array up. A safety harness that can brick the game is worse
+// than the problem it solves.
+function IsAnimationPlaying() {
+    const animations = gameState.activeAnimations;
+    if (!animations || animations.length === 0) return false;
+    const now = Date.now();
+    return animations.some(anim =>
+        anim
+        && typeof anim.startTime === 'number'
+        && typeof anim.duration === 'number'
+        && (now - anim.startTime) < anim.duration);
+}
+
 function IsBoundToOneSide() {
     return engine.state.playerSide === 1 || engine.state.playerSide === 2;
 }

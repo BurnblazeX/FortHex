@@ -1267,11 +1267,21 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             ctx.restore();
         }
 
+        // Three layers, painted bottom to top so each reads against the one under
+        // it: the whole fine lattice in BLUE, what the selected unit can SEE in
+        // YELLOW, and what it can ATTACK in RED. Attack range is always a subset
+        // of visibility, and visibility a subset of the lattice, so the stack is
+        // strictly nested and a colour appearing outside its parent layer is
+        // itself the bug worth seeing.
         function drawFineGridVisibilityDebug() {
-            if (!gameSettings.debugModeEnabled || !gameState.selectedUnit) return;
+            if (!gameSettings.debugModeEnabled) return;
 
-            const vis = getVisibleKeysFromUnit(gameState.selectedUnit);
-            const attackCells = getAttackRangeFineCells(gameState.selectedUnit);
+            // The lattice draws with nothing selected. Visibility and attack
+            // range need a unit; the grid does not, and it is most useful when
+            // there is nothing else on screen to read it against.
+            const selected = gameState.selectedUnit;
+            const vis = selected ? getVisibleKeysFromUnit(selected) : null;
+            const attackCells = selected ? getAttackRangeFineCells(selected) : null;
 
             const currentHexSize = HEX_SIZE * gameState.renderScale;
             const fineHexRadius = currentHexSize * 0.5;
@@ -1298,21 +1308,37 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 ctx.stroke();
             };
 
-            // 1. Visibility (blue)
-            vis.tiles.forEach(t => {
-                const f = getFineCoordForTile(t);
-                drawMiniHex(f.fq, f.fr, 'rgba(0, 100, 255, 0.6)');
-            });
-            vis.edges.forEach(e => {
-                const f = getFineCoordForEdge(e);
-                drawMiniHex(f.fq, f.fr, 'rgba(0, 100, 255, 0.6)');
+            // 1. The whole fine grid (blue). Rim cells - the boundary ring whose
+            //    second hexCenter is off the board - are drawn dimmer, because
+            //    they are real lattice positions that no unit may ever occupy and
+            //    seeing where that ring falls is most of the point of drawing it.
+            engine.state.fineGrid.forEach((cell, key) => {
+                const parts = key.split(',');
+                const fq = Number(parts[0]), fr = Number(parts[1]);
+                drawMiniHex(fq, fr, cell.type === 'rim'
+                    ? 'rgba(0, 100, 255, 0.18)'
+                    : 'rgba(0, 100, 255, 0.45)');
             });
 
-            // 2. Attack range (red) - always a subset of visibility, so drawn on top.
-            attackCells.forEach(fineKey => {
-                const [fq, fr] = fineKey.split(',').map(Number);
-                drawMiniHex(fq, fr, 'rgba(255, 0, 0, 0.65)');
-            });
+            // 2. Visibility (yellow), over the lattice.
+            if (vis) {
+                vis.tiles.forEach(t => {
+                    const f = getFineCoordForTile(t);
+                    drawMiniHex(f.fq, f.fr, 'rgba(255, 215, 0, 0.55)');
+                });
+                vis.edges.forEach(e => {
+                    const f = getFineCoordForEdge(e);
+                    drawMiniHex(f.fq, f.fr, 'rgba(255, 215, 0, 0.55)');
+                });
+            }
+
+            // 3. Attack range (red), on top - always a subset of visibility.
+            if (attackCells) {
+                attackCells.forEach(fineKey => {
+                    const [fq, fr] = fineKey.split(',').map(Number);
+                    drawMiniHex(fq, fr, 'rgba(255, 0, 0, 0.65)');
+                });
+            }
 
             ctx.restore();
         }
@@ -1924,7 +1950,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 gameState.isDragging ||
                 (gameState.currentActionState === ACTION_STATES.SELECTING_BRIDGE_EDGE) ||
                 (gameState.currentActionState === ACTION_STATES.SELECTING_ATTACK_TARGET) ||
-                (gameSettings.debugModeEnabled && (gameState.selectedUnit || gameState.debugSelectedBasePlayer));
+                gameSettings.debugModeEnabled;
 
             // 4. THROTTLED IDLE ANIMATIONS (30 FPS)
             if (!needsDraw && hasIdleAnimations()) {

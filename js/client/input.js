@@ -7,6 +7,13 @@
 // wrappers) already changed in step 7; that's the only thing A1 touches here.
 
 function handleInteractionStart(x, y, isTouchEvent = false) {
+            // Nothing may be picked up while an action is still animating. Both
+            // mouse and touch funnel through here, so this is one of the two
+            // places that has to hold the line (handleTapLogic is the other).
+            // Map making is exempt: the editor has no action animations and
+            // locking it would freeze the brush behind an unrelated effect.
+            if (!engine.state.mapMakerMode && IsAnimationPlaying()) return;
+
             if (gameState.fillToolActive) {
                 if (gameState.mapMakerBrush.type !== 'tile') {
                     ShowWarning("Please select a tile type to fill with.");
@@ -292,7 +299,12 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         }    
 
         function handleTapLogic(x, y) {
-            if (engine.state.mapMakerMode) return; 
+            if (engine.state.mapMakerMode) return;
+            // The click/tap half of the animation lock. Guarded separately from
+            // handleInteractionStart rather than at the listeners, because a
+            // click arrives AFTER its mousedown - gating only the listeners
+            // would let a tap through whose press was already refused.
+            if (IsAnimationPlaying()) return;
 
             if (gameState.mustUnfortify) {
                 // allow clicking an action target
