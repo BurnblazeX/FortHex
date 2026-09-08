@@ -520,7 +520,7 @@ if (verbose && health.degenerateRules.length) {
 
 if (recording) {
     const payload = {
-        note: 'Track C baseline: what the EDGE-ROTATION movement model answered, recorded before the fine-grid cutover. Do not regenerate to make a failing comparison pass.',
+        note: 'Track C baseline. Re-recorded after C1 (terrain weights 1/3/5/5 with a mean combine, cap 5, pools 9/7/5/5). The pre-C1 baseline it replaced is in git history at commit 0d16792. Do not regenerate to make a failing comparison pass - a red run means behaviour moved, and only a deliberate balance change justifies a new recording.',
         recordedAt: new Date().toISOString().slice(0, 10),
         boards,
     };

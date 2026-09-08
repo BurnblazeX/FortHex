@@ -1,4 +1,4 @@
-// FortHex - the edge cost model, both configurations  (Track C, step 3 prep)
+// FortHex - the edge cost model after C1  (Track C)
 //
 //   node tools/cost-model-smoke.js
 //   node tools/cost-model-smoke.js --verbose
@@ -11,18 +11,17 @@
 //
 // This file checks two things that are easy to get quietly wrong:
 //
-//   1. THE ACTIVE MODEL STILL MATCHES THE OLD CASCADE, terrain pair by terrain
-//      pair. move-parity.js already proves this over real boards, but it can
-//      only see pairs those boards happen to contain; this enumerates all of
-//      them, including any a map generator never produces.
+//   1. THE ACTIVE MODEL IS THE ROADMAP C1 TABLE, terrain pair by terrain pair.
+//      move-parity checks real boards, but it can only see pairs those boards
+//      happen to contain; this enumerates all sixteen.
 //
-//   2. THE C1 CONFIGURATION REPRODUCES THE ROADMAP'S PUBLISHED TABLE. C1 is a
-//      balance change nobody has run yet, and the claim that its 4x4 matrix
-//      collapses to four scalars is the reason the shape was built this way. If
-//      that claim is wrong, it should fail here rather than halfway through the
-//      rebalance.
+//   2. IT NO LONGER MATCHES THE PRE-C1 CASCADE. That cascade is kept here as a
+//      historical oracle, and asserting the active model DIFFERS from it is what
+//      proves the rebalance actually landed rather than silently no-opping.
 //
-// The C1 config is NOT active. This computes with it; it does not install it.
+//   3. THE CAP AND THE POOLS MOVED WITH IT. MAX_MOVEMENT_COST at 3 would have
+//      flattened every cost of 3, 4 and 5 into 3 and thrown the whole rebalance
+//      away with no error anywhere.
 //
 // Exit code 0 = pass.
 
@@ -89,8 +88,12 @@ for (const a of TERRAINS) {
         if (verbose) console.log('       ' + (a + '+' + b).padEnd(20) + ' cascade ' + String(legacy).padStart(3) + '   model ' + String(active).padStart(3));
     }
 }
-Check('the active cost model reproduces the old cascade on all ' + pairs + ' terrain pairs',
-    drift.length === 0, drift.join('; '));
+// C1 CHANGED THESE NUMBERS ON PURPOSE. Before C1 the active model reproduced
+// the cascade exactly and this asserted equality; now it must DIFFER, or the
+// rebalance silently did not land. Keeping the cascade as the historical oracle
+// is what makes that a real check rather than a comment.
+Check('the active cost model NO LONGER matches the pre-C1 cascade - the rebalance landed',
+    drift.length > 0, 'active model is still identical to the old max-based cascade');
 
 // Symmetry is not automatic - the cascade was written as an ordered chain of
 // tests, so it could in principle have disagreed with itself on order.
@@ -119,6 +122,15 @@ for (const key of Object.keys(ROADMAP_C1)) {
 Check('the C1 weights 1/3/5/5 reproduce every cell of the roadmap cost table',
     c1drift.length === 0, c1drift.join('; '));
 
+// And the ACTIVE model must now BE that table, not merely be capable of it.
+const activeDrift = [];
+for (const key of Object.keys(ROADMAP_C1)) {
+    const [a, b] = key.split('+');
+    const got = Cost('ActiveBaseCost', a, b);
+    if (got !== ROADMAP_C1[key]) activeDrift.push(key + ': want ' + ROADMAP_C1[key] + ' got ' + got);
+}
+Check('the ACTIVE cost model IS the roadmap C1 table', activeDrift.length === 0, activeDrift.join('; '));
+
 // Every C1 weight is odd, so every pair sums to an even number and halves to an
 // integer. If a future weight breaks that, costs become fractional and the MP
 // pools stop meaning what they say.
@@ -129,14 +141,26 @@ Check('every C1 weight is odd, so no pair produces a fractional cost',
 // --- 3. the cap that would silently eat the rebalance -----------------------
 const cap = vm.runInContext('MAX_MOVEMENT_COST', ctx);
 const worstC1 = 5;
-Check('MAX_MOVEMENT_COST is still ' + cap + ', which is BELOW C1\'s worst cost of '
-    + worstC1 + ' - it must be raised in the same commit that flips the weights',
-    cap < worstC1,
-    'this check exists to fire the moment someone flips the weights without the cap; '
-    + 'if the cap has been raised, delete this assertion rather than the warning it carries');
+// The cap was 3 while the weights were 1/2/3/3. Under C1 costs run to 5, so a
+// cap left at 3 would have flattened every cost of 3, 4 and 5 into 3 and thrown
+// the rebalance away with no error anywhere.
+Check('MAX_MOVEMENT_COST (' + cap + ') does not clamp the worst C1 cost of ' + worstC1,
+    cap >= worstC1, 'cap ' + cap + ' would flatten every cost above it');
+
+// Unit pools, rescaled (x * 2) - 1. Asserted by value, because these are the
+// numbers the whole terrain rebalance is calibrated against.
+const POOLS = { HORSEMAN: 9, MELEE: 7, ARCHER: 5, PIKEMAN: 5 };
+const poolDrift = Object.keys(POOLS).filter(
+    k => vm.runInContext('UNIT_TYPES.' + k + '.speed', ctx) !== POOLS[k]);
+Check('unit movement pools are Horseman 9, Melee 7, Archer 5, Pikeman 5',
+    poolDrift.length === 0,
+    poolDrift.map(k => k + '=' + vm.runInContext('UNIT_TYPES.' + k + '.speed', ctx)).join(', '));
+
+Check('the speed upgrade is worth +2 per point',
+    vm.runInContext('UPGRADE_CONSTANTS.BOOST_VALUES.speed', ctx) === 2);
 
 if (failures.length) {
     console.error('\ncost-model-smoke: ' + failures.length + ' failure(s)');
     process.exit(1);
 }
-console.log('cost-model-smoke: ok - active model matches the old cascade, C1 scalars match the roadmap table');
+console.log('cost-model-smoke: ok - active model is the C1 table, cap and pools rescaled with it');

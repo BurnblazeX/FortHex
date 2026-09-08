@@ -27,7 +27,19 @@
         const ATTACK_COST = 1;
         const FORTIFY_UNFORTIFY_COST = 1;
         const BUILD_BRIDGE_COST = 1;
-        const MAX_MOVEMENT_COST = 3;
+        // The ceiling on a single hexPath's cost, fortification penalty included.
+        //
+        // Rescaled 3 -> 5 by the same rule as the unit pools, (x * 2) - 1, so the
+        // clamp keeps the shape it always had rather than becoming a new balance
+        // decision smuggled in alongside one. What that shape IS: the +1 penalty
+        // for crossing next to an enemy fortification gets absorbed on the very
+        // hardest terrain and bites everywhere else. Today mountain costs 3 and
+        // 3+1 clamps back to 3; now mountain-to-mountain costs 5 and 5+1 clamps
+        // back to 5. Same behaviour, rescaled.
+        //
+        // Leaving this at 3 would have silently discarded the entire rebalance
+        // above forest - every cost of 3, 4 or 5 would have come out as 3.
+        const MAX_MOVEMENT_COST = 5;
         const SHIELD_COLOR = '#30C4C4';
 
         // Visual/Interaction Constants
@@ -90,37 +102,32 @@
         // onto reconstructed tiles. Nothing reads it for movement any more.
         const TILE_TYPES = {
             PLAINS:   { name: 'Plains',   color: '#90EE90', baseMoveCost: 1, moveWeight: 1, canFortify: true, visibility: 3 },
-            FOREST:   { name: 'Forest',   color: '#228B22', baseMoveCost: 2, moveWeight: 2, canFortify: true, visibility: 1 },
-            WATER:    { name: 'Water',    color: '#87CEEB', baseMoveCost: Infinity, moveWeight: 3, crossable: false, canFortify: false, visibility: 3 },
-            MOUNTAIN: { name: 'Mountain', color: '#808080', baseMoveCost: 3, moveWeight: 3, canFortify: false, blocksLOS: true, visibility: 0 }
+            FOREST:   { name: 'Forest',   color: '#228B22', baseMoveCost: 2, moveWeight: 3, canFortify: true, visibility: 1 },
+            WATER:    { name: 'Water',    color: '#87CEEB', baseMoveCost: Infinity, moveWeight: 5, crossable: false, canFortify: false, visibility: 3 },
+            MOUNTAIN: { name: 'Mountain', color: '#808080', baseMoveCost: 3, moveWeight: 5, canFortify: false, blocksLOS: true, visibility: 0 }
         };
 
         // How the two tiles an edge borders combine into a movement cost.
         //
-        // TODAY the game charges the harder of the two terrains: a plains-forest
-        // edge costs 2, a forest-mountain edge costs 3. That is Math.max over the
-        // weights above, and this object reproduces it EXACTLY - Track C's cutover
-        // is not allowed to move a single number.
+        // C1, LANDED. The cost of crossing a hexPath is the MEAN of the two
+        // hexCenters it sits between - literally what it costs to leave one tile
+        // plus what it costs to enter the other. With weights 1/3/5/5 that gives
+        // the whole of the roadmap's cost matrix:
         //
-        // C1 REPLACES IT WITH THE MEAN, and the roadmap's proposed cost matrix
-        // turns out to be exactly that with weights 1/3/5/5:
+        //     P+P=1  P+F=2  P+M=3  F+F=3  F+M=4  M+M=5  W+P=3  W+F=4  W+M=5
         //
-        //     combine: (a, b) => (a + b) / 2
-        //     weights: Plains 1, Forest 3, Mountain 5, Water 5
+        // Every weight is odd, so any pair sums even and halves to an integer.
+        // Water/water stays impassable without a bridge and is handled before
+        // this is ever called.
         //
-        // which yields P+P=1, P+F=2, P+M=3, F+F=3, F+M=4, M+M=5, W+P=3, W+F=4,
-        // W+M=5 - every cell of that table, from one scalar per terrain. Every
-        // weight is odd, so any pair sums even and halves to an integer.
+        // BEFORE C1 this was Math.max with weights 1/2/3/3, which charged the
+        // harder of the two terrains and could not tell a plains-to-mountain
+        // crossing from a mountain-to-mountain one. Both cost 3; they now cost 3
+        // and 5.
         //
-        // The point of the shape is what a NEW TERRAIN costs to add: one number,
-        // not a new row and a new column.
-        //
-        // WARNING for whoever flips this: MAX_MOVEMENT_COST is 3 and clamps the
-        // final cost. Under the C1 weights, costs run to 5, so leaving that cap
-        // where it is would silently discard the entire rebalance above plains
-        // and forest. It has to move in the same commit.
+        // Adding a terrain costs ONE number here, not a new row and column.
         const EDGE_COST_MODEL = {
-            combine: (a, b) => Math.max(a, b),
+            combine: (a, b) => (a + b) / 2,
         };
 
         // A bridge replaces the terrain underneath it for movement purposes, so it
@@ -129,11 +136,17 @@
         const BRIDGE_MOVE_COST = 1;
 
         // Unit Definitions (Templates)
+        // MOVEMENT POOLS, rescaled by C1 as (previous * 2) - 1: Horseman 5->9,
+        // Melee 4->7, Archer and Pikeman 3->5.
+        //
+        // The odd-number rescale is the point. Doubling alone would leave every
+        // pool and every cost divisible by the same factor, so nothing would move
+        // relative to anything else and the finer terrain costs would buy nothing.
         const UNIT_TYPES = {
-            MELEE:    { typeName: 'MELEE',    name: 'Melee',    hp: 12, speed: 4, damage: 3, defense: 1, symbol: 'M', canBuildBridge: true,  attackType: 'melee', canMoveAfterAttack: false, strengths: ['Archer'],   weaknesses: ['Horseman'] },
-            ARCHER:   { typeName: 'ARCHER',   name: 'Archer',   hp: 10, speed: 3, damage: 2, defense: 1, symbol: 'A', canBuildBridge: false, attackType: 'ranged', canMoveAfterAttack: false, strengths: ['Pikeman'],  weaknesses: ['Melee'] },
-            PIKEMAN:  { typeName: 'PIKEMAN',  name: 'Pikeman',  hp: 13, speed: 3, damage: 3, defense: 2, symbol: 'P', canBuildBridge: false, attackType: 'melee', canMoveAfterAttack: false, strengths: ['Horseman'], weaknesses: ['Archer'] },
-            HORSEMAN: { typeName: 'HORSEMAN', name: 'Horseman', hp: 11, speed: 5, damage: 3, defense: 0, symbol: 'H', canBuildBridge: false, attackType: 'melee', canMoveAfterAttack: true,  strengths: ['Melee'],    weaknesses: ['Pikeman'] }
+            MELEE:    { typeName: 'MELEE',    name: 'Melee',    hp: 12, speed: 7, damage: 3, defense: 1, symbol: 'M', canBuildBridge: true,  attackType: 'melee', canMoveAfterAttack: false, strengths: ['Archer'],   weaknesses: ['Horseman'] },
+            ARCHER:   { typeName: 'ARCHER',   name: 'Archer',   hp: 10, speed: 5, damage: 2, defense: 1, symbol: 'A', canBuildBridge: false, attackType: 'ranged', canMoveAfterAttack: false, strengths: ['Pikeman'],  weaknesses: ['Melee'] },
+            PIKEMAN:  { typeName: 'PIKEMAN',  name: 'Pikeman',  hp: 13, speed: 5, damage: 3, defense: 2, symbol: 'P', canBuildBridge: false, attackType: 'melee', canMoveAfterAttack: false, strengths: ['Horseman'], weaknesses: ['Archer'] },
+            HORSEMAN: { typeName: 'HORSEMAN', name: 'Horseman', hp: 11, speed: 9, damage: 3, defense: 0, symbol: 'H', canBuildBridge: false, attackType: 'melee', canMoveAfterAttack: true,  strengths: ['Melee'],    weaknesses: ['Pikeman'] }
         };
 
         // --- VETERAN SYSTEM CONSTANTS ---
@@ -149,7 +162,11 @@
             // Defines how much a stat increases per point
             BOOST_VALUES: {
                 health: 2, // +2 HP per point
-                speed: 1,  // +1 Move per point
+                // +2 per point, up from +1 (C1). Against pools that roughly
+                // doubled, a +1 upgrade would have been worth about half what it
+                // was. The health/speed PAIRS penalty reads this same table, so
+                // the paired cost scales with it automatically.
+                speed: 2,  // +2 Move per point
                 damage: 1, // +1 Dmg per point
                 defense: 1 // +1 Def per point
             }
