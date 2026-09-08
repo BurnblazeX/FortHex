@@ -89,12 +89,26 @@ function ProbeBoard() {
     // Every fine cell must be a hexCenter or a hexPath, with no third category
     // and no misclassification. This is the parity claim Burn'"'"'s model rests on:
     // both coordinates even means it sits on a tile centre.
-    let centres = 0, paths = 0, misclassified = 0;
+    let centres = 0, paths = 0, rimCells = 0, misclassified = 0, rimBroken = 0;
     engine.state.fineGrid.forEach((cell, key) => {
         const parts = key.split(',');
-        const isCentreCoord = IsHexCenterCoord(Number(parts[0]), Number(parts[1]));
+        const fq = Number(parts[0]), fr = Number(parts[1]);
+        const isCentreCoord = IsHexCenterCoord(fq, fr);
         if (cell.type === 'tile') { centres++; if (!isCentreCoord) misclassified++; }
         else if (cell.type === 'edge') { paths++; if (isCentreCoord) misclassified++; }
+        else if (cell.type === 'rim') {
+            rimCells++;
+            // A rim cell is a hexPath position, so it must NOT be at centre
+            // parity, must have exactly one hexCenter on the board (two would
+            // make it a real path, zero would mean it should have been culled),
+            // and must answer null when asked its cost.
+            if (isCentreCoord) misclassified++;
+            if (cell.centers.filter(c => c !== null).length !== 1) rimBroken++;
+            if (getEdgeCost({ player: 1 }, key) !== null) rimBroken++;
+            // It must also stay invisible to resolveFineCoord, which is what
+            // attack range and vision walk.
+            if (resolveFineCoord(fq, fr) !== null) rimBroken++;
+        }
         else misclassified++;
     });
 
@@ -118,7 +132,7 @@ function ProbeBoard() {
     });
 
     return JSON.stringify({
-        centres: centres, paths: paths, misclassified: misclassified,
+        centres: centres, paths: paths, rimCells: rimCells, rimBroken: rimBroken, misclassified: misclassified,
         keySumBroken: keySumBroken,
         fullVertices: fullVertices,
         edgeCount: edgeCount,
@@ -183,11 +197,14 @@ for (const board of BOARDS) {
     Check(label + ': every fine cell is a hexCenter or a hexPath, and the even/even parity rule classifies it correctly',
         r.misclassified === 0, r.misclassified + ' misclassified of ' + (r.centres + r.paths));
     Check(label + ': the fine grid holds both centres and paths', r.centres > 0 && r.paths > 0);
+    Check(label + ': every rim cell has exactly one hexCenter, costs null, and is invisible to resolveFineCoord',
+        r.rimBroken === 0, r.rimBroken + ' broken of ' + r.rimCells);
+    Check(label + ': the lattice generated a rim at all', r.rimCells > 0);
 
     if (verbose) {
         console.log('       ' + label + ': ' + r.edgeCount + ' edges, ' + r.vertexCount
             + ' vertices, neighbour counts ' + JSON.stringify(r.degrees)
-            + ', vertex sizes ' + JSON.stringify(r.vertexSizes));
+            + ', vertex sizes ' + JSON.stringify(r.vertexSizes) + ', rim ' + r.rimCells);
     }
 }
 

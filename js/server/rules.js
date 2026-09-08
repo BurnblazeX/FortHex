@@ -27,10 +27,25 @@
 
  // === Fine Grid System ===
 
+// The two hexCenters a hexPath sits between, as tile keys, with null where the
+// tile is not on the board. Derived from the coordinate alone: of a fine cell's
+// six neighbours, exactly two have both coordinates even, and those two are its
+// centres. Nothing is stored for this.
+function GetHexPathCenters(fq, fr) {
+    const centers = [];
+    for (const dir of AXIAL_DIRECTIONS) {
+        const nq = fq + dir.q, nr = fr + dir.r;
+        if (!IsHexCenterCoord(nq, nr)) continue;
+        const tileKey = getTileKey(nq / 2, nr / 2);
+        centers.push(engine.state.tiles.has(tileKey) ? tileKey : null);
+    }
+    return centers;
+}
+
 function buildFineGridIndex() {
     engine.state.fineGrid = new Map();
-    
-    // Tiles map to (2q, 2r)
+
+    // --- hexCenters: one per tile, at (2q, 2r) ------------------------------
     engine.state.tiles.forEach(tile => {
         const fq = 2 * tile.q;
         const fr = 2 * tile.r;
@@ -38,12 +53,54 @@ function buildFineGridIndex() {
         engine.state.fineGrid.set(`${fq},${fr}`, { type: 'tile', key: tileKey });
     });
 
-    // Edges map to (q1+q2, r1+r2)
+    // --- hexPaths: the real ones, at (q1+q2, r1+r2) -------------------------
     engine.state.edges.forEach((edge, edgeKey) => {
         const fq = edge.q1 + edge.q2;
         const fr = edge.r1 + edge.r2;
         engine.state.fineGrid.set(`${fq},${fr}`, { type: 'edge', key: edgeKey });
     });
+
+    // --- the rim: generate outward, then cull -------------------------------
+    //
+    // The lattice is grown from the hexCenters rather than swept over a bounding
+    // region, which is what makes it self-limiting: a cell is only considered if
+    // it neighbours a centre that exists, so generation stops one ring out on its
+    // own and there is no radius to keep in sync with anything.
+    //
+    // A candidate is CULLED when both of its hexCenters are off the board, and
+    // kept as 'rim' when exactly one is. Rim cells are real positions on the grid
+    // that no unit may occupy: GetPathCost returns null for them, which is a
+    // different answer from Infinity (a real hexPath you cannot cross, water to
+    // water).
+    //
+    // They are typed 'rim', NOT 'edge', and that matters. resolveFineCoord feeds
+    // fineRangeQuery, which is what attack range and vision are built on; a rim
+    // cell claiming to be an edge would put non-existent positions inside attack
+    // range, on a board that would still look completely normal.
+    const rim = [];
+    engine.state.fineGrid.forEach((cell, key) => {
+        if (cell.type !== 'tile') return;
+        const parts = key.split(',');
+        const cq = Number(parts[0]), cr = Number(parts[1]);
+        for (const dir of AXIAL_DIRECTIONS) {
+            const fq = cq + dir.q, fr = cr + dir.r;
+            const candidateKey = `${fq},${fr}`;
+            if (engine.state.fineGrid.has(candidateKey)) continue;
+            const centers = GetHexPathCenters(fq, fr);
+            const real = centers.filter(c => c !== null);
+            // The cull. Note it CANNOT currently fire: candidates are only
+            // generated as neighbours of a real hexCenter, so every one of them
+            // already has at least one. Growth is what limits the lattice, not
+            // this test. It is kept because the moment anyone generates by
+            // sweeping a bounding region instead - the more literal reading of
+            // drawing the grid over the board - this becomes the rule that stops
+            // it, and rediscovering that is worse than carrying four dead lines.
+            if (real.length === 0) continue;
+            if (real.length === 2) continue;   // a real hexPath already claimed it
+            rim.push([candidateKey, { type: 'rim', key: null, centers: centers }]);
+        }
+    });
+    for (const [key, cell] of rim) engine.state.fineGrid.set(key, cell);
 
     // Vertices ride along with the fine grid rather than having their own six
     // call sites. buildFineGridIndex is already called from six places
@@ -320,7 +377,13 @@ function getFineNeighbors(fq, fr) {
 }
 
 function resolveFineCoord(fq, fr) {
-    return engine.state.fineGrid.get(`${fq},${fr}`) || null;
+    const cell = engine.state.fineGrid.get(`${fq},${fr}`);
+    // Rim cells are deliberately invisible here. This is what fineRangeQuery
+    // walks, so attack range and vision see exactly the cells they saw before
+    // the lattice gained a boundary ring. ResolveBoardSpaceKey is the accessor
+    // that can see the rim.
+    if (!cell || cell.type === 'rim') return null;
+    return cell;
 }
 
 function fineRangeQuery(startFine, maxRange, options = {}) {
@@ -1063,7 +1126,9 @@ function getAttackRangeFineCells(unit) {
 
         function getEdgeCost(unit, edgeKey) {
             const edge = engine.state.edges.get(edgeKey);
-            if (!edge) return Infinity;
+            // Not a real hexPath. Null, not Infinity: see the hexCenter check
+            // below for why the two answers are kept apart.
+            if (!edge) return null;
 
             const tileCoords = parseEdgeKey(edgeKey);
             const tile1 = engine.state.tiles.get(getTileKey(tileCoords[0].q, tileCoords[0].r));
