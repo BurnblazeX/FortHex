@@ -84,6 +84,33 @@ function AuditUnits(tag) {
     return { problems, checked, fortifiedSeen, unfortifiedSeen };
 }
 
+// Vision must only ever name things that are on the board.
+//
+// computePlayerVision used to force all six geometric edges around every base
+// tile and every fortified unit visible, to paper over boundary fog from before
+// the fine grid had cells for borders. It SPELLED those edge keys rather than
+// looking them up, so at the rim it named edges that do not exist. Harmless in
+// practice - nothing matches a key for a thing that is not there - but it meant
+// the vision set was not a set of board entities, and anything downstream that
+// iterated it rather than testing membership would have been reading fiction.
+function AuditVisionKeys() {
+    const problems = [];
+    for (const player of [1, 2]) {
+        const vis = computePlayerVision(player);
+        vis.edges.forEach(edgeKey => {
+            if (!engine.state.edges.has(edgeKey)) {
+                problems.push({ player, why: 'vision names an edge that does not exist', key: edgeKey });
+            }
+        });
+        vis.tiles.forEach(tileKey => {
+            if (!engine.state.tiles.has(tileKey)) {
+                problems.push({ player, why: 'vision names a tile that does not exist', key: tileKey });
+            }
+        });
+    }
+    return problems;
+}
+
 async function FortifySome() {
     const fortified = [];
     for (const player of [1, 2]) {
@@ -154,6 +181,15 @@ function Check(label, condition, detail) {
         Check(label + ' (fortified): every unit still round-trips',
             after.problems.length === 0,
             after.problems.length ? JSON.stringify(after.problems[0]) : null);
+
+        // Fog on, so the vision path actually runs, and with units fortified so
+        // the branch that used to force-add edges is exercised.
+        vm.runInContext('engine.settings.fogOfWarEnabled = true;', ctx);
+        const visionProblems = JSON.parse(vm.runInContext('JSON.stringify(AuditVisionKeys())', ctx));
+        vm.runInContext('engine.settings.fogOfWarEnabled = false;', ctx);
+        Check(label + ': vision names only edges and tiles that exist on the board',
+            visionProblems.length === 0,
+            visionProblems.length ? JSON.stringify(visionProblems[0]) + ' (' + visionProblems.length + ' total)' : null);
 
         totalUnits += after.checked;
         totalFortified += after.fortifiedSeen;

@@ -1721,13 +1721,18 @@ function computePlayerVision(player) {
         if (!isNaN(h2.q)) baseTiles.push(getTileKey(h2.q, h2.r));
     }
 
+    // The tile is visible. Its surrounding hexPaths are NOT force-added here any
+    // more - getBaseVisibility below computes them properly from the base's outer
+    // edges, and it checks engine.state.edges.has() before adding anything.
+    //
+    // What was here forced all six geometric edges of every base tile visible "to
+    // clear boundary fog". It predates the fine grid having cells for borders at
+    // all, and it did so by SPELLING edge keys rather than looking them up, so at
+    // the board rim it invented keys for edges that do not exist. Measured before
+    // removal, across five boards and both players: it contributed 4 to 7 such
+    // phantom keys per player and NOT ONE real edge. Nothing loses visibility.
     baseTiles.forEach(tileKey => {
         visibleTiles.add(tileKey);
-        const [q, r] = tileKey.split(',').map(Number);
-        // Force all 6 geometric edges to be visible to clear boundary fog
-        AXIAL_DIRECTIONS.forEach(dir => {
-            visibleEdges.add(getEdgeKey(q, r, q + dir.q, r + dir.r));
-        });
     });
 
     const baseVis = getBaseVisibility(player);
@@ -1738,12 +1743,14 @@ function computePlayerVision(player) {
     engine.state.units.forEach(unit => {
         if (unit.player === player) {
             if (unit.positionType === 'center') {
+                // A fortified unit sees its own tile. The hexPaths around it come
+                // from getVisibleKeysFromUnit below, which walks the fine grid
+                // from this unit's cell and respects what blocks sight - so a
+                // path behind a forest correctly stays dark instead of being
+                // cleared because the unit happened to be standing next to it.
+                // Same phantom-key removal as the base camp block above; measured
+                // with units actually fortified, no real edge or tile is lost.
                 visibleTiles.add(unit.position);
-                const [q, r] = unit.position.split(',').map(Number);
-                // Force all 6 geometric edges to be visible to clear boundary fog
-                AXIAL_DIRECTIONS.forEach(dir => {
-                    visibleEdges.add(getEdgeKey(q, r, q + dir.q, r + dir.r));
-                });
             } else if (unit.positionType === 'edge') {
                 visibleEdges.add(unit.position);
                 const [h1, h2] = parseEdgeKey(unit.position);
