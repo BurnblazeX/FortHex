@@ -1309,14 +1309,16 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             };
 
             // 1. The whole fine grid (blue). Rim cells - the boundary ring whose
-            //    second hexCenter is off the board - are drawn dimmer, because
-            //    they are real lattice positions that no unit may ever occupy and
-            //    seeing where that ring falls is most of the point of drawing it.
+            //    second hexCenter is off the board - are GREY, at the same alpha
+            //    as the rest. They are real lattice positions that no unit may
+            //    ever occupy, so they read as a different kind of cell rather
+            //    than as a fainter one; a dimmer blue would just look like the
+            //    grid fading out at the edges, which is the opposite of the point.
             engine.state.fineGrid.forEach((cell, key) => {
                 const parts = key.split(',');
                 const fq = Number(parts[0]), fr = Number(parts[1]);
                 drawMiniHex(fq, fr, cell.type === 'rim'
-                    ? 'rgba(0, 100, 255, 0.18)'
+                    ? 'rgba(140, 140, 140, 0.45)'
                     : 'rgba(0, 100, 255, 0.45)');
             });
 
