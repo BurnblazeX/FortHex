@@ -267,6 +267,50 @@ function getFineCoordForUnit(unit) {
     }
 }
 
+// === Board space: one coordinate for every position a unit can occupy ===
+//
+// Every position a unit can be in is a fine-grid cell, so the fine grid is the
+// whole address space and the two-part scheme it replaces (a tile key OR a
+// two-tile edge key, disambiguated by positionType) is redundant. This is the
+// layer that establishes the new addressing WITHOUT changing what is stored,
+// so it can be proven against the old representation before anything switches.
+//
+// The switch itself - unit.position holding "fq,fr", positionType deleted, the
+// save schema at v11 and the wire carrying fine coordinates - is the next layer
+// and is deliberately not done here.
+
+// "fq,fr" for a unit, whichever kind of cell it is standing on.
+function BoardSpaceKeyOfUnit(unit) {
+    const coord = getFineCoordForUnit(unit);
+    if (!coord || isNaN(coord.fq) || isNaN(coord.fr)) return null;
+    return `${coord.fq},${coord.fr}`;
+}
+
+// What lives at a board-space key: { type: 'tile' | 'edge', key } in the old
+// spelling, or null when nothing does. The fine grid already holds this; this
+// just names the lookup so call sites stop reaching into the Map directly.
+function ResolveBoardSpaceKey(boardSpaceKey) {
+    if (!engine.state.fineGrid) return null;
+    return engine.state.fineGrid.get(boardSpaceKey) || null;
+}
+
+// Fortification, derived from position rather than stored.
+//
+// A hexCenter is a tile centre, and the only way to be standing on one is to be
+// fortified - fortifying is what moves a unit there (actions.js sets
+// positionType 'center' and position to the tile key together, and unfortifying
+// sets both back). So the flag and the position have always carried the same
+// fact twice.
+//
+// Nothing reads this yet. It exists so the equivalence can be checked on every
+// board before isFortified is deleted, which is exactly the mistake this project
+// keeps paying for when a second source of truth is introduced and assumed.
+function IsUnitFortifiedByPosition(unit) {
+    const coord = getFineCoordForUnit(unit);
+    if (!coord || isNaN(coord.fq)) return false;
+    return IsHexCenterCoord(coord.fq, coord.fr);
+}
+
 function fineDistance(a, b) {
     return axialDistance(a.fq, a.fr, b.fq, b.fr);
 }
