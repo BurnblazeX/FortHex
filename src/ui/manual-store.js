@@ -54,7 +54,7 @@ export function Reset() {
 // Host. Produces the code immediately and then waits - there is nothing to wait FOR
 // until the guest replies, so the screen shows the code and a box to paste the answer
 // into at the same time.
-export function StartHosting({ fogOfWar = false } = {}) {
+export function StartHosting({ fogOfWar = false, unitSpeedPreset = null } = {}) {
     Reset();
     SetState({ role: 'host', phase: 'preparing', error: null });
 
@@ -66,7 +66,7 @@ export function StartHosting({ fogOfWar = false } = {}) {
         signal,
         hostSeat: 1,
         guestSeat: 2,
-        settings: { fogOfWarEnabled: !!fogOfWar },
+        settings: { fogOfWarEnabled: !!fogOfWar, unitSpeedPreset: unitSpeedPreset || null },
     });
 
     session = { transport, signal };
@@ -74,7 +74,7 @@ export function StartHosting({ fogOfWar = false } = {}) {
     transport.Start()
         .then(() => {
             SetState({ phase: 'connected' });
-            BeginOnlineMatch(transport, 1, { fogOfWar: !!fogOfWar, isHost: true });
+            BeginOnlineMatch(transport, 1, { fogOfWar: !!fogOfWar, unitSpeedPreset: unitSpeedPreset || null, isHost: true });
             transport.StartMatch();
         })
         .catch(error => Fail(error));
@@ -115,6 +115,7 @@ export function StartJoining(hostCode) {
         SetState({ phase: 'connected' });
         BeginOnlineMatch(transport, message.seat || transport.seat || 2, {
             fogOfWar: !!message.fogOfWar,
+            unitSpeedPreset: message.unitSpeedPreset || null,
             isHost: false,
         });
     });

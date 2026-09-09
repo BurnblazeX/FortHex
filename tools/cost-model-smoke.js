@@ -149,15 +149,15 @@ Check('MAX_MOVEMENT_COST (' + cap + ') does not clamp the worst C1 cost of ' + w
 
 // Unit pools, rescaled (x * 2) - 1. Asserted by value, because these are the
 // numbers the whole terrain rebalance is calibrated against.
-const POOLS = { HORSEMAN: 9, MELEE: 7, ARCHER: 5, PIKEMAN: 5 };
+const POOLS = { HORSEMAN: 9, SWORDSMAN: 7, ARCHER: 5, PIKEMAN: 5 };
 const poolDrift = Object.keys(POOLS).filter(
     k => vm.runInContext('UNIT_TYPES.' + k + '.speed', ctx) !== POOLS[k]);
-Check('unit movement pools are Horseman 9, Melee 7, Archer 5, Pikeman 5',
+Check('unit movement pools are Horseman 9, Swordsman 7, Archer 5, Pikeman 5',
     poolDrift.length === 0,
     poolDrift.map(k => k + '=' + vm.runInContext('UNIT_TYPES.' + k + '.speed', ctx)).join(', '));
 
-Check('the speed upgrade is worth +2 per point',
-    vm.runInContext('UPGRADE_CONSTANTS.BOOST_VALUES.speed', ctx) === 2);
+Check('the speed upgrade is worth +1 per point',
+    vm.runInContext('UPGRADE_CONSTANTS.BOOST_VALUES.speed', ctx) === 1);
 
 if (failures.length) {
     console.error('\ncost-model-smoke: ' + failures.length + ' failure(s)');

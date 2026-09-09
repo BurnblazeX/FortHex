@@ -316,12 +316,72 @@ function getFineCoordForEdge(edgeKey) {
     return { fq: h1.q + h2.q, fr: h1.r + h2.r };
 }
 
+// The same three conversions as strings, which is what actually gets stored and
+// compared. Kept as a thin layer over the coord versions rather than duplicating
+// the arithmetic, so there is one place the doubling lives.
+// The preset this match is actually running, resolving "auto" against the board.
+//
+// One function so the fallback lives in one place: a match with no explicit choice
+// must answer the same thing at unit creation, at class swap and at save-load, or a
+// unit built at turn one and a unit built at turn thirty get different pools.
+function ActiveUnitSpeedPreset() {
+    const chosen = engine && engine.settings && engine.settings.unitSpeedPreset;
+    if (chosen && UNIT_SPEED_PRESETS[chosen]) return chosen;
+    const radius = (engine && engine.state && engine.state.gridRadius) || 3;
+    return RecommendedUnitSpeedPreset(radius);
+}
+
+function FineKeyOfTile(tileKey) {
+    const c = getFineCoordForTile(tileKey);
+    return c.fq + ',' + c.fr;
+}
+
+function FineKeyOfEdge(edgeKey) {
+    const c = getFineCoordForEdge(edgeKey);
+    return c.fq + ',' + c.fr;
+}
+
+function ParseFineKey(fineKey) {
+    const parts = String(fineKey).split(',');
+    return { fq: Number(parts[0]), fr: Number(parts[1]) };
+}
+
+// Both coordinates even means the cell sits exactly on a tile centre.
+// A null or malformed key parses to NaN, which is neither even nor odd, so it
+// falls through as "not a centre" rather than throwing - callers get a hexPath
+// answer and then a null legacy key, which is the same shape as a unit that is
+// simply not on the board.
+function IsHexCenterKey(fineKey) {
+    if (!fineKey) return false;
+    const { fq, fr } = ParseFineKey(fineKey);
+    return IsHexCenterCoord(fq, fr);
+}
+
+// LEGACY KEYS OUT OF BOARD SPACE. Both return null when the fine key does not
+// name that kind of cell, so a call site that asks for the wrong one gets
+// nothing rather than a plausible-looking wrong answer.
+function TileKeyOfFine(fineKey) {
+    if (!IsHexCenterKey(fineKey)) return null;
+    const { fq, fr } = ParseFineKey(fineKey);
+    return getTileKey(fq / 2, fr / 2);
+}
+
+function EdgeKeyOfFine(fineKey) {
+    if (!fineKey || IsHexCenterKey(fineKey)) return null;
+    const { fq, fr } = ParseFineKey(fineKey);
+    if (isNaN(fq) || isNaN(fr)) return null;
+    // A rim cell has only ONE hexCenter on the board, so it has no edge key -
+    // which is correct: there is no edge there, only a lattice position.
+    const centers = GetHexPathCenters(fq, fr).filter(Boolean);
+    if (centers.length !== 2) return null;
+    const [a, b] = centers.map(k => k.split(',').map(Number));
+    return getEdgeKey(a[0], a[1], b[0], b[1]);
+}
+
+// unit.position IS the fine coordinate now, so this is a parse rather than a
+// conversion. Kept as a function because a hundred call sites name it.
 function getFineCoordForUnit(unit) {
-    if (unit.positionType === 'center') {
-        return getFineCoordForTile(unit.position);
-    } else {
-        return getFineCoordForEdge(unit.position);
-    }
+    return ParseFineKey(unit.position);
 }
 
 // === Board space: one coordinate for every position a unit can occupy ===
@@ -332,16 +392,14 @@ function getFineCoordForUnit(unit) {
 // layer that establishes the new addressing WITHOUT changing what is stored,
 // so it can be proven against the old representation before anything switches.
 //
-// The switch itself - unit.position holding "fq,fr", positionType deleted, the
-// save schema at v11 and the wire carrying fine coordinates - is the next layer
-// and is deliberately not done here.
-
-// "fq,fr" for a unit, whichever kind of cell it is standing on.
-function BoardSpaceKeyOfUnit(unit) {
-    const coord = getFineCoordForUnit(unit);
-    if (!coord || isNaN(coord.fq) || isNaN(coord.fr)) return null;
-    return `${coord.fq},${coord.fr}`;
-}
+// THE SWITCH IS DONE (2026-09-08). unit.position holds "fq,fr" and nothing else;
+// positionType, isFortified and fortifiedTileKey are derived getters on the unit
+// and are no longer stored, transmitted or saved. Schema v11.
+//
+// The helpers below are the whole translation layer. Code that needs a LEGACY key
+// asks for it by name - unit.tileKey or unit.edgeKey - which forces every call
+// site to say which space it is working in instead of leaving it to a positionType
+// check somewhere else in the file.
 
 // What lives at a board-space key: { type: 'tile' | 'edge', key } in the old
 // spelling, or null when nothing does. The fine grid already holds this; this
@@ -349,23 +407,6 @@ function BoardSpaceKeyOfUnit(unit) {
 function ResolveBoardSpaceKey(boardSpaceKey) {
     if (!engine.state.fineGrid) return null;
     return engine.state.fineGrid.get(boardSpaceKey) || null;
-}
-
-// Fortification, derived from position rather than stored.
-//
-// A hexCenter is a tile centre, and the only way to be standing on one is to be
-// fortified - fortifying is what moves a unit there (actions.js sets
-// positionType 'center' and position to the tile key together, and unfortifying
-// sets both back). So the flag and the position have always carried the same
-// fact twice.
-//
-// Nothing reads this yet. It exists so the equivalence can be checked on every
-// board before isFortified is deleted, which is exactly the mistake this project
-// keeps paying for when a second source of truth is introduced and assumed.
-function IsUnitFortifiedByPosition(unit) {
-    const coord = getFineCoordForUnit(unit);
-    if (!coord || isNaN(coord.fq)) return false;
-    return IsHexCenterCoord(coord.fq, coord.fr);
 }
 
 function fineDistance(a, b) {
@@ -473,7 +514,7 @@ function getVisibleKeysFromUnit(unit) {
     // A fortified unit occupies its tile, so that tile's own terrain never blocks it -
     // it still gets the full flower and can see out of the forest/mountain it sits in.
     // Any OTHER forest or mountain tile still blocks normally.
-    const occupiedTileKey = (unit.positionType === 'center') ? unit.position : null;
+    const occupiedTileKey = unit.tileKey;
 
     const isForestTile = (tileKey) => {
         if (onMountainPeak) return false; // too high up for forests to matter
@@ -536,11 +577,11 @@ function getVisibleKeysFromUnit(unit) {
     // edges rotationally adjacent to the unit (fine-distance 1) cannot be seen -
     // the peak between them is in the way.
     if (unit.positionType === 'edge') {
-        const ownMountainKeys = getTileKeysOfEdge(unit.position).filter(isMountainTile);
+        const ownMountainKeys = getTileKeysOfEdge(unit.edgeKey).filter(isMountainTile);
 
         if (ownMountainKeys.length > 0) {
             [...visibleEdges].forEach(edgeKey => {
-                if (edgeKey === unit.position) return;
+                if (edgeKey === unit.edgeKey) return;
                 if (fineDistance(startCoord, getFineCoordForEdge(edgeKey)) !== 1) return;
                 if (getTileKeysOfEdge(edgeKey).some(k => ownMountainKeys.includes(k))) {
                     visibleEdges.delete(edgeKey);
@@ -564,13 +605,13 @@ function getTileKeysOfEdge(edgeKey) {
 // The two tile keys an edge-positioned unit sits between (its "side tiles").
 function getSideTileKeys(unit) {
     if (!unit || unit.positionType !== 'edge') return [];
-    return getTileKeysOfEdge(unit.position);
+    return getTileKeysOfEdge(unit.edgeKey);
 }
 
 // Does this unit share its edge with a friendly melee unit? (combined arms spotter)
 function hasCombinedArmsSupport(unit) {
     if (!unit || unit.positionType !== 'edge') return false;
-    const myEdge = engine.state.edges.get(unit.position);
+    const myEdge = engine.state.edges.get(unit.edgeKey);
     if (!myEdge) return false;
     return myEdge.units.some(u => u.id !== unit.id && u.player === unit.player && u.type.attackType === 'melee');
 }
@@ -605,19 +646,21 @@ function getAttackRangeCells(unit) {
     if (onMountainPeak) {
         maxRange = 3;
     } else if (isArcher && unit.positionType === 'center' && unit.isFortified) {
-        const sourceTile = engine.state.tiles.get(unit.position);
+        const sourceTile = engine.state.tiles.get(unit.tileKey);
         if (sourceTile && getTileVisibility(sourceTile) <= 1) {
             maxRange = 1;
             isLowVisFortifiedArcher = true;
         }
     }
 
-    // MODIFIER 1 - mountains stop arrows the same way they stop sight. Melee has no
+    // MODIFIER 1 - mountains stop arrows the same way they stop sight. Swordsman has no
     // LOS blocking at range 1, so it runs unblocked. An archer's own peak never blocks
     // its own shots.
     const blocksBeyond = !isArcher ? null : (entity, distance) => {
         if (distance === 0 || entity.type !== 'tile') return false;
-        if (entity.key === unit.position) return false;
+        // tileKey is null for a unit on a hexPath, so this never matches one -
+        // exactly as the old comparison of a tile key against an edge key never did.
+        if (entity.key === unit.tileKey) return false;
         const tile = engine.state.tiles.get(entity.key);
         return !!(tile && getTileVisibility(tile) === 0);
     };
@@ -663,7 +706,7 @@ function getAttackRangeCells(unit) {
                     if (getTileVisibility(tile) < visibilityThreshold) return;
                 }
             } else {
-                // Melee: fortified enemies can only be hit from an edge, not from
+                // Swordsman: fortified enemies can only be hit from an edge, not from
                 // another fortified position - and a mountain peak can never be melee'd
                 // at all, no matter where the attacker stands.
                 if (unit.positionType !== 'edge') return;
@@ -678,7 +721,7 @@ function getAttackRangeCells(unit) {
     // to 1 by MODIFIER 2, but can still target the centre of every adjacent PLAINS tile,
     // even though those sit at fine-distance 2.
     if (isLowVisFortifiedArcher) {
-        const [q, r] = unit.position.split(',').map(Number);
+        const [q, r] = unit.tileKey.split(',').map(Number);
 
         getNeighbors(q, r).forEach(n => {
             const tileKey = getTileKey(n.q, n.r);
@@ -753,7 +796,7 @@ function getAttackRangeFineCells(unit) {
             for (const tileKey of tilesThatFormTheEdge) {
                 const tile = engine.state.tiles.get(tileKey);
                 if (tile && tile.fortifiedByPlayer === enemyPlayer) {
-                    const fortifiedUnit = engine.state.units.find(u => u.position === tileKey && u.isFortified);
+                    const fortifiedUnit = engine.state.units.find(u => u.tileKey === tileKey);
                 if (fortifiedUnit && fortifiedUnit.type.name === 'Pikeman') {
                         return true; 
                     }
@@ -842,7 +885,7 @@ function getAttackRangeFineCells(unit) {
         function GetValidFortifyTargets(unit) {
             if (!unit || unit.positionType !== 'edge' || unit.isFortified) return [];
 
-            const edgeCoords = parseEdgeKey(unit.position);
+            const edgeCoords = parseEdgeKey(unit.edgeKey);
             if (!edgeCoords || edgeCoords.some(c => isNaN(c.q))) return [];
 
             const enemyPlayer = unit.player === 1 ? 2 : 1;
@@ -889,8 +932,80 @@ function getAttackRangeFineCells(unit) {
         // archer into another class would keep granting it archer-tier vision.
         function isUnitOnMountainPeak(unit) {
             if (!unit || !unit.type || unit.type.name !== 'Archer' || unit.positionType !== 'center' || !unit.isFortified) return false;
-            const tile = engine.state.tiles.get(unit.position);
+            const tile = engine.state.tiles.get(unit.tileKey);
             return !!(tile && tile.type.name === 'Mountain');
+        }
+
+        // === RATIONS =============================================================
+        //
+        // The consumable half of supply. One number per player, STORED rather than
+        // derived - a deliberate, named exception to Testament's "anything rebuildable
+        // gets rebuilt", because nothing on the board can recompute it. The old pool
+        // was derivable (reach ceiling minus network cost) and that is exactly what
+        // stopped being true: this is a record of what was SPENT.
+
+        // === REACH ===============================================================
+        //
+        // The other half, and the older one. Reach is a shared budget: every supply
+        // line reserves part of it for as long as it exists, so what is left is how
+        // much MORE line the player can lay. Unlike rations it is DERIVED - recomputed
+        // from the board by recalculatePlayerSupplyNetwork on every call - and it is
+        // stored in a save only so that a load has something to show before the first
+        // recalculation runs.
+
+        function ReachFor(playerNum) {
+            const pool = engine.state.reach;
+            if (!pool) return 0;
+            const value = pool[`player${playerNum}`];
+            return Number.isFinite(value) ? value : 0;
+        }
+
+        function SetReach(playerNum, value) {
+            if (!engine.state.reach) return;
+            const clamped = Math.max(0, Math.min(MAX_SUPPLY_REACH, Math.round(value)));
+            const key = `player${playerNum}`;
+            if (engine.state.reach[key] === clamped) return;
+            engine.state.reach[key] = clamped;
+            engine.Emit({ type: 'SUPPLY_CHANGED', player: playerNum, newValue: clamped });
+        }
+
+        function RationsFor(playerNum) {
+            const pool = engine.state.rations;
+            if (!pool) return 0;
+            const value = pool[`player${playerNum}`];
+            return Number.isFinite(value) ? value : 0;
+        }
+
+        function SetRations(playerNum, value) {
+            if (!engine.state.rations) return;
+            const clamped = Math.max(0, Math.min(STARTING_RATIONS, Math.round(value)));
+            const key = `player${playerNum}`;
+            if (engine.state.rations[key] === clamped) return;
+            engine.state.rations[key] = clamped;
+            engine.Emit({ type: 'SUPPLY_CHANGED', player: playerNum, newValue: clamped });
+        }
+
+        // Returns whether the ration was there to spend. Callers heal only on true -
+        // an empty pool means the healing simply does not happen, not that it happens
+        // on credit.
+        function SpendRation(playerNum, amount) {
+            const have = RationsFor(playerNum);
+            if (have < amount) return false;
+            SetRations(playerNum, have - amount);
+            return true;
+        }
+
+        // Is this unit's line being stood on by an enemy? An intercepted line still
+        // DRAINS - the ration is spent, stolen, and the unit at the far end does not
+        // heal - which turns interception from a simple block into an attritional
+        // attack on the enemy economy. isUnitSupplied answers false for these, so they
+        // have to be found separately rather than falling out of the healing branch.
+        function IsSupplyLineIntercepted(unit) {
+            if (!unit || !unit.supplyLine || !unit.supplyLine.path) return false;
+            return unit.supplyLine.path.some(edgeKey => {
+                const edge = engine.state.edges.get(edgeKey);
+                return edge && edge.units.some(u => u.player !== unit.player);
+            });
         }
 
         // Is this fortified unit's supply line intact? Sitting on a base tile always
@@ -929,33 +1044,43 @@ function getAttackRangeFineCells(unit) {
                 if (!isNaN(h2.q)) baseTileKeys.add(getTileKey(h2.q, h2.r));
             }
 
-            // 2. Find Outer Edges (Edges connecting a base tile to a non-base tile)
-            const outerEdges = new Set();
+            // 2. A base camp SEES FOR ITSELF, as though a unit were fortified on each
+            //    of its tiles - Burn's rule, and the one that matches what a base camp
+            //    is. A camp with nobody standing in it is still a camp; it does not go
+            //    blind because its garrison marched out.
+            //
+            //    This replaces a ring of "lookouts" placed on the base's outer EDGES.
+            //    That version had two problems. The smaller one is that it was indirect:
+            //    it computed what someone standing beside the base could see, which is
+            //    not the same shape as what the base itself commands, and it left the
+            //    base's own tiles seeing nothing when the ring happened to be empty.
+            //
+            //    The larger one is that it was BROKEN by the board-space cutover. The
+            //    dummy carried `position: edgeKey` and a hand-written positionType, and
+            //    position is a fine coordinate now - so getFineCoordForUnit parsed
+            //    "1,2_3,4" straight to NaN and every base lost its own visibility. The
+            //    dummy below is built in board space, with the derived keys spelled out,
+            //    because a hand-rolled unit literal that skips them is exactly how that
+            //    happened.
             baseTileKeys.forEach(tileKey => {
-                const [q, r] = tileKey.split(',').map(Number);
-                getNeighbors(q, r).forEach(n => {
-                    const nKey = getTileKey(n.q, n.r);
-                    if (!baseTileKeys.has(nKey)) {
-                        // This neighbor is NOT part of the base, so the edge between them is an "Outer Edge"
-                        const edgeKey = getEdgeKey(q, r, n.q, n.r);
-                        if (engine.state.edges.has(edgeKey)) {
-                            outerEdges.add(edgeKey);
-                        }
-                    }
-                });
-            });
+                if (!engine.state.tiles.has(tileKey)) return;
 
-            // 3. Aggregate Visibility from all Outer Edges
-            outerEdges.forEach(edgeKey => {
-                // Create a dummy unit representing a lookout on this edge
-                const dummyUnit = { 
-                    position: edgeKey, 
-                    positionType: 'edge', 
-                    isFortified: false,
-                    player: player // Needed if we add team-specific logic later
+                const fineKey = FineKeyOfTile(tileKey);
+                const garrison = {
+                    position: fineKey,
+                    positionType: 'center',
+                    isFortified: true,
+                    tileKey: tileKey,
+                    edgeKey: null,
+                    player: player,
+                    // No `type`, deliberately. isUnitOnMountainPeak asks for
+                    // type.name === 'Archer' before granting the range-3 peak package,
+                    // so a typeless garrison gets ordinary fortified vision - a base
+                    // camp is not an archer and should not see like one.
                 };
-                
-                const vis = getVisibleKeysFromUnit(dummyUnit);
+
+                visibleTiles.add(tileKey);
+                const vis = getVisibleKeysFromUnit(garrison);
                 vis.edges.forEach(e => visibleEdges.add(e));
                 vis.tiles.forEach(t => visibleTiles.add(t));
                 vis.rim.forEach(k => visibleRim.add(k));
@@ -980,7 +1105,7 @@ function getAttackRangeFineCells(unit) {
         }
 
         function getUnitCountsForPlayer(player) {
-            const counts = { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
+            const counts = { Swordsman: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
             engine.state.units.forEach(unit => {
                 if (unit.player === player) {
                     counts[unit.type.name]++;
@@ -989,9 +1114,54 @@ function getAttackRangeFineCells(unit) {
             return counts;
         }
 
-        function createUnit(player, typeInput, edgeKey, existingId = null) {
+        // The third argument is a BOARD-SPACE key ("fq,fr"), not an edge key. Callers
+// holding a legacy key wrap it in FineKeyOfEdge/FineKeyOfTile at the call site,
+// deliberately: a tile key and a fine key are both "a,b" and cannot be told
+// apart by shape, so accepting either here would be a silent mis-placement
+// waiting to happen.
+// The derived half of a unit's position, in ONE place.
+//
+// A unit reaches the board three ways - built by createUnit, resumed from a save
+// (RelinkResumedUnits), or loaded by the client (rehydrateGameState) - and before
+// the cutover positionType/isFortified/fortifiedTileKey were stored fields, so all
+// three paths got them for free by copying the saved object. They are derived now,
+// which means every one of those paths has to attach them, and three hand-written
+// copies of the same five accessors is three chances to write four.
+//
+// ENUMERABLE ON PURPOSE, exactly like type/hp/maxHp: the codebase spreads units
+// constantly - state-filter builds the wire view as `{ ...u, hidden: false }`, ai.js
+// scores hypothetical moves on `{ ...unit, position }` - and a non-enumerable
+// accessor vanishes from every one of those copies. That precise bug has already
+// happened once with `type` (see the note in js/client/save.js).
+function AttachDerivedUnitAccessors(unit) {
+    const derived = {
+        positionType: function () { return IsHexCenterKey(this.position) ? 'center' : 'edge'; },
+        isFortified: function () { return IsHexCenterKey(this.position); },
+        fortifiedTileKey: function () { return TileKeyOfFine(this.position); },
+        tileKey: function () { return TileKeyOfFine(this.position); },
+        edgeKey: function () { return EdgeKeyOfFine(this.position); },
+    };
+
+    for (const name of Object.keys(derived)) {
+        Object.defineProperty(unit, name, {
+            get: derived[name],
+            // Loud, not silent. These were plain fields until the cutover and are
+            // assigned in a handful of places; a bare getter would make every missed
+            // write site a silent no-op in sloppy mode. Throwing turns one into a
+            // test failure with its own name on it.
+            set: function () {
+                throw new Error('unit.' + name + ' is derived from position; set position instead');
+            },
+            configurable: true,
+            enumerable: true,
+        });
+    }
+    return unit;
+}
+
+function createUnit(player, typeInput, boardSpaceKey, existingId = null) {
             // Robust Type Lookup: Handle String Key or Object
-            let typeKey = 'MELEE';
+            let typeKey = 'SWORDSMAN';
             if (typeof typeInput === 'string') {
                 typeKey = typeInput.toUpperCase();
             } else if (typeInput && typeInput.typeName) {
@@ -1007,8 +1177,10 @@ function getAttackRangeFineCells(unit) {
                 return null;
             }
 
-            // Fallback values for stats to prevent NaN
-            const speedVal = template.speed !== undefined ? template.speed : (template.baseMove || 0);
+            // Fallback values for stats to prevent NaN. SpeedForPreset carries that
+            // same fallback and then answers for the match's chosen pools - a horseman
+            // is built with 6 under Normal and 9 under Faster.
+            const speedVal = SpeedForPreset(typeKey, ActiveUnitSpeedPreset());
             const defVal = template.defense !== undefined ? template.defense : (template.fortificationBonus || 0);
 
             // --- NEW: Deterministic ID Generation ---
@@ -1018,12 +1190,14 @@ function getAttackRangeFineCells(unit) {
             } else {
                 engine.state.unitIdCounter++;
                 // Format: u_p{PLAYER}_{TYPE}_{TURN}_{COUNTER}
-                // Example: u_p1_MELEE_t1_1
+                // Example: u_p1_SWORDSMAN_t1_1
                 unitId = `u_p${player}_${typeKey}_t${engine.state.globalTurnNumber}_${engine.state.unitIdCounter}`;
             }
             // ----------------------------------------
             
-            return {
+            // Built, then given its derived accessors - the same call the resume
+            // and load paths make, so a unit is the same shape however it arrived.
+            return AttachDerivedUnitAccessors({
                 id: unitId, 
                 player: player, 
                 typeId: typeKey, 
@@ -1048,12 +1222,13 @@ function getAttackRangeFineCells(unit) {
                 set maxHp(val) { this.stats.maxHp = val; },
 
                 currentMove: speedVal, // Initialize with full speed
-                
-                positionType: 'edge', 
-                position: edgeKey,
-                
-                isFortified: false, 
-                fortifiedTileKey: null, 
+
+                // BOARD SPACE. The one stored position field, holding "fq,fr" on
+                // the fine grid. Every position a unit can occupy is a fine cell,
+                // so this addresses all of them; the old scheme needed a tile key
+                // OR an edge key plus a positionType to say which.
+                position: boardSpaceKey,
+
                 hasPerformedMajorAction: false,
                 isCarryingFlag: false,
                 
@@ -1061,6 +1236,7 @@ function getAttackRangeFineCells(unit) {
                 turnsFortified: 0,
                 fortifyCooldown: 0,
                 canHeal: true,
+                hasShield: false,
                 supplyLine: null,
                 lastAttackedByHostileOnTurn: 0,
                 spearWalled: false,
@@ -1069,7 +1245,7 @@ function getAttackRangeFineCells(unit) {
                 // VETERANCY
                 level: 0,
                 upgrades: { health: 0, speed: 0, damage: 0, defense: 0 }
-            };
+            });
         }
 
         function SpawnUnit(player, unitType) {
@@ -1122,7 +1298,7 @@ function getAttackRangeFineCells(unit) {
             const spawnEdgeKey = potentialSpawnEdges.find(edgeKey => isEdgeValidForSpawn(edgeKey));
 
             if (spawnEdgeKey) {
-                const newUnit = createUnit(player, unitType, spawnEdgeKey);
+                const newUnit = createUnit(player, unitType, FineKeyOfEdge(spawnEdgeKey));
                 engine.state.units.push(newUnit);
                 
                 engine.Emit({ type: 'LOG', text: `P${player} ${unitType.name} has returned to the fight!`, player });
@@ -1206,7 +1382,7 @@ function getAttackRangeFineCells(unit) {
                 enemyBaseTiles.includes(getTileKey(tile1.q, tile1.r)) ||
                 enemyBaseTiles.includes(getTileKey(tile2.q, tile2.r)))
             {
-                fortificationPenalty = 1;
+                fortificationPenalty = FORTIFICATION_MOVE_PENALTY;
             }
 
             const finalCost = baseCost + fortificationPenalty;
@@ -1229,6 +1405,107 @@ function getAttackRangeFineCells(unit) {
             return Array.from(adjacentEdges);
         }
 
+        // THE ONE PLACE A UNIT LOSES HP.
+        //
+        // Shield is a one-hit sponge: it absorbs a single instance of damage IN FULL,
+        // whatever the amount, and is then gone. That only works if every source of
+        // damage asks the same function, so all nine of them do - attacks, split damage,
+        // retaliation, the three ZoC sites, bridge collapse and mountain attrition.
+        // Before this, shield was `hp === maxHp + 1` and any `hp -= n` consumed it by
+        // arithmetic; a sponge cannot be expressed that way, because a 4-damage hit
+        // would eat the point AND three real HP.
+        //
+        // Returns the damage ACTUALLY dealt, which is 0 on an absorb. Callers use that
+        // for their logs and ledger entries, so a shielded hit is recorded as the
+        // nothing it was rather than as damage the unit never took.
+        function ApplyDamageToUnit(unit, amount, sourceLabel) {
+            if (!unit || amount <= 0) return 0;
+
+            if (unit.hasShield) {
+                unit.hasShield = false;
+                const label = sourceLabel ? ` (${sourceLabel})` : '';
+                engine.Emit({
+                    type: 'LOG',
+                    text: `P${unit.player} ${unit.type.name}'s shield absorbs the hit${label}!`,
+                    player: engine.state.currentPlayer,
+                    duration: 2500
+                });
+                engine.Emit({ type: 'SHIELD_BROKEN', unit });
+                return 0;
+            }
+
+            unit.hp -= amount;
+            return amount;
+        }
+
+        // Shield is granted at the start of a turn to a fortified unit that has not been
+        // hit for a turn and is either at full health on supply, or cut off entirely.
+        // The mountain-peak exception is Burn's: ranged reach, elevation and a free
+        // absorbed hit on top is the one stack with no answer to it. Peak fortification
+        // is already archer-only (canUnitFortifyOnTile), so asking about the peak is
+        // enough - but the archer is named here anyway, because the day another type can
+        // hold a peak is the day this rule should be re-read rather than silently widened.
+        function CanUnitGainShield(unit) {
+            if (!unit || unit.hasShield) return false;
+            if (!unit.isFortified) return false;
+            if (isUnitOnMountainPeak(unit)) return false;
+            if (CanUnitDrawOnSupply(unit)) return unit.hp >= unit.maxHp;
+            return true;
+        }
+
+        // "Supplied" for the purposes of the shield means SUPPLIED AND ABLE TO USE IT.
+        // A stolen flag zeroes the pool (SetRationsForFlagStatus), so a unit on a
+        // perfectly intact line still cannot heal while the flag is gone - and a unit
+        // that cannot heal is exactly the one the shield's second branch is for. Asking
+        // isUnitSupplied alone would leave a hurt unit on a live line with neither the
+        // healing nor the buffer, which is the one gap the rework was meant to close.
+        function CanUnitDrawOnSupply(unit) {
+            if (!isUnitSupplied(unit)) return false;
+            const flag = engine.state.flags && engine.state.flags[`p${unit.player}_flag`];
+            return !(flag && flag.status === 'carried');
+        }
+
+        // The MP a unit is given at the start of its turn. ONE definition, because
+        // the overrun rule below has to ask "is this unit still on a full tank?" and a
+        // second copy of the flag-carrier penalty would drift from the first.
+        function TurnStartMovePool(unit) {
+            let pool = unit.stats.speed;
+            if (unit.isCarryingFlag) pool -= 1;
+            return Math.max(0, pool);
+        }
+
+        // OVERRUN: a unit on a full tank can always make at least one move.
+        //
+        // Terrain costs run to MAX_MOVEMENT_COST (5) while the smaller boards give an
+        // archer a pool of 4, so without this a mountain-to-mountain hexPath is not
+        // expensive for an archer - it is a wall, permanently, no matter how many turns
+        // it waits. Civ solves that the same way: if you have not spent anything yet,
+        // you may enter regardless of cost and it costs you everything.
+        //
+        // Three conditions, and each one is load-bearing:
+        //
+        //   pathCostSoFar === 0   FIRST STEP ONLY. Otherwise a unit could spend its
+        //                         pool crossing plains and then overrun a mountain on
+        //                         the end of it, which is a free move, not a floor.
+        //
+        //   stepCost > currentMove  Only when the step is genuinely unaffordable. If it
+        //                         fits, it is charged normally.
+        //
+        //   currentMove >= pool   NOTHING SPENT THIS TURN. Attacking, fortifying and
+        //                         bridge-building all draw on the same pool, so this
+        //                         reads as "has not acted", not merely "has not moved" -
+        //                         attacking and then overrunning would be two full
+        //                         actions on one turn.
+        //
+        // The caller clamps the resulting path cost to currentMove, which both charges
+        // the whole pool and stops the search dead at that cell.
+        function CanOverrunHexPath(unit, pathCostSoFar, stepCost) {
+            if (pathCostSoFar !== 0) return false;
+            if (!IsTraversableCost(stepCost)) return false;
+            if (stepCost <= unit.currentMove) return false;
+            return unit.currentMove >= TurnStartMovePool(unit);
+        }
+
         function getPossibleMoves(unit) {
             if (engine.state.mapMakerMode) {
                 return new Map(); 
@@ -1241,7 +1518,7 @@ function getAttackRangeFineCells(unit) {
                 if (!unit.type.canMoveAfterAttack) {
                     return new Map();
                 }
-                if (isEdgeAdjacentToSpearWall(unit, unit.position)) {
+                if (isEdgeAdjacentToSpearWall(unit, unit.edgeKey)) {
                     return new Map(); 
                 }
             }
@@ -1249,8 +1526,12 @@ function getAttackRangeFineCells(unit) {
     const playerBaseData = engine.state.baseCampPositions[`player${unit.player}`];
     
     let reachable = new Map();
-    let frontier = [{ edgeKey: unit.position, pathCost: 0, pathTaken: [unit.position] }];
-    let minCostsFound = new Map(); minCostsFound.set(unit.position, 0);
+    // Hoisted rather than asked for four times: unit.edgeKey is a derived getter
+    // that reparses the fine key and re-resolves both hexCenters, and this is the
+    // hot loop of the whole game.
+    const startEdgeKey = unit.edgeKey;
+    let frontier = [{ edgeKey: startEdgeKey, pathCost: 0, pathTaken: [startEdgeKey] }];
+    let minCostsFound = new Map(); minCostsFound.set(startEdgeKey, 0);
     
     while (frontier.length > 0) {
         frontier.sort((a, b) => a.pathCost - b.pathCost); 
@@ -1286,7 +1567,7 @@ function getAttackRangeFineCells(unit) {
             }
             // -------------------------------------------------------
 
-            if (nextAdjacentEdgeKey === unit.position && current.pathTaken.length === 1) continue;
+            if (nextAdjacentEdgeKey === startEdgeKey && current.pathTaken.length === 1) continue;
             const nextAdjacentEdgeObject = engine.state.edges.get(nextAdjacentEdgeKey); 
             if (!nextAdjacentEdgeObject) continue;
             
@@ -1305,14 +1586,21 @@ function getAttackRangeFineCells(unit) {
             if (friendlyUnitsOnNext.length >= 2 && !friendlyUnitsOnNext.find(u => u.id === unit.id)) continue;
             const costToTraverseNextEdge = getEdgeCost(unit, nextAdjacentEdgeKey);
             if (!IsTraversableCost(costToTraverseNextEdge)) continue;
-            const newTotalPathCost = current.pathCost + costToTraverseNextEdge;
+            let newTotalPathCost = current.pathCost + costToTraverseNextEdge;
+            // A full-tank unit may step onto a hexPath it cannot afford, for the price
+            // of everything it has. Charging currentMove rather than the real cost is
+            // what makes that terminal: the frontier entry then has nothing left to
+            // spend, so the search cannot continue past it.
+            if (CanOverrunHexPath(unit, current.pathCost, costToTraverseNextEdge)) {
+                newTotalPathCost = unit.currentMove;
+            }
             if (newTotalPathCost <= unit.currentMove) {
                 const knownMinCost = minCostsFound.get(nextAdjacentEdgeKey) || Infinity;
                 if (newTotalPathCost < knownMinCost) {
                     minCostsFound.set(nextAdjacentEdgeKey, newTotalPathCost);
                     const newPathTaken = current.pathTaken.concat(nextAdjacentEdgeKey);
                     frontier.push({ edgeKey: nextAdjacentEdgeKey, pathCost: newTotalPathCost, pathTaken: newPathTaken });
-                    if (nextAdjacentEdgeKey !== unit.position) reachable.set(nextAdjacentEdgeKey, { cost: newTotalPathCost, path: newPathTaken });
+                    if (nextAdjacentEdgeKey !== startEdgeKey) reachable.set(nextAdjacentEdgeKey, { cost: newTotalPathCost, path: newPathTaken });
                         }
                     }
                 }
@@ -1388,7 +1676,7 @@ function getAttackRangeFineCells(unit) {
                 // stored. recalculatePlayerSupplyNetwork then charges each network
                 // only for roads it has not already paid for, so two units on
                 // routes that share edges cost less than two on disjoint ones.
-                // Swapping the order therefore moves supplyPoints - caught by
+                // Swapping the order therefore moves rations - caught by
                 // tools/reference/default-opening.a2.json, which replayed to
                 // player1 supply 3 where the log recorded 4.
                 //
@@ -1419,8 +1707,7 @@ function getAttackRangeFineCells(unit) {
         function recalculatePlayerSupplyNetwork(playerNum) {
             if (engine.state.gameMode === 'arcade') return;
 
-            const playerSupplyKey = `player${playerNum}`;
-            const maxSupply = 10;
+            const playerRationsKey = `player${playerNum}`;
 
             // A6. Supply transitions were never a ledger type, so Testament's rebuilt
             // log could not reproduce them (A4 §5.1) and the archive had no record of
@@ -1436,9 +1723,14 @@ function getAttackRangeFineCells(unit) {
                 if (u.player === playerNum) supplyBefore.set(u.id, !!u.supplyLine);
             });
 
-            // Guard clause to prevent supply calculation if flag is stolen
+            // Two ways to have no network at all: the flag is gone, or the rations
+            // are. Starvation is the new one - "at zero, healing stops and every
+            // supply line is cut" - and it is checked here rather than only where the
+            // last ration is spent, because this function is what re-grants lines and
+            // it must not hand one back to a player who cannot feed it.
             const playerFlag = engine.state.flags[`p${playerNum}_flag`];
-            if (playerFlag && playerFlag.status === 'carried') {
+            const starved = RationsFor(playerNum) <= 0;
+            if ((playerFlag && playerFlag.status === 'carried') || starved) {
                 engine.state.units.forEach(unit => {
                     if (unit.player === playerNum) {
                         unit.supplyLine = null;
@@ -1451,7 +1743,7 @@ function getAttackRangeFineCells(unit) {
             }
 
             // --- FIX: Get Normalized Base Tiles ---
-            const rawBaseData = engine.state.baseCampPositions[playerSupplyKey];
+            const rawBaseData = engine.state.baseCampPositions[playerRationsKey];
             let baseTiles = [];
             if (Array.isArray(rawBaseData)) {
                 baseTiles = rawBaseData;
@@ -1488,11 +1780,34 @@ function getAttackRangeFineCells(unit) {
                 }
             });
 
+            // REACH IS A SHARED BUDGET, and this is the accounting for it.
+            //
+            // Lines are taken cheapest-first and each is charged only for the roads no
+            // earlier line has already paid for, so two units on routes that overlap
+            // cost less than two on disjoint ones. When the running total would pass
+            // MAX_SUPPLY_REACH the line is refused. What is LEFT of the budget is the
+            // Reach number on the panel: it falls as you lay line and rises as forts
+            // are released, which is the whole reason a player watches it.
+            //
+            // This is unchanged from the original mechanic, deliberately (Burn,
+            // 2026-09-09). C2 briefly replaced it with a per-line ceiling on the
+            // reasoning that a shared budget makes forts compete for a resource at a
+            // distance. It does, and that IS the mechanic - extending your network is
+            // supposed to cost you something everywhere else, or there is no decision
+            // in where you fortify. Only the CONSUMABLE half of C2 was wanted.
+            //
+            // The known wart, kept with it: because later lines pay only for NEW roads,
+            // which of several equal-cost routes findSupplyPath happens to store changes
+            // what everything after it costs. See the note there - it is why the
+            // rotation walk was not swapped for GetVertexAdjacentEdges.
+            //
+            // Rations are NOT touched here. They are spent on healing, at the start of a
+            // turn (ApplyStartOfTurnHealing), and this function runs on every move.
             potentialSupplies.sort((a, b) => a.cost - b.cost);
 
             let allUsedRoads = new Set();
             let networkSupplyCost = 0;
-            
+
             potentialSupplies.forEach(supply => {
                 const pathEdges = new Set(supply.pathData.path);
                 let incrementalCost = 0;
@@ -1504,7 +1819,7 @@ function getAttackRangeFineCells(unit) {
                     }
                 });
 
-                if (networkSupplyCost + incrementalCost <= maxSupply) {
+                if (networkSupplyCost + incrementalCost <= MAX_SUPPLY_REACH) {
                     networkSupplyCost += incrementalCost;
                     supply.unit.supplyLine = supply.pathData;
                     pathEdges.forEach(road => allUsedRoads.add(road));
@@ -1513,8 +1828,8 @@ function getAttackRangeFineCells(unit) {
                 }
             });
 
-            engine.state.supplyPoints[playerSupplyKey] = maxSupply - Math.round(networkSupplyCost);
-            engine.Emit({ type: 'SUPPLY_CHANGED', player: playerNum, newValue: engine.state.supplyPoints[playerSupplyKey] });
+            SetReach(playerNum, MAX_SUPPLY_REACH - Math.round(networkSupplyCost));
+
             RecordSupplyTransitions(playerNum, supplyBefore);
         }
 
@@ -1542,14 +1857,14 @@ function getAttackRangeFineCells(unit) {
                 player: playerNum,
                 payload: {
                     established, severed,
-                    supplyPoints: engine.state.supplyPoints[`player${playerNum}`],
+                    rations: engine.state.rations[`player${playerNum}`],
                 }
             });
         }
 
         function getPotentialUnfortifyTargets(unit) {
             if (!unit || !unit.isFortified || unit.positionType !== 'center') return [];
-            const fortifiedTile = engine.state.tiles.get(unit.position); if (!fortifiedTile) return [];
+            const fortifiedTile = engine.state.tiles.get(unit.tileKey); if (!fortifiedTile) return [];
     
             // Use the generic name as it can be a String or Array
             const playerBaseData = engine.state.baseCampPositions[`player${unit.player}`];
@@ -1564,7 +1879,7 @@ function getAttackRangeFineCells(unit) {
                 if (Array.isArray(playerBaseData)) {
                     // Expansive Mode: Check if edge connects two of our own base tiles
                     // We know one tile is the fortified tile (unit.position)
-                    const t1 = unit.position; 
+                    const t1 = unit.tileKey; 
                     const t2 = getTileKey(neighborCoords.q, neighborCoords.r);
             
                     // If both tiles are in the base camp array, this is an internal edge -> Restricted
@@ -1600,24 +1915,24 @@ function getAttackRangeFineCells(unit) {
             const validTargets = new Set();
             
             // 1. Check if the unit's CURRENT edge is a valid target
-            const currentEdge = engine.state.edges.get(unit.position);
+            const currentEdge = engine.state.edges.get(unit.edgeKey);
             if (currentEdge && !currentEdge.bridge) {
-                const [h1, h2] = parseEdgeKey(unit.position);
+                const [h1, h2] = parseEdgeKey(unit.edgeKey);
                 const tile1 = engine.state.tiles.get(getTileKey(h1.q, h1.r));
                 const tile2 = engine.state.tiles.get(getTileKey(h2.q, h2.r));
                 if (tile1 && tile2) {
                     const isBeachEdge = (tile1.type === TILE_TYPES.WATER && tile2.type !== TILE_TYPES.WATER) || 
                                       (tile2.type === TILE_TYPES.WATER && tile1.type !== TILE_TYPES.WATER);
                     if (isBeachEdge) {
-                        validTargets.add(unit.position);
+                        validTargets.add(unit.edgeKey);
                     }
                 }
             }
 
             // 2. Check all ADJACENT edges (original logic)
-            const rotationallyAdjacentEdges = GetHexPathNeighbours(unit.position);
+            const rotationallyAdjacentEdges = GetHexPathNeighbours(unit.edgeKey);
             rotationallyAdjacentEdges.forEach(adjEdgeKey => {
-                if (adjEdgeKey === unit.position) return;
+                if (adjEdgeKey === unit.edgeKey) return;
                 const edgeData = engine.state.edges.get(adjEdgeKey);
                 if (edgeData && !edgeData.bridge) {
                     const adjEdgeTileCoords = parseEdgeKey(adjEdgeKey);
@@ -1665,7 +1980,7 @@ function getAttackRangeFineCells(unit) {
                     const tile = engine.state.tiles.get(data.key);
                     if (!tile || !tile.fortifiedByPlayer || tile.fortifiedByPlayer === attackingUnit.player) return;
 
-                    const fortifiedUnit = engine.state.units.find(u => u.isFortified && u.position === data.key && u.player === tile.fortifiedByPlayer);
+                    const fortifiedUnit = engine.state.units.find(u => u.tileKey === data.key && u.player === tile.fortifiedByPlayer);
                     if (fortifiedUnit) addUnitTarget(fortifiedUnit, null, data.key);
                 }
             });
@@ -1675,7 +1990,7 @@ function getAttackRangeFineCells(unit) {
 
         function getValidMeleeAttackTargets(attackingUnit) {
             if (!attackingUnit || attackingUnit.currentMove < ATTACK_COST || attackingUnit.hasPerformedMajorAction) return [];
-            // Melee only. Without this, an Archer would get its full ranged result back
+            // Swordsman only. Without this, an Archer would get its full ranged result back
             // from here as well as from getValidArcherAttackTargets, double-counting every
             // archer target for any caller that unions the two.
             if (attackingUnit.type.attackType !== 'melee') return [];
@@ -1702,7 +2017,7 @@ function getAttackRangeFineCells(unit) {
         function isZoCSuppressed(fortifiedUnit, excludeUnitId = null) {
             if (!fortifiedUnit || !fortifiedUnit.isFortified) return false;
     
-            const tileKey = fortifiedUnit.position;
+            const tileKey = fortifiedUnit.tileKey;
             const tile = engine.state.tiles.get(tileKey);
             if (!tile) return false;
 
@@ -1778,10 +2093,10 @@ function computePlayerVision(player) {
                 // cleared because the unit happened to be standing next to it.
                 // Same phantom-key removal as the base camp block above; measured
                 // with units actually fortified, no real edge or tile is lost.
-                visibleTiles.add(unit.position);
+                visibleTiles.add(unit.tileKey);
             } else if (unit.positionType === 'edge') {
-                visibleEdges.add(unit.position);
-                const [h1, h2] = parseEdgeKey(unit.position);
+                visibleEdges.add(unit.edgeKey);
+                const [h1, h2] = parseEdgeKey(unit.edgeKey);
                 if (!isNaN(h1.q)) visibleTiles.add(getTileKey(h1.q, h1.r));
                 if (!isNaN(h2.q)) visibleTiles.add(getTileKey(h2.q, h2.r));
             }

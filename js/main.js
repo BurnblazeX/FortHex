@@ -63,6 +63,11 @@ function BeginOnlineMatchWith(socketTransport, seat, options = {}) {
     // result was a board with no fog drawn and enemies that were simply absent.
     engine.settings.fogOfWarEnabled = !!options.fogOfWar;
 
+    // And the movement pools, for the same reason and with a sharper edge: fog only
+    // changes what this client DRAWS, but the pools change what it believes is legal.
+    // A client left on the default would highlight moves the host then rejects.
+    engine.settings.unitSpeedPreset = options.unitSpeedPreset || null;
+
     // An online match never goes through initializeGrid, so nothing else would size
     // the canvas or the side panels.
     SizeBoardAndPanels();

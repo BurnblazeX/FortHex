@@ -9,6 +9,10 @@
     /* Player Identity */
     --p1-color-primary: #60B0E0;   /* BLUE_SKY */
     --p1-color-secondary: #60B0E0; /* (Legacy Hook) */
+
+    /* Out of reach, or out of rations. PALETTE.YELLOW_GOLD from js/client/theme.js,
+       written out because CSS cannot read that file. */
+    --supply-exhausted-color: #FFC020;
     --p2-color-primary: #E04030;   /* RED_VERMILION */
     --p2-color-secondary: #F05040; /* (Legacy Hook) */
     
@@ -404,7 +408,18 @@ input[type="checkbox"]:disabled::before { box-shadow: inset 1em 1em #809090; }
 .p1-log, #p1Supply { color: var(--p1-color-secondary) !important; }
 .p2-log, #p2Supply { color: var(--p2-color-secondary) !important; }
 
-#p1Supply, #p2Supply { transition: color 0.4s ease-in-out; }
+/* The supply panel's two numbers, in the VIEWER'S OWN team colour - the same thing
+   colour means everywhere else in this UI. Both facts belong to one player, so there is
+   nothing here for a per-number colour to distinguish; the labels do that. */
+.supply-value.player1 { color: var(--p1-color-secondary) !important; }
+.supply-value.player2 { color: var(--p2-color-secondary) !important; }
+
+/* Exhausted - out of rations, or no reach left to lay more line. Gold rather than a
+   brighter red, because red IS player 2's colour: an alert has to read as an alert to
+   both sides, not as P2's ordinary number to one of them. */
+.supply-value.exhausted { color: var(--supply-exhausted-color) !important; font-weight: bold; }
+
+#p1Supply, #p2Supply, .supply-value { transition: color 0.4s ease-in-out; }
 .log-message strong { transition: color 0.4s ease-in-out; }
 
 /* ==========================================================================

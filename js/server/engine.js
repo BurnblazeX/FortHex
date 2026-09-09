@@ -33,7 +33,8 @@ class FortHexEngine {
             flags: null,
             respawnQueue: { player1: [], player2: [] },
             unitCounts: null,
-            supplyPoints: { player1: 10, player2: 10 },
+            reach: { player1: MAX_SUPPLY_REACH, player2: MAX_SUPPLY_REACH },
+            rations: { player1: STARTING_RATIONS, player2: STARTING_RATIONS },
             fineGrid: new Map(),
             baseCampPositions: JSON.parse(JSON.stringify(DEFAULT_FLAG_HOME_POSITIONS)),
             gameOver: false,
@@ -57,6 +58,19 @@ class FortHexEngine {
         // client (A2 security requirement).
         this.settings = {
             fogOfWarEnabled: false,
+
+            // Which movement-pool preset this match runs on: 'normal', 'faster', or
+            // null for "whatever the board recommends". Server-owned and fixed for the
+            // match, exactly like fogOfWarEnabled - it decides how far every unit can
+            // move, so a client that disagreed would compute different legal moves
+            // from the same board.
+            //
+            // NULL BY DEFAULT ON PURPOSE. A local match never picks one and should
+            // behave as it always has (Normal on Compact and Standard, Faster on
+            // Expansive); an online match assigns the host's choice here before the
+            // board exists. Resolving null lazily is what lets both be true without
+            // either overwriting the other.
+            unitSpeedPreset: null,
 
             // Server-owned per the animation design: the engine waits out the
             // animation's duration before applying a mutation, so it needs to

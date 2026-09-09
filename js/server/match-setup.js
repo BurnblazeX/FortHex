@@ -62,15 +62,17 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
     engine.state.arcadeTotalTurns = 0;
 
     engine.state.unitCounts = {
-        player1: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 },
-        player2: { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 }
+        player1: { Swordsman: 0, Archer: 0, Pikeman: 0, Horseman: 0 },
+        player2: { Swordsman: 0, Archer: 0, Pikeman: 0, Horseman: 0 }
     };
 
     if (engine.state.gameMode === 'arcade') {
-        engine.state.supplyPoints = { player1: 0, player2: 0 };
+        engine.state.reach = { player1: 0, player2: 0 };
+        engine.state.rations = { player1: 0, player2: 0 };
         engine.state.flags = null;
     } else {
-        engine.state.supplyPoints = { player1: 10, player2: 10 };
+        engine.state.reach = { player1: MAX_SUPPLY_REACH, player2: MAX_SUPPLY_REACH };
+        engine.state.rations = { player1: STARTING_RATIONS, player2: STARTING_RATIONS };
     }
 
     // Load Tiles
@@ -128,7 +130,13 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
                     const newEdge = { q1: tile.q, r1: tile.r, q2: n_coord.q, r2: n_coord.r, bridge: false, bridgeHp: null, isPathway: true };
                     Object.defineProperty(newEdge, 'units', {
                         get: function() {
-                            return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey);
+                            // Board space: a hexPath's fine key is the SUM of its two
+                            // tile coordinates, and a unit standing there stores exactly
+                            // that string. No positionType test is needed any more - a
+                            // hexCenter key has both coordinates even and can never equal
+                            // a hexPath key, so the comparison alone is unambiguous.
+                            const fineKey = (tile.q + n_coord.q) + ',' + (tile.r + n_coord.r);
+                            return engine.state.units.filter(u => u.position === fineKey);
                         },
                         configurable: true,
                         enumerable: false
@@ -146,8 +154,11 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
             const typeName = unitInfo.typeName.toUpperCase();
             const type = UNIT_TYPES[typeName];
 
+            // Custom/preset unit lists still name an EDGE, because that is what a
+            // human writing a map thinks in. Converted here rather than accepted by
+            // createUnit - see the note on its signature.
             if (type && engine.state.edges.has(unitInfo.position)) {
-                const newUnit = createUnit(unitInfo.player, type, unitInfo.position);
+                const newUnit = createUnit(unitInfo.player, type, FineKeyOfEdge(unitInfo.position));
                 engine.state.units.push(newUnit);
             }
         });
@@ -156,20 +167,28 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
         PlaceUnitsOnNewGeneratedMap(limit);
     } else {
         if (engine.state.gameMode === 'arcade') {
-            engine.state.units.push(createUnit(1, 'MELEE', getEdgeKey(1, -2, 0, -2)));
-            engine.state.units.push(createUnit(1, 'ARCHER', getEdgeKey(-2, 0, -1, -1)));
-            engine.state.units.push(createUnit(2, 'MELEE', getEdgeKey(-1, 2, 0, 2)));
-            engine.state.units.push(createUnit(2, 'ARCHER', getEdgeKey(1, 1, 2, 0)));
+            engine.state.units.push(createUnit(1, 'SWORDSMAN', '1,-4'));
+            engine.state.units.push(createUnit(1, 'ARCHER', '-3,-1'));
+            engine.state.units.push(createUnit(2, 'SWORDSMAN', '-1,4'));
+            engine.state.units.push(createUnit(2, 'ARCHER', '3,1'));
         } else {
-            engine.state.units.push(createUnit(1, 'MELEE', getEdgeKey(1, -2, 0, -2)));
-            engine.state.units.push(createUnit(1, 'ARCHER', getEdgeKey(-2, 0, -1, -1)));
-            engine.state.units.push(createUnit(1, 'PIKEMAN', getEdgeKey(-1, -1, 0, -2)));
-            engine.state.units.push(createUnit(1, 'HORSEMAN', getEdgeKey(-2, 0, -2, 1)));
+            // The default opening on the Standard board, in board space - the same
+            // coordinates the debug overlay prints, so a placement read off the screen
+            // is typed in here verbatim with no conversion in between. 1,-5 is the
+            // hexPath between tiles 0,-2 and 1,-3, because a hexPath's fine coordinate
+            // is the sum of its two tiles.
+            //
+            // Swordsman and Horseman moved out one ring 2026-09-08, from the
+            // plains/forest hexPaths beside the base to the plains/water shoreline.
+            engine.state.units.push(createUnit(1, 'SWORDSMAN', '1,-5'));
+            engine.state.units.push(createUnit(1, 'ARCHER', '-3,-1'));
+            engine.state.units.push(createUnit(1, 'PIKEMAN', '-1,-3'));
+            engine.state.units.push(createUnit(1, 'HORSEMAN', '-5,1'));
 
-            engine.state.units.push(createUnit(2, 'MELEE', getEdgeKey(-1, 2, 0, 2)));
-            engine.state.units.push(createUnit(2, 'ARCHER', getEdgeKey(1, 1, 2, 0)));
-            engine.state.units.push(createUnit(2, 'PIKEMAN', getEdgeKey(0, 2, 1, 1)));
-            engine.state.units.push(createUnit(2, 'HORSEMAN', getEdgeKey(2, 0, 2, -1)));
+            engine.state.units.push(createUnit(2, 'SWORDSMAN', '-1,5'));
+            engine.state.units.push(createUnit(2, 'ARCHER', '3,1'));
+            engine.state.units.push(createUnit(2, 'PIKEMAN', '1,3'));
+            engine.state.units.push(createUnit(2, 'HORSEMAN', '5,-1'));
         }
     }
 
@@ -219,7 +238,7 @@ function InitializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
 const RESUME_ENGINE_FIELDS = [
     'gameMode', 'playerSide', 'gridRadius', 'playerColorSelections',
     'units', 'currentPlayer', 'globalTurnNumber', 'actionLog', 'matchHistory',
-    'unitIdCounter', 'flags', 'respawnQueue', 'unitCounts', 'supplyPoints',
+    'unitIdCounter', 'flags', 'respawnQueue', 'unitCounts', 'reach', 'rations',
     'baseCampPositions', 'gameOver', 'arcadeTotalTurns', 'playerActionTaken',
     'matchId',
 ];
@@ -322,15 +341,19 @@ function RelinkResumedUnits() {
             configurable: true,
             enumerable: true,
         });
+
+        // positionType/isFortified/fortifiedTileKey/tileKey/edgeKey. Stored fields
+        // before the cutover, so a resumed unit used to get them by copying; derived
+        // now, so they have to be put back.
+        AttachDerivedUnitAccessors(unit);
     });
 
     // No reference relinking needed: an edge does not hold units, it computes them.
     engine.state.edges.forEach((edge, edgeKey) => {
         Object.defineProperty(edge, 'units', {
             get: function () {
-                return engine.state.units.filter(
-                    unit => unit.positionType === 'edge' && unit.position === edgeKey
-                );
+                const fineKey = (edge.q1 + edge.q2) + ',' + (edge.r1 + edge.r2);
+                return engine.state.units.filter(unit => unit.position === fineKey);
             },
             configurable: true,
             enumerable: false,

@@ -180,8 +180,32 @@ function HandleActionEvent(event) {
             }
             break;
         }
+        case 'TURN_ADVANCED':
+            // Nothing to draw. The event exists so that a turn which changes nothing
+            // else still produces a state-sync (js/server/turn-lifecycle.js explains
+            // why); the view attached to that sync is what actually redraws the board.
+            // Named here rather than left to the default so it does not log a warning
+            // on every single turn.
+            break;
+
+        case 'SHIELD_BROKEN': {
+            // Same ring as the grant, drawn inward instead of outward, so the two read
+            // as opposites at a glance rather than as the same flourish twice.
+            const brokenTile = engine.state.tiles.get(event.unit.tileKey);
+            if (brokenTile) {
+                const center = axialToPixel(brokenTile.q, brokenTile.r);
+                gameState.visualEffects.push({
+                    type: 'shield_break',
+                    x: center.x, y: center.y,
+                    unitRadius: FORTIFIED_UNIT_DRAW_SIZE,
+                    startTime: Date.now(),
+                    duration: 500
+                });
+            }
+            break;
+        }
         case 'SHIELD_GAINED': {
-            const tile = engine.state.tiles.get(event.unit.position);
+            const tile = engine.state.tiles.get(event.unit.tileKey);
             if (tile) {
                 const center = axialToPixel(tile.q, tile.r);
                 gameState.visualEffects.push({
@@ -420,7 +444,7 @@ async function completeUnfortify(unitToUnfortify, targetEdgeKey) {
         gameState.activeAnimations.push({
             type: 'unfortify',
             unit: unitToUnfortify,
-            startTileKey: unitToUnfortify.position,
+            startTileKey: unitToUnfortify.tileKey,
             targetEdgeKey: targetEdgeKey,
             startTime: Date.now(),
             duration,

@@ -193,6 +193,7 @@ function HandleLobbyMessage(message) {
             // it announces itself with differs.
             BeginOnlineMatch(transport, message.seat, {
                 fogOfWar: !!(message.room && message.room.fogOfWar),
+                unitSpeedPreset: (message.room && message.room.unitSpeedPreset) || null,
                 isHost: !!(message.room && message.room.isHost),
                 rejoined: !!message.rejoined,
                 hotJoined: !!message.hotJoined,

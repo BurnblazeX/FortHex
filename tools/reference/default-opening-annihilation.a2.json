@@ -16,10 +16,7 @@
     "turn": 17,
     "currentPlayer": 1,
     "gameOver": true,
-    "supplyPoints": {
-      "player1": 10,
-      "player2": 10
-    },
+    "supplyPoints": {"player1":15,"player2":15},
     "units": [
       {
         "id": "u_p1_MELEE_t1_1",

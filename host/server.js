@@ -749,6 +749,7 @@ function SpawnMatch(room) {
             players,
             settings: {
                 fogOfWarEnabled: !!room.settings.fogOfWarEnabled,
+                unitSpeedPreset: room.settings.unitSpeedPreset || null,
                 // Shortened by tests; the engine's own 100s default otherwise.
                 disconnectTimeoutMs: DISCONNECT_TIMEOUT_MS_OVERRIDE,
             },

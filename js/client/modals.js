@@ -130,6 +130,10 @@ function WireLoadAndConfirmModals() {
     });
 
     document.getElementById('loadFromFileButton').addEventListener('click', () => {
+        // Same refusal as the autosave path - a file is no more loadable into a hosted
+        // match than the autosave slot is. Guarded before the picker opens rather than
+        // after, so the player is not asked to choose a file that will be rejected.
+        if (RefuseIfHostedMatch('Loading a save')) return;
         document.getElementById('fileLoaderInput').click();
     });
 

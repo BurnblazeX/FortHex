@@ -16,10 +16,7 @@
     "turn": 3,
     "currentPlayer": 2,
     "gameOver": false,
-    "supplyPoints": {
-      "player1": 4,
-      "player2": 6
-    },
+    "supplyPoints": {"player1":9,"player2":11},
     "units": [
       {
         "id": "u_p1_ARCHER_t1_2",

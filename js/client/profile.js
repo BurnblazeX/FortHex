@@ -43,7 +43,7 @@ const PROFILE_VERSION = 2;
 // list and the files it names, nothing else.
 const PROFILE_AVATARS = [
     { key: 'archer',   label: 'Archer',   src: 'assets/units/Archer.png' },
-    { key: 'swordsman', label: 'Swordsman', src: 'assets/units/Melee.png' },
+    { key: 'swordsman', label: 'Swordsman', src: 'assets/units/Swordsman.png' },
     { key: 'pikeman',  label: 'Pikeman',  src: 'assets/units/Pikeman.png' },
     { key: 'horseman', label: 'Horseman', src: 'assets/units/Horseman.png' },
 ];

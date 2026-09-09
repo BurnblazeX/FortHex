@@ -14,6 +14,15 @@ function MapSizeLabel(radius) {
     return 'Normal';
 }
 
+// Which movement pools a board of this size suggests. Mirrors
+// RecommendedUnitSpeedPreset in js/config-data.js, which the engine actually uses -
+// this copy exists because the lobby bundle is built separately and does not load the
+// game's config. If they ever disagree the lobby only mis-SUGGESTS: the value it sends
+// is what the match runs on either way.
+function RecommendedSpeed(radius) {
+    return radius >= 4 ? 'faster' : 'normal';
+}
+
 // "Blaze's Room" - built from the local profile rather than a generic placeholder, so
 // the suggested name is recognisably the player's before they have typed anything.
 function DefaultRoomName() {
@@ -56,6 +65,23 @@ export function CreateRoomScreen({ onBack }) {
     const [mapName, setMapName] = useState(maps[0].name);
     const [customMap, setCustomMap] = useState(null);
     const [mapError, setMapError] = useState(null);
+
+    // How far units move, for the whole match. 'normal' or 'faster', never null here:
+    // the lobby always states a choice out loud rather than sending "auto" and letting
+    // the two sides resolve it, because a setting nobody can read on the screen is a
+    // setting players will argue about afterwards.
+    //
+    // Seeded from whatever the chosen board recommends, and it FOLLOWS the board until
+    // the player touches it - picking Expansive should offer Faster without making them
+    // find the control, and picking a small board afterwards should take it back. Once
+    // they have chosen for themselves, it stops moving under them; that is what
+    // speedTouched is for.
+    const chosenRadius = customMap ? customMap.radius : (maps.find(m => m.name === mapName) || {}).radius;
+    const [speedTouched, setSpeedTouched] = useState(false);
+    const [unitSpeed, setUnitSpeed] = useState(RecommendedSpeed(chosenRadius));
+    useEffect(() => {
+        if (!speedTouched) setUnitSpeed(RecommendedSpeed(chosenRadius));
+    }, [chosenRadius, speedTouched]);
 
     // A saved match to resume. Mutually exclusive with a map by nature rather than by
     // rule: a save already contains its board, so a map chosen alongside one is stale
@@ -131,6 +157,7 @@ export function CreateRoomScreen({ onBack }) {
             hosting,
             settings: {
                 fogOfWarEnabled: fog,
+                unitSpeedPreset: unitSpeed,
                 mapName: (customMap || resumeSave) ? null : mapName,
                 customMap: resumeSave ? null : customMap,
                 resumeSave,
@@ -168,6 +195,35 @@ export function CreateRoomScreen({ onBack }) {
                         <input type="checkbox" checked={fog} onChange={(e) => setFog(e.target.checked)} />
                         <span>Fog of war</span>
                     </label>
+
+                    {/* Two buttons rather than a checkbox: "Faster" is not the
+                        negation of "Normal", and a tick box labelled "faster units"
+                        would not say what the other state is. Sits directly above the
+                        map because the recommendation depends on which board you pick,
+                        and a hint about Expansive maps is no use below the control that
+                        chooses one. */}
+                    <div className="fh-room__speed">
+                        <span className="fh-profile__label">Unit speed</span>
+                        <div className="fh-room__speedchoice" role="group" aria-label="Unit speed">
+                            {[['normal', 'Normal'], ['faster', 'Faster']].map(([value, label]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    className={'fh-room__speedbtn'
+                                        + (unitSpeed === value ? ' fh-room__speedbtn--on' : '')}
+                                    aria-pressed={unitSpeed === value}
+                                    onClick={() => { setSpeedTouched(true); setUnitSpeed(value); }}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="fh-lobby__note">
+                            {unitSpeed === 'faster'
+                                ? 'Horseman 9, Swordsman 7, Archer and Pikeman 5. Recommended on Expansive maps only.'
+                                : 'Horseman 6, Swordsman 5, Archer and Pikeman 4.'}
+                        </p>
+                    </div>
 
                     {/* The map. A plain select rather than the card grid the
                         singleplayer flow uses: that screen exists to show you the board

@@ -139,14 +139,14 @@ function getUnitScreenPosition(unit) {
     let unitX, unitY;
 
     if (unit.isFortified) {
-        const tile = engine.state.tiles.get(unit.position);
+        const tile = engine.state.tiles.get(unit.tileKey);
         if (tile) {
             const center = axialToPixel(tile.q, tile.r);
             unitX = center.x;
             unitY = center.y;
         }
     } else {
-        const edge = engine.state.edges.get(unit.position);
+        const edge = engine.state.edges.get(unit.edgeKey);
         if (edge) {
             const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
             unitX = mid.x;

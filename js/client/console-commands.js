@@ -12,8 +12,8 @@
 //
 //   FH.help()                       list everything
 //   FH.units()                      who is on the board
-//   FH.moves('u_p1_MELEE_t1_1')     where that unit may legally go
-//   FH.move('u_p1_MELEE_t1_1', '0,-1_1,-1')
+//   FH.moves('u_p1_SWORDSMAN_t1_1')     where that unit may legally go
+//   FH.move('u_p1_SWORDSMAN_t1_1', '0,-1_1,-1')
 //   FH.endTurn()
 //   FH.log('after-my-change')       capture a match log
 
@@ -27,7 +27,7 @@ const FH = {
             currentPlayer: engine.state.currentPlayer,
             mode: engine.state.gameMode,
             gameOver: engine.state.gameOver,
-            supply: { ...engine.state.supplyPoints },
+            supply: { ...engine.state.rations },
             fogOfWar: engine.settings.fogOfWarEnabled,
             units: engine.state.units.length,
         };
@@ -327,10 +327,10 @@ const FH = {
               FH.attackBridge(id, edgeKey) FH.fortify(id, tileKey)
               FH.unfortify(id, edgeKey)    FH.bridge(id, edgeKey)
               FH.upgrade(id, 'damage')     FH.swap(id, 'ARCHER')
-              FH.spawn(player, 'MELEE')    FH.endTurn()
+              FH.spawn(player, 'SWORDSMAN')    FH.endTurn()
 
   editor      FH.paint(tileKey, 'FOREST')  FH.eraseTile(tileKey)
-              FH.place(player, 'MELEE', edgeKey)  FH.removeUnit(id)
+              FH.place(player, 'SWORDSMAN', edgeKey)  FH.removeUnit(id)
               FH.fill(q, r, 'WATER')
 
   session     FH.sessions()                FH.disconnect(player, reason?, profileId?)
@@ -346,7 +346,7 @@ const FH = {
 
   capture     FH.log('label')
 
-  Stats: health, speed, damage, defense.  Types: MELEE, ARCHER, PIKEMAN, HORSEMAN.
+  Stats: health, speed, damage, defense.  Types: SWORDSMAN, ARCHER, PIKEMAN, HORSEMAN.
   A refusal prints the error code - that's a real result, not a bug.`);
     },
 };
@@ -355,8 +355,8 @@ const FH = {
 // it rather than making every console call spell it out.
 function FH_AttackType(unitId) {
     const u = engine.state.units.find(x => x.id === unitId);
-    if (!u) return 'Melee';
-    return u.type.attackType === 'melee' ? 'Melee' : 'Archer';
+    if (!u) return 'Swordsman';
+    return u.type.attackType === 'melee' ? 'Swordsman' : 'Archer';
 }
 
 // One place that submits, reports, and refreshes the view - so a console action

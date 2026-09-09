@@ -143,7 +143,7 @@
                 updateActionButtonState(ui.fortifyUnfortifyButton, "Unfortify", "Cancel Unfortify", isSelectingUnfortify, canPerformMajorAction && canAffordFortify, fortifyDisabledCondition);
             } else { 
                 if (!isSelectingFortify) {
-                    const edgeCoords = parseEdgeKey(selectedUnit.position);
+                    const edgeCoords = parseEdgeKey(selectedUnit.edgeKey);
                     if (edgeCoords && edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
                         const tile1Key = getTileKey(edgeCoords[0].q, edgeCoords[0].r);
                         const tile2Key = getTileKey(edgeCoords[1].q, edgeCoords[1].r);
@@ -324,7 +324,7 @@
             const maxUnits = getMaxUnitsForCurrentMap();
             
             // --- BULLETPROOF UNIT COUNTER ---
-            const counts = { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
+            const counts = { Swordsman: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
             engine.state.units.forEach(u => {
                 if (u.player === player && u.type && u.type.name) {
                     counts[u.type.name] = (counts[u.type.name] || 0) + 1;
@@ -335,7 +335,7 @@
             const recruitContainer = document.getElementById('respawnChoices');
             recruitContainer.innerHTML = '';
             
-            const recruitOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'];
+            const recruitOrder = ['SWORDSMAN', 'ARCHER', 'PIKEMAN', 'HORSEMAN'];
             
             console.log(`[Respawn] Populating Recruit Tab. Army Size: ${armySize}/${maxUnits}`);
             recruitOrder.forEach(typeKey => {
@@ -363,7 +363,7 @@
             promoteContainer.innerHTML = '';
             
             const aliveUnits = engine.state.units.filter(u => u.player === player);
-            const classOrder = ['Melee', 'Archer', 'Pikeman', 'Horseman'];
+            const classOrder = ['Swordsman', 'Archer', 'Pikeman', 'Horseman'];
             
             classOrder.forEach(className => {
                 const eligibleUnits = aliveUnits.filter(u => u.type && u.type.name === className && u.level < 3);
@@ -494,7 +494,7 @@
                 iconSvg = `<svg class="log-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`;
             } else if (message.includes('unfortified')) {
                 iconSvg = `<svg class="log-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
-            } else if (message.includes('healed') || message.includes('gained a shield')) {
+            } else if (message.includes('healed') || message.includes('gained a shield') || message.includes('shield absorbs')) {
                 iconSvg = `<svg class="log-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>`;
             } else if (message.includes('destroyed')) {
                  iconSvg = `<svg class="log-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><path d="M8 20v2h8v-2"></path><path d="m12.5 17.5-1-1-1 1"></path><path d="M16 20a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2"></path><path d="M16 20a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2"></path><path d="M15 2h-1.5a1.5 1.5 0 0 0 0 3h1.5a1.5 1.5 0 0 0 0-3Z"></path><path d="M9 2H7.5a1.5 1.5 0 0 0 0 3H9a1.5 1.5 0 0 0 0-3Z"></path></svg>`;
@@ -544,6 +544,7 @@
                 formattedMessage = formattedMessage.replace(/(\d+)\s(damage|HP)/g, '<strong class="damage-text">$1</strong> $2');
                 formattedMessage = formattedMessage.replace(/(healed\s\d+\sHP)/g, '<span class="heal-text">$1</span>');
                 formattedMessage = formattedMessage.replace(/(gained a shield)/g, '<span class="shield-text">$1</span>');
+                formattedMessage = formattedMessage.replace(/(shield absorbs the (?:hit|blow)[^!.]*)/g, '<span class="shield-text">$1</span>');
                 formattedMessage = formattedMessage.replace(/(Advantage!)/g, '<strong class="advantage-text">$1</strong>');
                 formattedMessage = formattedMessage.replace(/(Disadvantage!)/g, '<strong class="disadvantage-text">$1</strong>');
                 formattedMessage = formattedMessage.replace(/(Spear Wall|Cavalry Screen|Combined arms|Damage split)/g, '<strong class="keyword-text">$1</strong>');
@@ -556,35 +557,96 @@
             }
         }
 
+        // Whose supply the panel is about.
+        //
+        // In a hotseat match the board belongs to whoever's turn it is, so that is the
+        // answer. Online it is the SEAT, not the turn: a guest watching the host think
+        // should be looking at their own larder, not at a number they cannot spend and,
+        // after the filtering fix in js/server/session.js, are not even sent.
+        function SupplyPanelPlayer() {
+            if (typeof IsRemoteMatch === 'function' && IsRemoteMatch()) {
+                const seat = typeof RemoteSeat === 'function' ? RemoteSeat() : null;
+                if (seat) return seat;
+            }
+            return engine.state.currentPlayer;
+        }
+
         function updateSupplyPointsDisplay() {
-            const container = document.getElementById('supplyPointsContainer');
+            const container = document.getElementById('supplyPanel');
             if (!container) return;
 
-            // Rebuild the inner HTML to switch between "Supply" and "Health" labels
-            // while keeping the IDs (p1Supply, p2Supply) for the color system to target.
+            // ONE PLAYER'S NUMBERS, not both.
+            //
+            // This used to read "P1 Supply: 7 | P2 Supply: 4", which was two problems in
+            // one line. It handed every player a live readout of the opponent's
+            // logistics, which under fog is information they have not earned - the whole
+            // point of fog is that you do not know how well supplied the other side is.
+            // And the number itself answered the wrong question: it was reach ceiling
+            // minus network cost, so it moved when you fortified and meant nothing a
+            // player could act on.
+            //
+            // Two numbers now, both about the viewer:
+            //   REACH    the shared line budget, and the number the old panel was
+            //            showing all along. It falls as you lay supply line and rises
+            //            as forts are released, so it answers "how much more line can
+            //            I afford".
+            //   RATIONS  the consumable, spent one per unit healed. Answers "how many
+            //            heals do I have left", which nothing used to answer.
+            //
+            // Both current/max, because a bare number tells a player how much they have
+            // and not how much they are missing.
             if (engine.state.gameMode === 'arcade') {
-        // Calculate Total HP for Arcade Mode
+                // Arcade has no supply at all, so the panel is repurposed as a
+                // scoreboard - both sides deliberately, because there is nothing
+                // hidden to leak.
                 const p1HP = engine.state.units.filter(u => u.player === 1).reduce((sum, u) => sum + u.hp, 0);
                 const p2HP = engine.state.units.filter(u => u.player === 2).reduce((sum, u) => sum + u.hp, 0);
-        
+
                 container.innerHTML = `
                     <span>P1 Health: <span id="p1Supply">${p1HP}</span></span> | 
                     <span>P2 Health: <span id="p2Supply">${p2HP}</span></span>
                 `;
-            } else {
-                // Standard Mode uses Supply Points
-                container.innerHTML = `
-                    <span>P1 Supply: <span id="p1Supply">${engine.state.supplyPoints.player1}</span></span> | 
-                    <span>P2 Supply: <span id="p2Supply">${engine.state.supplyPoints.player2}</span></span>
-                `;
+                return;
             }
+
+            const player = SupplyPanelPlayer();
+            const reachPool = engine.state.reach || {};
+            const rationPool = engine.state.rations || {};
+            const reachLeft = Number.isFinite(reachPool[`player${player}`]) ? reachPool[`player${player}`] : 0;
+            const held = Number.isFinite(rationPool[`player${player}`]) ? rationPool[`player${player}`] : 0;
+            const starved = held <= 0;
+            const overstretched = reachLeft <= 0;
+
+            // BOTH NUMBERS WEAR THE VIEWER'S OWN TEAM COLOUR.
+            //
+            // They were briefly blue and red as CATEGORY colours, one per number. Wrong
+            // (Burn): these are two facts about ONE player, and colour in this UI has
+            // always meant "whose side is this" - the action log and the turn display
+            // both use it that way. The labels already tell the two numbers apart.
+            //
+            // A class rather than an inline style, so the colour is defined once in
+            // css/main.css beside the other player-coloured elements and follows
+            // whichever theme the player picked.
+            const side = `player${player}`;
+
+            // NO "/max" - just the current number, which is the one a player acts on.
+            // The totals are commented out rather than deleted because a beginner or
+            // tutorial mode is the likely home for them: "5/15" teaches what the ceiling
+            // is, "5" assumes you already know it.
+            //
+            //   ...>${reachLeft}/${MAX_SUPPLY_REACH}</span></span>
+            //   ...>${held}/${STARTING_RATIONS}</span></span>
+            container.innerHTML = `
+                <span>Reach: <span id="supplyReach" class="supply-value ${side}${overstretched ? ' exhausted' : ''}">${reachLeft}</span></span> | 
+                <span>Rations: <span id="supplyRations" class="supply-value ${side}${starved ? ' exhausted' : ''}">${held}</span></span>
+            `;
         }
 
-        // Thin wrapper - the actual engine.state.supplyPoints mutation lives in
-        // js/server/actions.js's SetSupplyPointsForFlagStatus. Client-side files
+        // Thin wrapper - the actual engine.state.rations mutation lives in
+        // js/server/actions.js's SetRationsForFlagStatus. Client-side files
         // must not mutate gameState directly.
         function updateSupplyPointsBasedOnFlagStatus(playerNum) {
-            SetSupplyPointsForFlagStatus(playerNum);
+            SetRationsForFlagStatus(playerNum);
             updateSupplyPointsDisplay();
         }
 
@@ -600,7 +662,7 @@
         <h3 style="font-family: 'Lexend Deca', 'Exo 2', sans-serif; font-size: 1.8em; color: #FFC020; margin-bottom: 10px;">Swap Unit</h3>
         <p style="margin-bottom: 20px;">Select new class for ${unit.type.name}</p>
         <div id="respawnChoices" style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-            <button class="respawn-button" data-unit-type="MELEE" title="Melee"></button>
+            <button class="respawn-button" data-unit-type="SWORDSMAN" title="Swordsman"></button>
             <button class="respawn-button" data-unit-type="ARCHER" title="Archer"></button>
             <button class="respawn-button" data-unit-type="PIKEMAN" title="Pikeman"></button>
             <button class="respawn-button" data-unit-type="HORSEMAN" title="Horseman"></button>
@@ -1118,8 +1180,8 @@
             if (!calibrationDiv) {
                 const dummyMaxUnit = {
                     player: 1,
-                    typeId: 'MELEE',
-                    type: { name: 'Melee' },
+                    typeId: 'SWORDSMAN',
+                    type: { name: 'Swordsman' },
                     level: 3,
                     stats: { hp: 12, maxHp: 12, speed: 4, damage: 3, defense: 1 },
                     upgrades: { health: 3, speed: 3, damage: 3, defense: 3 }
@@ -1518,7 +1580,7 @@ function createCardBackDOM() {
                  if (!foundHoverable) {
                      for (const unit of engine.state.units) {
                          if (unit.isFortified && unit.positionType === 'center' && unit.player === engine.state.currentPlayer) {
-                             const tile = engine.state.tiles.get(unit.position);
+                             const tile = engine.state.tiles.get(unit.tileKey);
                              if (tile) {
                                  const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
                                  if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5) { newHoveredUnitId = unit.id; foundHoverable = true; break; }
@@ -1535,6 +1597,19 @@ function createCardBackDOM() {
         }
 
         function handleCanvasMouseUp(event) {
+            // FIRST, unconditionally: the button is up, so there is no hold any more.
+            //
+            // This must run BEFORE the early return below, which fires on every ordinary
+            // click (nothing is dragging yet at that point). Cancelling only inside
+            // handleInteractionEnd left the timer armed after a click, so a unit clicked
+            // and left alone leapt into the cursor 1.5s later with nothing held down.
+            CancelDragHold();
+
+            // The press already selected. Tell the click that follows to stay out of it -
+            // handleCanvasClick reads and clears this flag.
+            if (gameState.pressSelectedUnit) dragOperationJustConcluded = true;
+            gameState.pressSelectedUnit = false;
+
             if (engine.state.gameOver || !gameState.isDragging) return;
             if (isLikelySyntheticFromTouch()) return;
             const { x, y } = getRelativeCoordinates(event.clientX, event.clientY);
@@ -1542,6 +1617,10 @@ function createCardBackDOM() {
         }
 
         function handleCanvasMouseLeave(event) {
+            // The pointer is no longer over the unit, so the hold is over too - the same
+            // reason moving beyond the slop distance abandons it.
+            CancelDragHold();
+            gameState.pressSelectedUnit = false;
             handleInteractionCancel();
             if (gameState.hoveredUnitId !== null) gameState.hoveredUnitId = null;
             canvas.style.cursor = 'default';
@@ -1587,14 +1666,30 @@ function handleCanvasTouchEnd(event) {
     lastTouchInteractionTime = Date.now();
     const { x, y } = getRelativeCoordinates(finalTouch.clientX, finalTouch.clientY);
 
+    // The finger is off the glass, so no hold survives it - and unlike the mouse path
+    // this one never calls handleInteractionEnd for a plain tap, so it is the only
+    // place the timer can be cleared.
+    CancelDragHold();
+
+    const pressSelected = gameState.pressSelectedUnit;
+    gameState.pressSelectedUnit = false;
+
     const wasDragging = gameState.isDragging;
-    const wasShortDrag = gameState.draggedDistance < DRAGGED_DISTANCE_THRESHOLD;
 
     if (wasDragging) {
         handleInteractionEnd(x, y, true);
-    }
-    
-    if (!wasDragging || wasShortDrag) {
+    } else if (!pressSelected) {
+        // Only a touch that never became a drag AND never landed on a unit is a TAP.
+        // A touch that landed on a unit has already selected it on the way down; running
+        // tap logic here would hand it to the toggle and put it straight back down.
+        //
+        // This used to also run for a "short drag" - a drag that finished within
+        // DRAGGED_DISTANCE_THRESHOLD of where it started - because a press always
+        // entered drag mode immediately, so every ordinary tap arrived here looking
+        // like one. It does not any more: a drag now requires a 1.5s hold, and running
+        // tap logic after one would hand the just-picked-up unit to
+        // handleUnitSelectionClick, which TOGGLES - deselecting the unit the player had
+        // deliberately held down to grab.
         handleTapLogic(x, y);
     }
     
@@ -1604,6 +1699,8 @@ function handleCanvasTouchEnd(event) {
 }
 
 function handleCanvasTouchCancel(event) {
+    CancelDragHold();
+    gameState.pressSelectedUnit = false;
     handleInteractionCancel();
     gameState.draggedDistance = 0;
     dragOperationJustConcluded = true; 

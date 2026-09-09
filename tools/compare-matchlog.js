@@ -113,10 +113,24 @@ for (const id of Object.keys(bA)) {
 for (const id of Object.keys(bB)) {
     if (!bA[id]) problems.push(`final board: ${id} appeared, wasn't there before`);
 }
+const reachA = LoggedReach(A.outcome);
+const reachB = LoggedReach(B.outcome);
 for (const p of ['player1', 'player2']) {
-    if (A.outcome.supplyPoints[p] !== B.outcome.supplyPoints[p]) {
-        problems.push(`final supply ${p}: ${A.outcome.supplyPoints[p]} -> ${B.outcome.supplyPoints[p]}`);
+    if (reachA[p] !== reachB[p]) {
+        problems.push(`final reach ${p}: ${reachA[p]} -> ${reachB[p]}`);
     }
+}
+
+// A log's recorded reach, whatever it is called in the file.
+//
+// Logs captured before the C2 supply overhaul record it as `supplyPoints`; newer ones
+// record `reach`, which is the same fact renamed. Normalised HERE rather than by
+// rewriting the logs, for the reason set out in js/testament.js: a record quietly
+// edited to match today's vocabulary is worth less as evidence than an honestly mixed
+// one. Same policy that keeps matchHistory positions in their original spelling.
+function LoggedReach(outcome) {
+    if (!outcome) return {};
+    return outcome.reach || outcome.supplyPoints || {};
 }
 
 // --- report -----------------------------------------------------------------

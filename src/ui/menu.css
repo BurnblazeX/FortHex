@@ -1097,6 +1097,49 @@
     background: rgba(255, 255, 255, 0.22);
 }
 
+/* === Unit speed in Create Room === */
+/* A segmented pair rather than a checkbox: "Faster" is not the negation of
+   "Normal", so a tick box could not name the state it turns off. */
+.fh-room__speed {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.fh-room__speedchoice {
+    display: flex;
+    gap: 0;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.fh-room__speedbtn {
+    flex: 1 1 0;
+    padding: 9px 11px;
+    border: 0;
+    background: rgba(0, 0, 0, 0.28);
+    color: var(--color-text-main);
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.fh-room__speedbtn + .fh-room__speedbtn {
+    border-left: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.fh-room__speedbtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.fh-room__speedbtn--on {
+    background: rgba(255, 255, 255, 0.22);
+    font-weight: 600;
+}
+
 /* === Map choice in Create Room === */
 .fh-room__map {
     display: flex;

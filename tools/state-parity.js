@@ -38,6 +38,8 @@ const EXPECTED = {
     isTrainingMode: 'training never runs in a hosted match',
     mapMakerMode: 'there is no hosted map editing',
     actionLog: 'rebuilt on the client from the event stream, not copied wholesale',
+    reach: 'fog - a client is sent only its OWN budget, so the opponent key is absent',
+    rations: 'fog - a client is sent only its OWN pool, so the opponent key is absent',
 };
 
 function Boot() {
@@ -95,8 +97,9 @@ vm.runInContext([
     "engine.state.playerActionTaken = { player1: true, player2: false };",
     "engine.state.arcadeTotalTurns = 7;",
     "engine.state.matchId = 'parity-test-match';",
-    "engine.state.unitCounts = { player1: { MELEE: 2 }, player2: { ARCHER: 1 } };",
-    "engine.state.supplyPoints = { player1: 4, player2: 9 };",
+    "engine.state.unitCounts = { player1: { SWORDSMAN: 2 }, player2: { ARCHER: 1 } };",
+    "engine.state.reach = { player1: 11, player2: 2 };",
+    "engine.state.rations = { player1: 4, player2: 9 };",
     "engine.state.baseCampPositions = { player1: ['1,2'], player2: ['-1,-2'] };",
     "engine.state.gameOver = false;",
 ].join('\n'), server);
@@ -150,6 +153,20 @@ questions.forEach(([label, expr]) => {
 });
 
 // --- report -----------------------------------------------------------------
+// An exemption is a place a test stops looking, so the two added for the supply pools
+// pay for themselves with assertions. "Only your own travels" has two halves, and a
+// filter that sent nothing at all would satisfy the first one on its own.
+[['reach', 11], ['rations', 4]].forEach(([field, mineValue]) => {
+    const seen = vm.runInContext('JSON.stringify(engine.state.' + field + ')', client);
+    const parsed = JSON.parse(seen || 'null') || {};
+    if (parsed.player1 !== mineValue) {
+        gaps.push(field + ': the client did not receive its OWN value (got ' + seen + ')');
+    }
+    if ('player2' in parsed) {
+        gaps.push(field + ': the OPPONENT value travelled to the client (' + seen + ')');
+    }
+});
+
 if (gaps.length || behaviour.length) {
     console.error('FAIL - the client does not match the server.');
     console.error('');
@@ -186,4 +203,5 @@ if (gaps.length || behaviour.length) {
 console.log('PASS - server/client state parity');
 console.log('  fields    : every engine.state field matches, or is listed as deliberately different');
 console.log('  explained : ' + explained.join(', '));
+
 console.log('  behaviour : moves, attack targets, fine grid and board size all agree');

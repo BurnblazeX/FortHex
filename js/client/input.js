@@ -63,7 +63,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 if (!clickedUnit) {
                     for (const unit of engine.state.units) {
                          if (unit.player === engine.state.currentPlayer && unit.isFortified) {
-                             const tile = engine.state.tiles.get(unit.position);
+                             const tile = engine.state.tiles.get(unit.tileKey);
                              if (tile) {
                                  const {x: tx, y: ty} = axialToPixel(tile.q, tile.r);
                                  if (Math.sqrt((x - tx)**2 + (y - ty)**2) < clickRadius) {
@@ -149,22 +149,80 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
             }
 
             if (unitToDrag) {
-                gameState.isDragging = true; 
-                gameState.dragStartTime = Date.now();
-                gameState.draggingUnit = unitToDrag;
-                gameState.dragUnitOriginalPosition = unitToDrag.position; 
-                gameState.dragUnitOriginalType = unitToDrag.positionType;
-                gameState.dragUnitRenderX = x; 
-                gameState.dragUnitRenderY = y;
-                if (!gameState.selectedUnit || gameState.selectedUnit.id !== unitToDrag.id) {
-                    gameState.selectedUnit = unitToDrag;
-                    gameState.currentActionState = ACTION_STATES.UNIT_SELECTED;
-                    console.log(`[Selection] Dragged Unit: ${gameState.selectedUnit.id}`);
-                    updateSelectedUnitInfoPanel();
-                }
+                // MOUSE DOWN SELECTS. Immediately, and the 1.5s hold timer starts in the
+                // same breath: release before it fires and the selection is all that
+                // happened, hold past it and PromoteHoldToDrag picks the unit up.
+                //
+                // Assigned directly rather than through handleUnitSelectionClick, which
+                // TOGGLES. Pressing is not a toggle - pressing a unit twice is not a way
+                // to deselect it, and routing through the toggle is what made an earlier
+                // attempt at this select on the way down and deselect on the way up.
+                //
+                // pressSelectedUnit is how the trailing click is told to keep its hands
+                // off: a mouse-down is always followed by a click, and that click would
+                // otherwise run the toggle over the selection this just made.
+                gameState.selectedUnit = unitToDrag;
+                gameState.currentActionState = ACTION_STATES.UNIT_SELECTED;
+                resetActionSelectionStates();
                 gameState.currentReachableMoves = getPossibleMoves(unitToDrag);
-                canvas.style.cursor = 'grabbing'; 
+                updateSelectedUnitInfoPanel();
+                gameState.pressSelectedUnit = true;
+                gameState.needsRedraw = true;
+
+                BeginDragHold(unitToDrag, x, y);
             }
+        }
+
+        // --- press and hold ---------------------------------------------------
+        //
+        // Three functions rather than an inline timer, because the hold has to be
+        // abandoned from four different places (the pointer moves away, the press ends,
+        // the interaction is cancelled, an animation locks input) and a timer that
+        // survives any one of them leaves a unit stuck to the cursor.
+
+        function BeginDragHold(unit, x, y) {
+            CancelDragHold();
+            gameState.dragPendingUnit = unit;
+            gameState.dragHoldTimer = setTimeout(() => PromoteHoldToDrag(x, y), UNIT_DRAG_HOLD_MS);
+        }
+
+        function CancelDragHold() {
+            if (gameState.dragHoldTimer) clearTimeout(gameState.dragHoldTimer);
+            gameState.dragHoldTimer = null;
+            gameState.dragPendingUnit = null;
+        }
+
+        function PromoteHoldToDrag(x, y) {
+            const unit = gameState.dragPendingUnit;
+            CancelDragHold();
+            if (!unit) return;
+
+            // The board can have moved on during the hold - the unit may have died to
+            // something arriving over the wire, or an animation may have taken the input
+            // lock. Re-checked rather than assumed, because 1.5s is a long time.
+            if (IsAnimationPlaying && IsAnimationPlaying()) return;
+            if (!engine.state.units.some(u => u.id === unit.id) || unit.hp <= 0) return;
+
+            gameState.isDragging = true;
+            gameState.dragStartTime = Date.now();
+            gameState.draggingUnit = unit;
+            gameState.dragUnitOriginalPosition = unit.position;
+            gameState.dragUnitOriginalType = unit.positionType;
+            gameState.dragUnitRenderX = x;
+            gameState.dragUnitRenderY = y;
+
+            // The picked-up unit becomes the selection, and its reachable set has to be
+            // there before the first frame of the drag draws. Set here rather than on
+            // the press for the toggle reason above; assigned directly rather than
+            // through the click path because a drag is not a toggle - picking a unit up
+            // twice is not a way to put it down.
+            gameState.selectedUnit = unit;
+            gameState.currentActionState = ACTION_STATES.UNIT_SELECTED;
+            gameState.currentReachableMoves = getPossibleMoves(unit);
+            updateSelectedUnitInfoPanel();
+
+            canvas.style.cursor = 'grabbing';
+            gameState.needsRedraw = true;
         }
 
         function handleInteractionMove(x, y) {
@@ -172,6 +230,13 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                 applyMapMakerBrush(x, y);
                 return;
             }
+             // Moving off the unit before the hold completes abandons it, so a swipe
+             // that happens to start on a unit pans the board instead of dragging it.
+             if (gameState.dragPendingUnit) {
+                const wandered = Math.sqrt((x - gameState.dragStartX) ** 2 + (y - gameState.dragStartY) ** 2);
+                if (wandered > UNIT_DRAG_HOLD_SLOP) CancelDragHold();
+             }
+
              if (gameState.isDragging && gameState.draggingUnit) {
                 gameState.dragUnitRenderX = x; 
                 gameState.dragUnitRenderY = y;
@@ -209,6 +274,8 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         }
 
         function handleInteractionEnd(x, y, isTouchEvent = false) {
+            // A press that ends is over, whether or not it ever became a drag.
+            CancelDragHold();
             if (engine.state.mapMakerMode) {
                 gameState.isDragging = false;
                 gameState.mapMakerLastPaintedHexKey = null;
@@ -256,7 +323,7 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
                  const unit = gameState.draggingUnit;
                 if (unit) {
                     if (gameState.dragUnitOriginalType === 'edge' && gameState.dragUnitOriginalPosition) {
-                         unit.position = gameState.dragUnitOriginalPosition; unit.positionType = 'edge';
+                         unit.position = gameState.dragUnitOriginalPosition;
                      }
                      if (gameState.draggedDistance >= DRAGGED_DISTANCE_THRESHOLD) ShowWarning("Invalid drop. Unit returned.");
                      gameState.selectedUnit = unit;
@@ -277,12 +344,13 @@ function handleInteractionStart(x, y, isTouchEvent = false) {
         }
 
         function handleInteractionCancel() {
+            CancelDragHold();
             dragOperationJustConcluded = true;
             clearDebugPath();
             if (gameState.isDragging && gameState.draggingUnit) {
                  const unit = gameState.draggingUnit;
                  if (gameState.dragUnitOriginalType === 'edge' && gameState.dragUnitOriginalPosition) {
-                     unit.position = gameState.dragUnitOriginalPosition; unit.positionType = 'edge';
+                     unit.position = gameState.dragUnitOriginalPosition;
                  }
                 gameState.isDragging = false; 
                 gameState.dragStartTime = null;
@@ -497,7 +565,7 @@ function handleActionTargetSelectionClick(x, y) {
             const currentAttackTargets = selectedUnit.type.attackType === 'melee' 
                 ? gameState.validMeleeAttackTargets 
                 : gameState.validArcherAttackTargets;
-            const attackType = selectedUnit.type.attackType === 'melee' ? 'Melee' : 'Archer';
+            const attackType = selectedUnit.type.attackType === 'melee' ? 'Swordsman' : 'Archer';
 
             for (const targetInfo of currentAttackTargets) {
                 if (targetInfo.isBridgeTarget && targetInfo.edgeKey) {
@@ -568,7 +636,7 @@ function handleUnitSelectionClick(x, y) {
             
             for (const unit of engine.state.units) {
                 if (unit.isFortified && unit.positionType === 'center') {
-                    const tile = engine.state.tiles.get(unit.position);
+                    const tile = engine.state.tiles.get(unit.tileKey);
                     if (tile) {
                         const {x: tileCenterX, y: tileCenterY} = axialToPixel(tile.q, tile.r);
                         if (Math.sqrt((x - tileCenterX)**2 + (y - tileCenterY)**2) < (FORTIFIED_UNIT_DRAW_SIZE * gameState.renderScale) * 1.5) {
@@ -582,7 +650,7 @@ function handleUnitSelectionClick(x, y) {
                             } else { 
                                 // --- FOG CHECK ---
                                 if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
-                                    if (!engine.visionCache.tiles.has(unit.position)) continue; // Treat as empty space
+                                    if (!engine.visionCache.tiles.has(unit.tileKey)) continue; // Treat as empty space
                                 }
                                 showInstruction(`Enemy ${unit.type.name} fortified.`); 
                                 return true; 
@@ -625,7 +693,7 @@ function handleUnitSelectionClick(x, y) {
                         } else { 
                             // --- FOG CHECK ---
                             if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
-                                if (!engine.visionCache.edges.has(unit.position)) continue; // Treat as empty space
+                                if (!engine.visionCache.edges.has(unit.edgeKey)) continue; // Treat as empty space
                             }
                             showInstruction(`Enemy ${unit.type.name} on edge.`); 
                             return true; 
@@ -665,7 +733,7 @@ function handleUnitSelectionClick(x, y) {
                 return; 
             }
             
-            const edgeCoords = parseEdgeKey(selectedUnit.position);
+            const edgeCoords = parseEdgeKey(selectedUnit.edgeKey);
             if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) { 
                 ShowWarning("Unit not on valid edge.");
                 return; 

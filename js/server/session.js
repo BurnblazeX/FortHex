@@ -238,7 +238,21 @@ function BuildResyncSnapshot(player) {
         visibleRim: [...(view.visibleRim || [])],
         currentPlayer: engine.state.currentPlayer,
         globalTurnNumber: engine.state.globalTurnNumber,
-        supplyPoints: { ...engine.state.supplyPoints },
+        // ONLY THIS PLAYER'S OWN. The old field shipped both players' pools to
+        // both clients, which was harmless while the number was a derived side effect
+        // of the board a client could mostly see anyway. Rations are a consumable now:
+        // "how many heals does the enemy have left" is exactly the kind of thing fog
+        // exists to hide, and the panel that used to display it no longer does.
+        //
+        // The other player's key is absent rather than zeroed, so a client that reads
+        // for it gets undefined and fails visibly instead of believing the enemy is
+        // starving.
+        reach: engine.state.reach
+            ? { [`player${player}`]: engine.state.reach[`player${player}`] }
+            : null,
+        rations: engine.state.rations
+            ? { [`player${player}`]: engine.state.rations[`player${player}`] }
+            : null,
         flags: engine.state.flags ? JSON.parse(JSON.stringify(engine.state.flags)) : null,
         gameOver: engine.state.gameOver,
 

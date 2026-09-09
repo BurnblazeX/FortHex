@@ -309,6 +309,10 @@ class RtcHostTransport extends RtcChannelBase {
                     matchId: m.matchId,
                     seat: this.guestSeat,
                     fogOfWar: !!this.settings.fogOfWarEnabled,
+                    // Same reasoning as fog: the guest's own engine computes legal
+                    // moves, so it has to know the pools this match runs on or it
+                    // will disagree with the host about how far a unit can go.
+                    unitSpeedPreset: this.settings.unitSpeedPreset || null,
                 });
                 this.EmitLobby({ type: 'match-started', matchId: m.matchId, seat: this.hostSeat });
                 this.worker.postMessage({ kind: 'resync' });

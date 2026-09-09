@@ -3,26 +3,33 @@
 //   node tools/board-space-smoke.js
 //   node tools/board-space-smoke.js --verbose
 //
-// Burn's model says every position a unit can occupy is a fine-grid cell, so the
-// fine grid can replace the current two-part scheme (a tile key OR a two-tile
-// edge key, told apart by positionType). Before unit.position is changed to hold
-// a fine coordinate - which moves the save schema to v11 and changes the wire
-// format - that claim has to be true of every unit on every board, not just the
-// ones a quick look happened to cover.
+// unit.position holds a fine-grid coordinate and nothing else (schema v11). This
+// file used to argue FOR that change, checking the proposed addressing against the
+// tile-key-or-edge-key scheme it was going to replace. That argument is spent - the
+// old representation is gone and there is nothing left to compare against - so what
+// this file checks now is the invariant the shipped model rests on, which is the
+// same claim from the other side: THE FINE GRID IS THE WHOLE ADDRESS SPACE.
 //
-// Three things are checked, and the third is the one that would be expensive to
-// discover later:
+// Four things, and the fourth is the one that would be expensive to discover late:
 //
-//   1. ROUND TRIP. Every unit's board-space key resolves back to exactly the
-//      position it came from. If this fails, the new addressing loses
-//      information and no migration can be written.
+//   1. EVERY UNIT IS SOMEWHERE REAL. Its position resolves to an actual fine-grid
+//      cell - never to nothing, and never to a rim cell, which is a lattice
+//      position no unit may occupy.
 //
-//   2. CELL TYPE AGREES WITH positionType. A unit that says 'center' must land
-//      on a hexCenter and one that says 'edge' must land on a hexPath.
+//   2. THE LEGACY KEYS ROUND-TRIP. unit.edgeKey and unit.tileKey convert back to
+//      exactly the position they came from. Roughly a hundred call sites still ask
+//      for a tile or edge key by name; if that conversion loses information, all of
+//      them are quietly reading the wrong cell.
 //
-//   3. FORTIFICATION IS DERIVABLE. Standing on a hexCenter must mean exactly
-//      isFortified. This is what lets the flag be deleted rather than
-//      transmitted, and a single counterexample anywhere means it cannot be.
+//   3. EXACTLY ONE OF THEM IS NON-NULL. A unit is on a hexCenter or a hexPath and
+//      never both or neither, so tileKey and edgeKey are never both answers - which
+//      is what makes tiles.get(unit.tileKey) safe to call unconditionally.
+//
+//   4. FORTIFICATION AGREES WITH THE CELL. isFortified is derived from position
+//      now, so this is no longer "do two stored facts match" but "does the derived
+//      flag match what the board says is there" - the tile's own fortifiedByPlayer
+//      and the cell's type. A disagreement means fortify and position have come
+//      apart, which is the exact bug deriving the flag was meant to make impossible.
 //
 // Units are FORTIFIED for real here, through the action path, because a board at
 // turn one has no fortified units at all and every one of these checks would
@@ -55,30 +62,51 @@ function AuditUnits(tag) {
         checked++;
         if (unit.isFortified) fortifiedSeen++; else unfortifiedSeen++;
 
-        const key = BoardSpaceKeyOfUnit(unit);
-        if (!key) { problems.push({ tag, id: unit.id, why: 'no board-space key' }); continue; }
+        const key = unit.position;
+        if (!key) { problems.push({ tag, id: unit.id, why: 'no position at all' }); continue; }
 
+        // 1. it names a real, occupiable cell
         const cell = ResolveBoardSpaceKey(key);
-        if (!cell) { problems.push({ tag, id: unit.id, why: 'key resolves to nothing', key }); continue; }
+        if (!cell) { problems.push({ tag, id: unit.id, why: 'position resolves to nothing', key }); continue; }
+        if (cell.type === 'rim') {
+            problems.push({ tag, id: unit.id, why: 'unit is standing on a rim cell', key });
+            continue;
+        }
 
-        // 1. round trip
-        if (cell.key !== unit.position) {
+        // 2 + 3. exactly one legacy key, and it converts back to where we started
+        const onCenter = cell.type === 'tile';
+        const legacy = onCenter ? unit.tileKey : unit.edgeKey;
+        const other = onCenter ? unit.edgeKey : unit.tileKey;
+
+        if (!legacy) {
+            problems.push({ tag, id: unit.id, why: 'no legacy key for a ' + cell.type + ' cell', key });
+            continue;
+        }
+        if (other !== null) {
+            problems.push({ tag, id: unit.id, why: 'both legacy keys answered', key,
+                tileKey: unit.tileKey, edgeKey: unit.edgeKey });
+        }
+        if (legacy !== cell.key) {
+            problems.push({ tag, id: unit.id, why: 'legacy key disagrees with the cell',
+                key, cellKey: cell.key, legacy });
+        }
+        const back = onCenter ? FineKeyOfTile(legacy) : FineKeyOfEdge(legacy);
+        if (back !== key) {
             problems.push({ tag, id: unit.id, why: 'round trip lost the position',
-                key, resolvedTo: cell.key, actual: unit.position });
+                key, via: legacy, cameBackAs: back });
         }
 
-        // 2. cell type agrees with the stored positionType
-        const expected = unit.positionType === 'center' ? 'tile' : 'edge';
-        if (cell.type !== expected) {
-            problems.push({ tag, id: unit.id, why: 'cell type disagrees with positionType',
-                positionType: unit.positionType, cellType: cell.type });
+        // 4. the derived flag against what the board says is there
+        if (unit.isFortified !== onCenter) {
+            problems.push({ tag, id: unit.id, why: 'isFortified disagrees with the cell type',
+                isFortified: unit.isFortified, cellType: cell.type });
         }
-
-        // 3. fortification derivable from position alone
-        if (IsUnitFortifiedByPosition(unit) !== !!unit.isFortified) {
-            problems.push({ tag, id: unit.id, why: 'fortification not derivable',
-                derived: IsUnitFortifiedByPosition(unit), stored: !!unit.isFortified,
-                positionType: unit.positionType });
+        if (onCenter) {
+            const tile = engine.state.tiles.get(legacy);
+            if (!tile || tile.fortifiedByPlayer !== unit.player) {
+                problems.push({ tag, id: unit.id, why: 'on a tile centre the board does not call fortified',
+                    tileKey: legacy, fortifiedByPlayer: tile ? tile.fortifiedByPlayer : 'no tile' });
+            }
         }
     }
     return { problems, checked, fortifiedSeen, unfortifiedSeen };
@@ -178,7 +206,7 @@ function Check(label, condition, detail) {
 
         const opening = vm.runInContext('JSON.stringify(AuditUnits("opening"))', ctx);
         const openingResult = JSON.parse(opening);
-        Check(label + ' (opening): every unit round-trips through board space',
+        Check(label + ' (opening): every unit sits on a real cell and round-trips',
             openingResult.problems.length === 0,
             openingResult.problems.length ? JSON.stringify(openingResult.problems[0]) : null);
         Check(label + ' (opening): the board actually has units', openingResult.checked > 0);
@@ -188,7 +216,7 @@ function Check(label, condition, detail) {
         const fortifiedIds = await ctx.__fortified;
 
         const after = JSON.parse(vm.runInContext('JSON.stringify(AuditUnits("fortified"))', ctx));
-        Check(label + ' (fortified): every unit still round-trips',
+        Check(label + ' (fortified): every unit still sits on a real cell and round-trips',
             after.problems.length === 0,
             after.problems.length ? JSON.stringify(after.problems[0]) : null);
 
@@ -222,5 +250,5 @@ function Check(label, condition, detail) {
     }
     console.log('board-space-smoke: ok - ' + totalUnits + ' unit positions across '
         + BOARDS.length + ' boards, ' + totalFortified
-        + ' on hexCenters, all round-trip and all derive fortification from position');
+        + ' on hexCenters, every one on a real cell with exactly one legacy key that round-trips');
 })();

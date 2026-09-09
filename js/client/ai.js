@@ -215,8 +215,8 @@ function getBaseCenter(baseData) {
 
 // --- AI: Influence Map ("Heatmap") ---
 function getUnitTileKeys(u) {
-    if (u.isFortified) return [u.position];
-    const edgeCoords = parseEdgeKey(u.position);
+    if (u.isFortified) return [u.tileKey];
+    const edgeCoords = parseEdgeKey(u.edgeKey);
     if (!edgeCoords || edgeCoords.length !== 2 || isNaN(edgeCoords[0].q)) return [];
     return [getTileKey(edgeCoords[0].q, edgeCoords[0].r), getTileKey(edgeCoords[1].q, edgeCoords[1].r)];
 }
@@ -293,14 +293,14 @@ async function handleAIReinforcements() {
             await delay(800);
 
         } else if (armySize < maxUnits) {
-            const counts = { Melee: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
+            const counts = { Swordsman: 0, Archer: 0, Pikeman: 0, Horseman: 0 };
             engine.state.units.forEach(u => {
                 if (u.player === player && u.type && u.type.name) {
                     counts[u.type.name] = (counts[u.type.name] || 0) + 1;
                 }
             });
 
-            const preferredOrder = ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
+            const preferredOrder = ['SWORDSMAN', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].sort((a, b) => {
                 const weightA = (aiBrain.weights[`recruit_${a.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
                 const weightB = (aiBrain.weights[`recruit_${b.toLowerCase()}`] || 100) * (1 + (Math.random() * 0.1 - 0.05));
                 return weightB - weightA; 
@@ -385,7 +385,7 @@ const ACTION_FEATURE_KEYS = [
     'destInfluence', 'threatPenalty', 'nearbyAllyCount', 'minDistToEnemy',
     'predictedDamage', 'targetHpRatio', 'targetIsFlagCarrier', 'isBridgeAttack',
     'isMoveAction', 'isAttackAction', 'isFortifyAction', 'isUnfortifyAction',
-    'isMelee', 'isArcher', 'isPikeman', 'isHorseman'
+    'isSwordsman', 'isArcher', 'isPikeman', 'isHorseman'
 ];
 
 function featuresToVector(features) {
@@ -424,7 +424,7 @@ const isAction = (type) => {
         isFortifyAction: isAction('FORTIFY'),
         isUnfortifyAction: isAction('UNFORTIFY'),
         
-        isMelee: isClass('Melee'),
+        isSwordsman: isClass('Swordsman'),
         isArcher: isClass('Archer'),
         isPikeman: isClass('Pikeman'),
         isHorseman: isClass('Horseman')
@@ -599,7 +599,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
             if (!tile) return false;
             if (enemyBaseTiles.includes(tileKey)) return true;
             if (tile.fortifiedByPlayer === enemyPlayer) {
-                const fortUnit = engine.state.units.find(u => u.isFortified && u.position === tileKey && u.player === enemyPlayer);
+                const fortUnit = engine.state.units.find(u => u.tileKey === tileKey && u.player === enemyPlayer);
                 if (fortUnit && !isZoCSuppressed(fortUnit)) return true;
             }
             return false;
@@ -680,7 +680,7 @@ function getUnitAIAction(unit, strategy, allEnemies, allAllies) {
         }
 
         if (unit.stats.defense > 0 && !unit.isCarryingFlag) {
-             const edgeCoords = parseEdgeKey(unit.position);
+             const edgeCoords = parseEdgeKey(unit.edgeKey);
              if (edgeCoords.length === 2 && !isNaN(edgeCoords[0].q)) {
                 
                 const myFlagTileKey = getFlagTileKey(unit.player);
@@ -769,7 +769,7 @@ async function executeAIAction(action) {
             await animateAndMove(action.unit, action.moveData);
             break;
         case 'ATTACK_ONLY':
-            completeAttack(action.unit, action.targetInfo, action.unit.type.attackType === 'melee' ? 'Melee' : 'Archer');
+            completeAttack(action.unit, action.targetInfo, action.unit.type.attackType === 'melee' ? 'Swordsman' : 'Archer');
             await delay(800);
             break;
         case 'FORTIFY_ONLY':
@@ -787,7 +787,7 @@ async function executeAIAction(action) {
         case 'MOVE_AND_ATTACK':
             await animateAndMove(action.unit, action.moveData);
             await delay(400);
-            completeAttack(action.unit, action.targetInfo, action.unit.type.attackType === 'melee' ? 'Melee' : 'Archer');
+            completeAttack(action.unit, action.targetInfo, action.unit.type.attackType === 'melee' ? 'Swordsman' : 'Archer');
             await delay(800);
             break;
     }
@@ -875,7 +875,7 @@ function evolveBrain(brain, aiVictory, victoryReason, aiPlayerNum, matchHistory)
         brain.weights.promote_tendency = clampProb(brain.weights.promote_tendency - 0.05);
     }
 
-    let classUtility = { MELEE: 0, ARCHER: 0, PIKEMAN: 0, HORSEMAN: 0 };
+    let classUtility = { SWORDSMAN: 0, ARCHER: 0, PIKEMAN: 0, HORSEMAN: 0 };
     let totalActions = 0;
     let totalUpgrades = 0;
 
@@ -899,7 +899,7 @@ function evolveBrain(brain, aiVictory, victoryReason, aiPlayerNum, matchHistory)
         }
     });
 
-    ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].forEach(unitClass => {
+    ['SWORDSMAN', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].forEach(unitClass => {
         const weightKey = `recruit_${unitClass.toLowerCase()}`;
         const utility = classUtility[unitClass] || 0;
 
@@ -925,7 +925,7 @@ function evolveBrain(brain, aiVictory, victoryReason, aiPlayerNum, matchHistory)
         const humanPlayerNum = aiPlayerNum === 1 ? 2 : 1;
         const GOSPEL_RATE = aiVictory ? 0.15 : 0.25; 
 
-        let humanClassUsage = { MELEE: 0, ARCHER: 0, PIKEMAN: 0, HORSEMAN: 0 };
+        let humanClassUsage = { SWORDSMAN: 0, ARCHER: 0, PIKEMAN: 0, HORSEMAN: 0 };
         let humanUpgrades = 0;
         let humanBridgeBuilds = 0;
         let humanActionCount = 0;
@@ -945,7 +945,7 @@ function evolveBrain(brain, aiVictory, victoryReason, aiPlayerNum, matchHistory)
         });
 
         if (humanActionCount > 0) {
-            ['MELEE', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].forEach(unitClass => {
+            ['SWORDSMAN', 'ARCHER', 'PIKEMAN', 'HORSEMAN'].forEach(unitClass => {
                 const usagePercentage = humanClassUsage[unitClass] / humanActionCount;
                 if (usagePercentage > 0.20) {
                     const weightKey = `recruit_${unitClass.toLowerCase()}`;

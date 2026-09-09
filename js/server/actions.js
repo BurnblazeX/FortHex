@@ -25,7 +25,7 @@
 // updateSupplyPointsBasedOnFlagStatus (ui.js) and updateAllHealingStatus
 // (main.js) used to mutate game state directly from client-side files. Client
 // files must not do that - their state-mutating logic now lives here as
-// SetSupplyPointsForFlagStatus/RecalculateHealingEligibility, and
+// SetRationsForFlagStatus/RecalculateHealingEligibility, and
 // ui.js/main.js's versions became thin wrappers (call the helper here, then do
 // the actual UI refresh) so their existing external callers keep working.
 //
@@ -104,7 +104,7 @@ async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
     engine.state.playerActionTaken[`player${engine.state.currentPlayer}`] = true;
 
     // Immediate (synchronous prefix) - matches original timing.
-    const startTileKey = unit.position;
+    const startTileKey = unit.tileKey;
     const oldFortifiedTile = engine.state.tiles.get(startTileKey);
     if (oldFortifiedTile) {
         oldFortifiedTile.fortifiedByPlayer = null;
@@ -118,7 +118,6 @@ async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
 
     unit.fortifyCooldown = unit.turnsFortified * 5;
 
-    unit.isFortified = false;
     if (unit.typeId === 'ARCHER') {
         unit.stats.damage -= 2;
     }
@@ -126,9 +125,9 @@ async function ApplyUnfortify(unit, targetEdgeKey, duration = 600) {
     unit.turnsFortified = 0;
     unit.mountainAttritionTurns = 0;
     unit.supplyLine = null;
-    unit.fortifiedTileKey = null;
-    unit.positionType = 'edge';
-    unit.position = targetEdgeKey;
+    // ONE write where there were four. isFortified, fortifiedTileKey and
+    // positionType all read off this, so moving to a hexPath IS unfortifying.
+    unit.position = FineKeyOfEdge(targetEdgeKey);
     unit.currentMove -= FORTIFY_UNFORTIFY_COST;
     unit.hasPerformedMajorAction = true;
 
@@ -165,14 +164,13 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
     const fortifyingPlayer = unit.player;
     const targetTileObject = engine.state.tiles.get(targetTileKey);
 
-    unit.isFortified = true;
-    unit.fortifiedTileKey = targetTileKey;
     unit.mountainAttritionTurns = 0;
     if (unit.typeId === 'ARCHER') {
         unit.stats.damage += 2;
     }
-    unit.positionType = 'center';
-    unit.position = targetTileKey;
+    // And the mirror of unfortify: standing on the tile centre IS being
+    // fortified there.
+    unit.position = FineKeyOfTile(targetTileKey);
     unit.currentMove -= FORTIFY_UNFORTIFY_COST;
     unit.hasPerformedMajorAction = true;
     targetTileObject.fortifiedByPlayer = fortifyingPlayer;
@@ -219,7 +217,7 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
                     }
                 });
 
-                SetSupplyPointsForFlagStatus(enemyPlayer);
+                SetRationsForFlagStatus(enemyPlayer);
 
                 flagCapturedForPlayer = enemyPlayer;
                 engine.Emit({ type: 'FLAG_CAPTURED', player: enemyPlayer, carrierId: unit.id, carrierUnit: unit });
@@ -245,15 +243,15 @@ async function ApplyFortify(unit, targetTileKey, duration = 450) {
         if (adjacentEdge) {
             adjacentEdge.units.forEach(enemyUnit => {
                 if (enemyUnit.player !== fortifyingPlayer && enemyUnit.positionType === 'edge') {
-                    enemyUnit.hp -= FORTIFICATION_DAMAGE;
+                    const fortZocDealt = ApplyDamageToUnit(enemyUnit, FORTIFICATION_DAMAGE, 'ZoC');
 
                     zocHits.push({
                         unitId: enemyUnit.id,
-                        damage: FORTIFICATION_DAMAGE,
+                        damage: fortZocDealt,
                         isFatal: enemyUnit.hp <= 0
                     });
 
-                    engine.Emit({ type: 'LOG', text: `P${enemyUnit.player} ${enemyUnit.type.name} takes ZoC. HP: ${enemyUnit.hp}`, player: fortifyingPlayer });
+                    if (fortZocDealt > 0) engine.Emit({ type: 'LOG', text: `P${enemyUnit.player} ${enemyUnit.type.name} takes ZoC. HP: ${enemyUnit.hp}`, player: fortifyingPlayer });
                     if (enemyUnit.hp <= 0 && !unitsToDestroy.find(u => u.id === enemyUnit.id)) unitsToDestroy.push(enemyUnit);
                 }
             });
@@ -325,7 +323,7 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
     let spearWalled = false;
     if (attackingUnit.type.canMoveAfterAttack) {
         attackingUnit.currentMove -= ATTACK_COST;
-        const spearWallOnAttacker = isEdgeAdjacentToSpearWall(attackingUnit, attackingUnit.position);
+        const spearWallOnAttacker = isEdgeAdjacentToSpearWall(attackingUnit, attackingUnit.edgeKey);
         const spearWallOnTarget = targetUnitInfo.edgeKey ? isEdgeAdjacentToSpearWall(attackingUnit, targetUnitInfo.edgeKey) : false;
         if (spearWallOnAttacker || spearWallOnTarget) {
             hitAndRunMessage = "Spear Wall prevents further movement!";
@@ -390,8 +388,9 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                 [...bridgeEdge.units].forEach(unitOnCollapse => {
                     if (isBeach) {
                         const fallDamage = 5;
-                        unitOnCollapse.hp -= fallDamage;
-                        logParts.push(`P${unitOnCollapse.player} ${unitOnCollapse.type.name} fell as the bridge collapsed and takes ${fallDamage} damage! HP: ${unitOnCollapse.hp}`);
+                        const fallDealt = ApplyDamageToUnit(unitOnCollapse, fallDamage, 'the fall');
+                        if (fallDealt > 0) logParts.push(`P${unitOnCollapse.player} ${unitOnCollapse.type.name} fell as the bridge collapsed and takes ${fallDamage} damage! HP: ${unitOnCollapse.hp}`);
+                        else logParts.push(`P${unitOnCollapse.player} ${unitOnCollapse.type.name} fell as the bridge collapsed, shielded from the drop.`);
                         if (unitOnCollapse.hp <= 0) {
                             const deathResult = DestroyUnitIfExists(unitOnCollapse, "bridge_collapse");
                         }
@@ -435,14 +434,14 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
             // never applied this modifier, so the AI under-predicts its own damage
             // against a peak archer by 1. Untouched here rather than changing AI
             // behaviour inside a balance fix.
-            const fortTile = engine.state.tiles.get(targetUnit.position);
+            const fortTile = engine.state.tiles.get(targetUnit.tileKey);
             if (targetUnit.isFortified && fortTile && fortTile.type.name === 'Mountain') {
                 targetDefense -= 1;
             }
 
             if (targetUnit.isFortified) {
                 let hasCombinedArmsPartner = false;
-                const edge = engine.state.edges.get(attackingUnit.position);
+                const edge = engine.state.edges.get(attackingUnit.edgeKey);
                 if (edge) {
                     if (attackingUnit.type.attackType === 'ranged') hasCombinedArmsPartner = edge.units.some(u => u.id !== attackingUnit.id && u.player === attackingUnit.player && u.type.attackType === 'melee');
                     else if (attackingUnit.type.attackType === 'melee') hasCombinedArmsPartner = edge.units.some(u => u.id !== attackingUnit.id && u.player === attackingUnit.player && u.type.attackType === 'ranged');
@@ -486,9 +485,11 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                     allEnemyUnitsOnEdge.forEach(unitToHit => {
                         const liveSplitTarget = engine.state.units.find(u => u.id === unitToHit.id);
                         if (liveSplitTarget) {
-                            liveSplitTarget.hp -= splitDamage;
-                            engine.Emit({ type: 'UNIT_DAMAGED', unit: liveSplitTarget, attackStatus });
-                            logParts.push(`P${liveSplitTarget.player} ${liveSplitTarget.type.name} takes ${splitDamage} damage. HP: ${liveSplitTarget.hp}`);
+                            const splitDealt = ApplyDamageToUnit(liveSplitTarget, splitDamage, 'split');
+                            if (splitDealt > 0) {
+                                engine.Emit({ type: 'UNIT_DAMAGED', unit: liveSplitTarget, attackStatus });
+                                logParts.push(`P${liveSplitTarget.player} ${liveSplitTarget.type.name} takes ${splitDealt} damage. HP: ${liveSplitTarget.hp}`);
+                            }
                             if (attackingUnit.player !== liveSplitTarget.player) liveSplitTarget.lastAttackedByHostileOnTurn = engine.state.globalTurnNumber;
                             if (liveSplitTarget.hp <= 0) {
                                 const deathResult = DestroyUnitIfExists(liveSplitTarget, "destroyed");
@@ -497,9 +498,10 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                     });
                 } else {
                     ledgerPayload.targetType = 'UNIT';
-                    ledgerPayload.damageDealt = actualDamage;
-                    targetUnit.hp -= actualDamage;
-                    logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
+                    const hitDealtA = ApplyDamageToUnit(targetUnit, actualDamage, 'the blow');
+                    ledgerPayload.damageDealt = hitDealtA;
+                    if (hitDealtA > 0) logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${hitDealtA}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
+                    else logParts.push(`P${targetUnit.player} ${targetUnit.type.name}'s shield absorbs the blow.`);
                     if (targetUnit.hp <= 0) {
                         const deathResult = DestroyUnitIfExists(targetUnit, "destroyed");
                         ledgerPayload.isKill = true;
@@ -507,9 +509,10 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                 }
             } else {
                 ledgerPayload.targetType = 'UNIT';
-                ledgerPayload.damageDealt = actualDamage;
-                targetUnit.hp -= actualDamage;
-                logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${actualDamage}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
+                const hitDealtB = ApplyDamageToUnit(targetUnit, actualDamage, 'the blow');
+                ledgerPayload.damageDealt = hitDealtB;
+                if (hitDealtB > 0) logParts.push(`P${attackingUnit.player} ${attackingUnit.type.name} hits P${targetUnit.player} ${targetUnit.type.name} for ${hitDealtB}.<br>HP: ${targetUnit.hp}/${targetUnit.maxHp}`);
+                else logParts.push(`P${targetUnit.player} ${targetUnit.type.name}'s shield absorbs the blow.`);
                 if (targetUnit.hp <= 0) {
                     const deathResult = DestroyUnitIfExists(targetUnit, "destroyed");
                     ledgerPayload.isKill = true;
@@ -522,9 +525,11 @@ async function ApplyAttack(attackingUnit, targetUnitInfo, attackType, duration =
                 if (retaliatingArcher) {
                     let retDmg = retaliatingArcher.stats ? retaliatingArcher.stats.damage : retaliatingArcher.type.damage;
                     const retaliationDamage = Math.ceil(retDmg / 2);
-                    attackingUnit.hp -= retaliationDamage;
-                    engine.Emit({ type: 'UNIT_DAMAGED', unit: attackingUnit, attackStatus: 'normal' });
-                    logParts.push(`Cavalry Screen! P${retaliatingArcher.player} ${retaliatingArcher.type.name} retaliates for ${retaliationDamage} damage.<br>Attacker HP: ${attackingUnit.hp}/${attackingUnit.maxHp}`);
+                    const retDealt = ApplyDamageToUnit(attackingUnit, retaliationDamage, 'the retaliation');
+                    if (retDealt > 0) {
+                        engine.Emit({ type: 'UNIT_DAMAGED', unit: attackingUnit, attackStatus: 'normal' });
+                        logParts.push(`Cavalry Screen! P${retaliatingArcher.player} ${retaliatingArcher.type.name} retaliates for ${retDealt} damage.<br>Attacker HP: ${attackingUnit.hp}/${attackingUnit.maxHp}`);
+                    }
                     ledgerModifiers.push(`RETALIATION_DMG_${retaliationDamage}`);
                     if (attackingUnit.hp <= 0) {
                         const deathResult = DestroyUnitIfExists(attackingUnit, "retaliation");
@@ -567,15 +572,32 @@ function GetUnitSnapshot(unit) {
         id: unit.id,
         hp: unit.hp, // Getter accesses unit.stats.hp
         mp: Number(unit.currentMove.toFixed(2)), // Clean float precision
+        // Board space, so one field says where AND whether fortified. The archive
+        // keeps isFortified alongside it because a log is read by humans and by
+        // Testament's rebuild, and neither should have to know the parity rule.
         pos: unit.position,
         isFortified: unit.isFortified
     };
 }
 
-function SetSupplyPointsForFlagStatus(playerNum) {
+// A stolen flag ZEROES the pool; recovering it refills it.
+//
+// The zeroing is the rule Burn set and the code already did. The REFILL is the older
+// half and it is worth naming rather than leaving implicit: getting your flag back
+// hands you a full larder regardless of what you had spent before it was taken. That
+// is generous under a consumable model, and it is left exactly as it was, because
+// changing it is a balance decision and this change is a mechanical one.
+function SetRationsForFlagStatus(playerNum) {
     const playerFlag = engine.state.flags[`p${playerNum}_flag`];
-    const playerSupplyKey = `player${playerNum}`;
-    engine.state.supplyPoints[playerSupplyKey] = (playerFlag && playerFlag.status === 'carried') ? 0 : 10;
+    const stolen = !!(playerFlag && playerFlag.status === 'carried');
+
+    // BOTH pools. Zeroing reach is what the original did and it follows from the
+    // severing: with every line cut there is no network reserving any of the budget,
+    // and a player who cannot supply anything has no reach to spend. Recovering the
+    // flag hands both back full, which is the same generosity the old code had - see
+    // the note below.
+    SetReach(playerNum, stolen ? 0 : MAX_SUPPLY_REACH);
+    SetRations(playerNum, stolen ? 0 : STARTING_RATIONS);
 }
 
 function RecalculateHealingEligibility() {
@@ -611,7 +633,7 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
             unitToDestroy.isCarryingFlag = false;
             engine.Emit({ type: 'LOG', text: `The P${flag.player} flag has been returned to base!`, player: activePlayer });
 
-            SetSupplyPointsForFlagStatus(flag.player);
+            SetRationsForFlagStatus(flag.player);
             recalculatePlayerSupplyNetwork(flag.player);
 
             // A6. A flag going home was a LOG line and nothing else, so a rebuilt
@@ -668,10 +690,12 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
 
     // --- Nuclear Tile Clearing ---
     if (unitToDestroy.positionType === 'edge') {
-        const edgeOfUnit = engine.state.edges.get(unitToDestroy.position);
+        const edgeOfUnit = engine.state.edges.get(unitToDestroy.edgeKey);
         if (edgeOfUnit) edgeOfUnit.units = edgeOfUnit.units.filter(u => u.id !== unitToDestroy.id);
     } else if (unitToDestroy.positionType === 'center' || wasFortified) {
-        const tileKey = unitToDestroy.positionType === 'center' ? unitToDestroy.position : unitToDestroy.fortifiedTileKey;
+        // One expression where there were two branches: both used to name the same
+        // tile by different routes, and tileKey IS that tile.
+        const tileKey = unitToDestroy.tileKey;
         const fortifiedTile = engine.state.tiles.get(tileKey);
         if (fortifiedTile) {
             fortifiedTile.fortifiedByPlayer = null;
@@ -681,13 +705,19 @@ function DestroyUnit(unitToDestroy, reason = "destroyed") {
     engine.state.units = engine.state.units.filter(u => u.id !== unitToDestroy.id);
 
     if (wasFortified) {
+        // A dead fortified unit hands back the REACH its line was reserving, because
+        // that budget was paying for geometry which no longer exists. Normally the
+        // recalculation below works that out for itself; the else branch is for the
+        // one case where it cannot run - the flag is stolen, so supply is severed
+        // wholesale and there is no network to recompute.
+        //
+        // Note this is reach only. Rations are not refunded by a death: they pay for
+        // healing, and a unit dying does not un-eat what it ate.
         const playerFlag = engine.state.flags[`p${destroyedPlayer}_flag`];
         if (playerFlag && playerFlag.status !== 'carried') {
             recalculatePlayerSupplyNetwork(destroyedPlayer);
-        } else {
-            if (unitToDestroy.supplyLine && unitToDestroy.supplyLine.cost > 0) {
-                engine.state.supplyPoints[`player${destroyedPlayer}`] += Math.round(unitToDestroy.supplyLine.cost);
-            }
+        } else if (unitToDestroy.supplyLine && unitToDestroy.supplyLine.cost > 0) {
+            SetReach(destroyedPlayer, ReachFor(destroyedPlayer) + Math.round(unitToDestroy.supplyLine.cost));
         }
     }
 
@@ -742,6 +772,35 @@ function AttemptToResupplyForts(playerNum) {
     return {};
 }
 
+// ZoC IS PAID FOR EVERY HEXPATH CROSSED, not only the one a unit stops on.
+//
+// A move is resolved as a single jump - position is assigned once, at the destination -
+// so this used to fire exactly once, against the destination edge. A unit could
+// therefore run the length of an enemy's fortified frontage and pay for one step of it,
+// which made a fortification something to route THROUGH rather than around: the cheapest
+// way past a defended line was to sprint along it and stop somewhere quiet.
+//
+// So the whole traversed path is charged, one hit per hexPath, in the order they were
+// entered. Three things that follow from that and are deliberate:
+//
+//   THE ORIGIN IS NOT CHARGED. path[0] is where the unit was already standing; it paid
+//   for that hexPath when it entered it, and start-of-turn ZoC bills it for staying.
+//
+//   AN AMBUSHED MOVE IS CHARGED ONLY AS FAR AS IT GOT. The caller passes the truncated
+//   path, so a unit halted on step two does not take damage for the four steps it never
+//   walked.
+//
+//   THE SHIELD ABSORBS ONE HIT, NOT THE CROSSING. Three fortified hexPaths against a
+//   shielded unit is one absorbed and two landed - which is the whole point of the
+//   sponge being per-instance rather than per-turn.
+function ApplyFortificationDamageAlongPath(unitMoving, traversedEdges) {
+    for (const edgeKey of traversedEdges) {
+        const result = ApplyFortificationDamageOnMove(unitMoving, edgeKey);
+        if (result.destroyed) return { destroyed: true };
+    }
+    return { destroyed: false };
+}
+
 function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
     if (!unitMoving || unitMoving.isFortified || unitMoving.positionType !== 'edge') return { destroyed: false };
     const tileCoords = parseEdgeKey(newEdgeKey);
@@ -751,7 +810,7 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
 
     const checkAndApply = (tile, tileKey) => {
         if (tile && tile.fortifiedByPlayer === enemyPlayer && !unitDestroyed) {
-            const fortUnit = engine.state.units.find(u => u.isFortified && u.position === tileKey && u.player === enemyPlayer);
+            const fortUnit = engine.state.units.find(u => u.tileKey === tileKey && u.player === enemyPlayer);
             // The mover is already standing on the destination edge by now
             // (unit.position was assigned above), so exclude it - it should not
             // suppress the zone it is walking into.
@@ -759,7 +818,7 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
                 return false;
             }
 
-            unitMoving.hp -= FORTIFICATION_DAMAGE;
+            const moveZocDealt = ApplyDamageToUnit(unitMoving, FORTIFICATION_DAMAGE, 'ZoC');
 
             if (typeof engine !== 'undefined') {
                 engine.actionManager.RecordHistory({
@@ -769,13 +828,13 @@ function ApplyFortificationDamageOnMove(unitMoving, newEdgeKey) {
                     actorId: unitMoving.id,
                     payload: {
                         location: newEdgeKey,
-                        damage: FORTIFICATION_DAMAGE,
+                        damage: moveZocDealt,
                         isFatal: unitMoving.hp <= 0
                     }
                 });
             }
 
-            engine.Emit({ type: 'LOG', text: `P${unitMoving.player} ${unitMoving.type.name} takes ZoC. HP: ${unitMoving.hp}`, player: engine.state.currentPlayer, duration: 3500 });
+            if (moveZocDealt > 0) engine.Emit({ type: 'LOG', text: `P${unitMoving.player} ${unitMoving.type.name} takes ZoC. HP: ${unitMoving.hp}`, player: engine.state.currentPlayer, duration: 3500 });
             if (unitMoving.hp <= 0) {
                 const deathResult = DestroyUnit(unitMoving, "zoc_move");
                 unitDestroyed = true;
@@ -922,7 +981,9 @@ function ApplyClassSwap(unit, newType) {
 
     unit.stats.maxHp = template.hp;
     unit.stats.hp = newHp;
-    unit.stats.speed = template.speed;
+    // Through SpeedForPreset, not template.speed: a morph in a Normal-pool match
+    // must hand out that match's pool, or swapping class would be a free +3 movement.
+    unit.stats.speed = SpeedForPreset(newTypeKey, ActiveUnitSpeedPreset());
     unit.stats.damage = template.damage;
     if (unit.isFortified && newTypeKey === 'ARCHER') {
         unit.stats.damage += 2;
@@ -955,12 +1016,17 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
     const masterUnit = engine.state.units.find(u => u.id === unitToMove.id);
     if (!masterUnit) return { unitFound: false };
     const unit = masterUnit;
-    const originPos = unit.position;
+    const originPos = unit.edgeKey;
 
     // --- AMBUSH RESOLUTION ---
     let actualTarget = targetEdgeKey;
     let actualCost = costToMove;
     let ambushed = false;
+
+    // The hexPaths the unit actually entered, origin excluded, in order. Built here
+    // rather than derived afterwards because an ambush truncates the route and only
+    // this loop knows where it stopped.
+    let traversedEdges = [];
 
     if (path && path.length > 1) {
         let accumulatedCost = 0;
@@ -984,6 +1050,7 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
 
             accumulatedCost += stepCost;
             lastValidEdge = stepEdgeKey;
+            traversedEdges.push(stepEdgeKey);
         }
 
         if (ambushed) {
@@ -997,8 +1064,15 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
         }
     }
 
-    unit.position = actualTarget;
-    unit.positionType = 'edge';
+    // Nothing walked. Two ways to get here: a caller that supplied no path at all, and
+    // an ambush on the very first step, which leaves the unit exactly where it started.
+    // Both fall back to charging actualTarget once, which is what this code did for
+    // every move before the walk existed - preserved rather than re-judged, because
+    // whether standing still next to a fortification should cost anything is a rule
+    // question and start-of-turn ZoC already has an answer to it.
+    if (!traversedEdges.length) traversedEdges = [actualTarget];
+
+    unit.position = FineKeyOfEdge(actualTarget);
     unit.currentMove = Math.max(0, unit.currentMove - actualCost);
 
     // FLAG CAPTURE LOGIC
@@ -1036,7 +1110,7 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
                 }
             });
 
-            SetSupplyPointsForFlagStatus(enemyPlayer);
+            SetRationsForFlagStatus(enemyPlayer);
 
             const healingResult = RecalculateHealingEligibility();
 
@@ -1055,7 +1129,7 @@ function ApplyMoveAction(unitToMove, targetEdgeKey, costToMove, path = null) {
         }
     }
 
-    const fortDamageResult = ApplyFortificationDamageOnMove(unit, actualTarget);
+    const fortDamageResult = ApplyFortificationDamageAlongPath(unit, traversedEdges);
     const unitDestroyedByZoC = fortDamageResult.destroyed;
 
     if (typeof engine !== 'undefined') {

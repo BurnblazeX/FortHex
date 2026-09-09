@@ -111,9 +111,9 @@
             <div id="leftPanel" class="ui-panel">
                 <div>
                     <div id="globalTurnCounterDisplay" class="text-center" style="font-size: 1.5em; color: #FFC020;">Turn: 1</div>
-                    <div id="supplyPointsContainer" class="text-center" style="font-size: 0.9em; margin-top: 8px;">
-                        <span>P1 Supply: <span id="p1Supply">10</span></span> | 
-                        <span>P2 Supply: <span id="p2Supply">10</span></span>
+                    <div id="supplyPanel" class="text-center" style="font-size: 0.9em; margin-top: 8px;">
+                        <span>Reach: <span id="supplyReach" class="supply-value player1">15</span></span> | 
+                        <span>Rations: <span id="supplyRations" class="supply-value player1">10</span></span>
                     </div>
                     <hr style="width: 100%; border-color: #4a6075; margin-top: 10px;">
                 </div>
@@ -531,7 +531,7 @@
                 <li style="margin-bottom: 15px;">
                     <strong style="color: #F0C020; font-size: 1.1em;">Improvements</strong>
                     <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px;">
-                        <li><strong>Traversable Beaches:</strong> Edges between Land and Water are now playable terrain with a movement cost of 3, and can be bridged by Melee units.</li>
+                        <li><strong>Traversable Beaches:</strong> Edges between Land and Water are now playable terrain with a movement cost of 3, and can be bridged by Swordsman units.</li>
                         <li><strong>Visual & UI Overhaul:</strong> Added pulsating bridge highlights, modernized the Settings checkboxes with a new green square style, and applied consistent colors and 'X' close buttons to all modals.</li>
                         <li><strong>Quality of Life:</strong> Implemented a "Return to Game" button for the editor, improved click detection for bridge building, and added extensive validation rules for map creation.</li>
                     </ul>
@@ -642,7 +642,7 @@
                         <li><strong>Plains:</strong> Open ground. Costs 1 MP to traverse. Does not block Line of Sight.</li>
                         <li><strong>Forest:</strong> Dense terrain. Costs 2 MP to traverse. Blocks Line of Sight for ranged attacks.</li>
                         <li><strong>Mountain:</strong> Tall rock formations. Costs 3 MP to traverse. Blocks Line of Sight for ranged attacks. Cannot be fortified.</li>
-                        <li><strong>Water & Beaches:</strong> Beaches (edges between land and water) cost 3 MP to traverse. Pure water edges are impassable until a Melee unit converts them into a Bridge. Cannot be fortified.</li>
+                        <li><strong>Water & Beaches:</strong> Beaches (edges between land and water) cost 3 MP to traverse. Pure water edges are impassable until a Swordsman unit converts them into a Bridge. Cannot be fortified.</li>
                     </ul>
                 </div>
             </div>
@@ -653,10 +653,10 @@
                     <img src="assets/guide/guide-units.png" alt="Unit Classes" style="width: 100%; max-width: 250px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; margin: 10px auto 15px auto; display: block; border: 2px solid #304860; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
                     <p>You control four distinct unit classes. Class advantages grant +1 Damage against specific targets, while disadvantages deal -1 Damage.</p>
                     <ul>
-                        <li><strong>Melee (Sword):</strong> HP: 12 | Move: 4 | Attack: 3. Standard frontline infantry. Can consume 1 MP to build a Bridge over a water road. Strong vs Archers. Weak vs Horsemen.</li>
-                        <li style="margin-top:10px;"><strong>Archer (Arrow):</strong> HP: 10 | Move: 3 | Attack: 2. Ranged unit. Attacks from a distance without taking counter-attack damage. Gains +2 Attack when fortified. Strong vs Pikemen. Weak vs Melee.</li>
+                        <li><strong>Swordsman (Sword):</strong> HP: 12 | Move: 4 | Attack: 3. Standard frontline infantry. Can consume 1 MP to build a Bridge over a water road. Strong vs Archers. Weak vs Horsemen.</li>
+                        <li style="margin-top:10px;"><strong>Archer (Arrow):</strong> HP: 10 | Move: 3 | Attack: 2. Ranged unit. Attacks from a distance without taking counter-attack damage. Gains +2 Attack when fortified. Strong vs Pikemen. Weak vs Swordsman.</li>
                         <li style="margin-top:10px;"><strong>Pikeman (Pike):</strong> HP: 13 | Move: 3 | Attack: 3. Heavily armored defender. Base defense is higher than other classes. Strong vs Horsemen. Weak vs Archers.</li>
-                        <li style="margin-top:10px;"><strong>Horseman (Horse):</strong> HP: 11 | Move: 5 | Attack: 3. Mobile scout. Can attack and use any remaining MP to retreat in the same turn. Cannot fortify. Strong vs Melee. Weak vs Pikemen.</li>
+                        <li style="margin-top:10px;"><strong>Horseman (Horse):</strong> HP: 11 | Move: 5 | Attack: 3. Mobile scout. Can attack and use any remaining MP to retreat in the same turn. Cannot fortify. Strong vs Swordsman. Weak vs Pikemen.</li>
                     </ul>
                 </div>
             </div>
@@ -669,8 +669,8 @@
                     <p><strong>Fortifying:</strong> Consumes 1 MP. Moves a unit off the road and into the center of an adjacent <strong>Plains or Forest</strong> tile. Fortified units take reduced damage and exert a Zone of Control (ZoC) that deals 1 damage to any enemy that walks past or starts their turn nearby.</p>
                     <p><strong>Unit Synergies:</strong> Position your units to utilize combat rules:</p>
                     <ul>
-                        <li><strong>Combined Arms:</strong> If a Melee and Archer occupy the same road, their attacks ignore the defense bonuses of fortified targets.</li>
-                        <li><strong>Cavalry Screen:</strong> If an enemy Melee attacks your Horseman, a friendly Archer sharing the road will automatically fire a half-damage support shot at the attacker.</li>
+                        <li><strong>Combined Arms:</strong> If a Swordsman and Archer occupy the same road, their attacks ignore the defense bonuses of fortified targets.</li>
+                        <li><strong>Cavalry Screen:</strong> If an enemy Swordsman attacks your Horseman, a friendly Archer sharing the road will automatically fire a half-damage support shot at the attacker.</li>
                         <li><strong>Spear Wall:</strong> Enemy Horsemen attacking an edge adjacent to your fortified Pikeman immediately lose their remaining MP and cannot retreat.</li>
                         <li><strong>Split Damage:</strong> If an Archer fires at a road occupied by two enemies, the total damage is split evenly between both targets.</li>
                     </ul>
@@ -681,7 +681,9 @@
                 <div class="tutorial-section-header">5. Advanced Mechanics <span class="tutorial-arrow">►</span></div>
                 <div class="tutorial-section-content">
                     <img src="assets/guide/guide-advanced.png" alt="Logistics and Veterancy" style="width: 100%; max-width: 250px; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; margin: 10px auto 15px auto; display: block; border: 2px solid #304860; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-                    <p><strong>Supply Lines:</strong> You have 10 Supply Points. Fortifying a unit draws a glowing line back to your Base Camp if there is a valid path, reserving points based on distance. Unbroken supply lines allow fortified units to heal +1 HP at the start of your turn (up to +1 Shield over their Max HP) if they have not been attacked that turn. Enemy units standing on the dotted line block this healing.</p>
+                    <p><strong>Supply - Reach:</strong> Fortifying a unit draws a glowing line back to your Base Camp if a valid path exists. You have 15 points of <em>Reach</em>, measured in the same movement cost the board is measured in, and every line reserves part of it for as long as it stands - so a long line leaves less for the rest, and releasing a fort gives its share back. Lines that share roads share the cost. Enemy units standing on the dotted line intercept it.</p>
+                    <p><strong>Supply - Rations:</strong> Healing costs 1 <em>Ration</em> per unit per turn, from a pool of 10. An unbroken line lets a fortified unit heal +1 HP at the start of your turn if it was not attacked that turn. An intercepted line still spends the ration - the supplies are stolen and nobody heals. The pool refills by +1 on any turn you spend nothing at all, so resting and healing are exclusive; at zero, healing stops and every supply line is cut. Losing your flag empties the pool.</p>
+                    <p><strong>Shield:</strong> A fortified unit that has gone a full turn without being attacked gains a Shield, shown as a cyan health ring. A Shield absorbs the next instance of damage <em>completely</em>, however large, and is then spent. It is granted either when the unit is supplied and at full health, or when it is unsupplied at any health - so a cut-off unit gets a buffer in place of the healing it cannot have. An Archer fortified on a mountain peak gets neither.</p>
                     <p><strong>Capturing the Flag:</strong> The moment a unit picks up the enemy flag, all enemy supply lines are severed. The enemy army cannot heal until they destroy your flag carrier and return the flag to their base.</p>
                     <p><strong>Bridge Destruction:</strong> Attacking and destroying a built bridge immediately drowns or heavily damages any units standing on it, and severs any supply lines routed across it.</p>
                     <p><strong>Reinforcements & Veterancy:</strong> Destroyed units enter the Reinforcements queue (bottom left) for 10 turns. When the timer hits 0, a prompt appears. You can either <strong>Deploy</strong> a new unit at your base, or click the <strong>Promote</strong> tab to permanently upgrade a surviving unit on the board. Units can reach up to Level 3, gaining Health, Speed, Damage, or Defense. Heavily upgrading one stat will apply a permanent penalty to its paired stat (Health ↔ Speed, Damage ↔ Defense).</p>

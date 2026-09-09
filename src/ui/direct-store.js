@@ -47,6 +47,7 @@ export async function BeginDirectMatch(socketTransport, message) {
                 matchId: message.room ? message.room.id : null,
                 settings: {
                     fogOfWarEnabled: !!(message.room && message.room.fogOfWar),
+                    unitSpeedPreset: (message.room && message.room.unitSpeedPreset) || null,
                 },
             });
 
@@ -86,6 +87,7 @@ export async function BeginDirectMatch(socketTransport, message) {
 function HandOver(transport, seat, message, isHost) {
     BeginOnlineMatch(transport, seat, {
         fogOfWar: !!(message.room && message.room.fogOfWar),
+        unitSpeedPreset: (message.room && message.room.unitSpeedPreset) || null,
         isHost,
     });
 }

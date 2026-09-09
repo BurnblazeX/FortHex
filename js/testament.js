@@ -28,29 +28,42 @@
 
 // Bumped whenever a new migration step is appended. 8 = B30, the Track A reshape;
 // 9 = A5, the optional local player profile a save carries when the device that
-// wrote it has one.
+// wrote it has one; 10 = A6's match id; 11 = Track C's board-space cutover.
 //
-// EXPECTED NEXT BUMP: Track C (fine grid migration), now a v9->v10 step since A5
-// took v8->v9. Burn's flag, recorded here because this line is where whoever
-// does it will start.
+// v11, DONE, and this block used to be the plan for it. Keeping what it predicted
+// against what happened, because the two differ in one place that matters:
 //
-// It is NOT the fineGrid index that forces it - that stays derived, rebuilt by
-// buildFineGridIndex() at load, which is why the lean schema drops it. What
-// changes is how a POSITION is spelled, and positions are saved in four places:
+//   unit.position / unit.positionType   AS PREDICTED. position holds "fq,fr" and
+//                                       positionType is gone - along with
+//                                       isFortified and fortifiedTileKey, which
+//                                       turned out to be derivable from the same
+//                                       coordinate. MigrateToBoardSpace converts.
 //
-//   unit.position / unit.positionType   a unit can sit on a vertex, so both the
-//                                       value and the 'edge'|'center' enum change
-//   unit.supplyLine.path                an array of edge keys
-//   baseCampPositions / flags.homePosition
-//   matchHistory payloads               MOVE.from/to, FORTIFY.tile, ATTACK.targetEdge
+//   unit.supplyLine.path                UNCHANGED, deliberately. It is a list of
+//                                       EDGES, not of unit positions -
+//                                       LogSiegeStatus looks each one up in
+//                                       engine.state.edges - and an edge is still
+//                                       spelled the way an edge has always been.
 //
-// The last one is the awkward one and is worth deciding deliberately rather than
-// discovering: a v8 save's ledger records positions in the old spelling. Either
-// the v8->v9 step rewrites historical entries (which brushes against the
-// no-backporting rule, though arguably it is re-spelling rather than re-judging),
-// or the ledger keeps mixed representations and every reader handles both.
-// A6's archive and D3's Gospel corpus both read that ledger - see the A4 handoff.
-const CURRENT_SCHEMA_VERSION = 10;
+//   baseCampPositions / flags.home      UNCHANGED, same reason: they name board
+//                                       features, not places a unit stands.
+//
+//   matchHistory payloads               THE AWKWARD ONE, and it was decided the
+//                                       second way: the ledger keeps mixed
+//                                       representations and readers handle both.
+//
+// That last decision, spelled out. A migrated save's ledger records positions in
+// the old spelling and new entries record board space, and NOTHING REWRITES THE OLD
+// ONES. Rewriting them would be re-spelling rather than re-judging, so the
+// no-backporting rule would arguably permit it - but the ledger is the evidence of
+// what a build actually did, and a record that gets quietly edited to match today's
+// vocabulary is worth less as evidence than one that is honestly mixed. The one
+// reader that compares a logged position against a live one, tools/replay-matchlog.js,
+// normalises at read time instead; see ToBoardSpace there.
+// 12 = the MELEE -> SWORDSMAN rename plus the Shield rework's stored `hasShield`.
+// Both are pure reshapes of facts the old files already carried; see
+// MigrateSwordsmanShieldAndRations for why the unit IDS are deliberately not touched.
+const CURRENT_SCHEMA_VERSION = 12;
 
 // The verified mapping from beta number to schema version. Built by diffing the ten
 // real fixture files (B20-B29), NOT from the guide's provisional table - which was
@@ -194,6 +207,8 @@ const MIGRATIONS = [
     { from: 7, to: 8, Migrate: MigrateToEngineState },
     { from: 8, to: 9, Migrate: MigrateAddProfile },
     { from: 9, to: 10, Migrate: MigrateAddMatchId },
+    { from: 10, to: 11, Migrate: MigrateToBoardSpace },
+    { from: 11, to: 12, Migrate: MigrateSwordsmanShieldAndRations },
 ];
 
 // The runner. Detect, then step forward one schema version at a time, auditing
@@ -231,7 +246,11 @@ function MigrateSave(rawData, options = {}) {
     report.toVersion = version;
     data.schemaVersion = version;
     if (options.modernise) {
-        const modernised = ModerniseUnits(data.units);
+        // The preset the file was played under, or the one its board recommends when
+        // it predates the setting. Never today's default: a v10 save modernised into a
+        // preset it never ran on would have every pool silently rewritten.
+        const modernised = ModerniseUnits(data.units,
+            data.unitSpeedPreset || RecommendedUnitSpeedPreset(data.gridRadius || data.radius));
         data.units = modernised.units;
         modernised.changes.forEach(change => report.corrections.push(change));
         report.modernised = true;
@@ -368,7 +387,7 @@ function ConvertUnitToStatsModel(unit, report) {
 
     // typeName is what a map file's skeletal unit records instead of a type object.
     const typeId = String(
-        u.typeId || u.typeName || oldType.typeName || oldType.name || 'MELEE'
+        u.typeId || u.typeName || oldType.typeName || oldType.name || 'SWORDSMAN'
     ).toUpperCase();
     u.typeId = typeId;
     delete u.typeName;
@@ -456,6 +475,191 @@ function MigrateAddMatchId(data) {
     return data;
 }
 
+// v10 -> v11. unit.position stops being "a tile key OR an edge key, ask
+// positionType which" and becomes a fine-grid coordinate, "fq,fr", that addresses
+// both. positionType, isFortified and fortifiedTileKey stop being stored at all -
+// they are derived from the position on the live unit now.
+//
+// The conversion is pure arithmetic and needs no board:
+//
+//   a tile "q,r"          -> "2q,2r"        (a hexCenter, so: fortified)
+//   an edge "q1,r1_q2,r2" -> "q1+q2,r1+r2"  (a hexPath, so: not fortified)
+//
+// WHICH ONE IS DECIDED BY THE KEY'S OWN SHAPE, not by the stored positionType.
+// An edge key contains an underscore and a tile key does not, so the shape is
+// unambiguous, whereas positionType is exactly the field this migration exists to
+// stop trusting - a save written by a build with the fortify/position desync (they
+// were four separate assignments before the cutover) can have it wrong, and the
+// underscore cannot be.
+//
+// A unit whose position is missing or unparseable is left ALONE rather than
+// guessed at. Losing a unit's position is not recoverable by arithmetic, and a
+// wrong position is worse than a null one: the load path treats null as "not on
+// the board" and says so, where a fabricated coordinate would quietly place the
+// unit somewhere it never was.
+// v11 -> v12. Three unrelated reshapes in one step, because they landed in the same
+// build and a schema version is a point in time, not a topic.
+//
+// MELEE -> SWORDSMAN. The rename shipped with no migration on the reasoning that no
+// v11 save existed yet, which is true and beside the point: every save that exists
+// is OLDER than v11, and each one carries `typeId: "MELEE"`. UNIT_TYPES has no such
+// key any more, so `unit.type` came back undefined and rehydrateGameState produced
+// eight ghost units - caught by tools/testament-fixtures.js on all four fixtures
+// that reach a units array.
+//
+// Three places carry the old spelling and all three move:
+//   * unit.typeId          "MELEE" - the one that actually breaks things.
+//   * unitCounts keys      "Melee" - DISPLAY names, not type ids (match-setup.js),
+//                          so the recruit UI reads a key that no longer matches.
+//   * respawnQueue entries a whole embedded type object (actions.js DestroyUnit),
+//                          so both its id and its name need saying.
+//
+// Unit IDS are deliberately left alone. `unit_1_melee_1788353395423_...` is an
+// opaque identity, referenced by matchHistory actorId/targetId and by the flag's
+// carrier - rewriting it means rewriting every reference or breaking them, and it
+// buys nothing, because nothing resolves a type from an id.
+//
+// SHIELD. Under v11 and earlier, shield WAS the single point of overheal: a unit at
+// `hp === maxHp + 1` was carrying one. It is a stored boolean now, so the fact is
+// carried across into the new spelling and the HP clamped back to maxHp. This is a
+// reshape, not a backport - the unit genuinely had a shield when the file was
+// written, and dropping it would silently take something off the board. It is only
+// ever a GAIN of the flag, never a grant: a unit at or below maxHp gets nothing.
+function MigrateSwordsmanShieldAndRations(data, report) {
+    if (!data) return data;
+
+    let renamed = 0, shielded = 0;
+    const next = { ...data };
+
+    if (Array.isArray(data.units)) {
+        next.units = data.units.map(unit => {
+            const u = { ...unit };
+            if (u.typeId === 'MELEE') { u.typeId = 'SWORDSMAN'; renamed++; }
+
+            const stats = u.stats;
+            if (stats && Number.isFinite(stats.hp) && Number.isFinite(stats.maxHp)
+                && stats.hp > stats.maxHp) {
+                u.stats = { ...stats, hp: stats.maxHp };
+                u.hasShield = true;
+                shielded++;
+            }
+            return u;
+        });
+    }
+
+    if (data.unitCounts) {
+        const counts = {};
+        for (const side of Object.keys(data.unitCounts)) {
+            const row = data.unitCounts[side];
+            if (!row || typeof row !== 'object') { counts[side] = row; continue; }
+            const moved = { ...row };
+            if ('Melee' in moved) {
+                moved.Swordsman = moved.Melee;
+                delete moved.Melee;
+                renamed++;
+            }
+            counts[side] = moved;
+        }
+        next.unitCounts = counts;
+    }
+
+    if (data.respawnQueue) {
+        const queues = {};
+        for (const side of Object.keys(data.respawnQueue)) {
+            const queue = data.respawnQueue[side];
+            if (!Array.isArray(queue)) { queues[side] = queue; continue; }
+            queues[side] = queue.map(entry => {
+                const type = entry && entry.unitType;
+                if (!type || typeof type !== 'object') return entry;
+                if (type.id !== 'MELEE' && type.name !== 'Melee') return entry;
+                renamed++;
+                return { ...entry, unitType: { ...type, id: 'SWORDSMAN', name: 'Swordsman' } };
+            });
+        }
+        next.respawnQueue = queues;
+    }
+
+    // SUPPLY POINTS SPLIT IN TWO: reach and rations.
+    //
+    // The old `supplyPoints` was the line budget, so it becomes `reach` and KEEPS ITS
+    // VALUE - same fact, new name, which is exactly what a reshape is. It is derived
+    // from the board anyway and the first recalculation after load will overwrite it;
+    // carrying it means the panel is right before that happens rather than briefly
+    // claiming a full budget the player does not have.
+    //
+    // Rations have no predecessor - nothing in an old save records a consumable that
+    // did not exist - so they start full. The one exception is a save written while the
+    // flag was stolen, which should load back mid-theft rather than be handed a refill.
+    if ('supplyPoints' in data || data.rations === undefined) {
+        const old = data.supplyPoints || {};
+        const flags = data.flags || {};
+        const reach = {};
+        const rations = {};
+        for (const side of ['player1', 'player2']) {
+            const flag = flags['p' + side.slice(-1) + '_flag'];
+            const stolen = !!(flag && flag.status === 'carried');
+            reach[side] = Number.isFinite(old[side]) ? old[side] : (stolen ? 0 : MAX_SUPPLY_REACH);
+            rations[side] = stolen ? 0 : STARTING_RATIONS;
+        }
+        next.reach = reach;
+        next.rations = rations;
+        delete next.supplyPoints;
+        if (report && Object.keys(old).length) {
+            report.corrections.push('supply points split into reach ('
+                + reach.player1 + '/' + reach.player2 + ') and a full ration pool');
+        }
+    }
+
+    if (report && renamed) {
+        report.corrections.push(renamed + ' Melee reference(s) renamed to Swordsman');
+    }
+    if (report && shielded) {
+        report.corrections.push(shielded + ' overhealed unit(s) converted to a stored shield');
+    }
+    return next;
+}
+
+function MigrateToBoardSpace(data, report) {
+    if (!data || !Array.isArray(data.units)) return data;
+
+    let converted = 0, skipped = 0;
+    const units = data.units.map(unit => {
+        const next = { ...unit };
+        delete next.positionType;
+        delete next.isFortified;
+        delete next.fortifiedTileKey;
+
+        const pos = unit.position;
+        if (typeof pos !== 'string' || !pos) {
+            skipped++;
+            if (report) Warn(report, 'unit ' + unit.id + ' had no position; left unconverted');
+            return next;
+        }
+
+        const nums = pos.split('_').map(part => part.split(',').map(Number));
+        const flat = [].concat.apply([], nums);
+        if (flat.some(n => !Number.isFinite(n)) || (nums.length !== 1 && nums.length !== 2)) {
+            skipped++;
+            if (report) Warn(report, 'unit ' + unit.id + ' had an unparseable position ' + pos + '; left unconverted');
+            return next;
+        }
+
+        if (nums.length === 1) {
+            next.position = (2 * nums[0][0]) + ',' + (2 * nums[0][1]);   // tile centre
+        } else {
+            next.position = (nums[0][0] + nums[1][0]) + ',' + (nums[0][1] + nums[1][1]);
+        }
+        converted++;
+        return next;
+    });
+
+    if (report && converted) {
+        report.corrections.push(converted + ' unit position(s) converted to board space'
+            + (skipped ? ', ' + skipped + ' left alone' : ''));
+    }
+    return { ...data, units };
+}
+
 // --- the lean current schema ------------------------------------------------
 //
 // Measured against the real B29 fixture rather than reasoned about abstractly.
@@ -482,7 +686,7 @@ function MigrateAddMatchId(data) {
 const SAVE_ENGINE_FIELDS = [
     'gameMode', 'playerSide', 'gridRadius', 'playerColorSelections',
     'currentPlayer', 'globalTurnNumber', 'matchHistory',
-    'unitIdCounter', 'flags', 'respawnQueue', 'unitCounts', 'supplyPoints',
+    'unitIdCounter', 'flags', 'respawnQueue', 'unitCounts', 'reach', 'rations',
     'baseCampPositions', 'gameOver', 'arcadeTotalTurns', 'isTrainingMode',
     'mapMakerMode', 'playerActionTaken',
 
@@ -495,16 +699,25 @@ const SAVE_ENGINE_FIELDS = [
     // A6. Which match this is, so a save resumed later keeps updating the same
     // archive record instead of forking a second partial one.
     'matchId',
+
+    // Which movement pools this match runs on. Lives on engine.SETTINGS rather than
+    // engine.state, so BuildSaveObject supplies it explicitly the way it does profile.
+    // A file without it predates the setting and resolves to its board's
+    // recommendation, which is exactly what such a file was played under.
+    'unitSpeedPreset',
 ];
 
 // Everything worth keeping about a unit. type/hp/maxHp are absent on purpose:
 // all three are getters restored at load, so saving them stores the same facts
 // twice and lets the copies drift apart.
+// positionType, isFortified and fortifiedTileKey are absent for the same reason
+// type/hp/maxHp are: all three are derived from position at load, so storing them
+// records the same fact twice and gives the copies room to disagree.
 const SAVE_UNIT_FIELDS = [
-    'id', 'player', 'typeId', 'stats', 'currentMove', 'positionType', 'position',
-    'isFortified', 'fortifiedTileKey', 'hasPerformedMajorAction', 'isCarryingFlag',
+    'id', 'player', 'typeId', 'stats', 'currentMove', 'position',
+    'hasPerformedMajorAction', 'isCarryingFlag',
     'turnsFortifiedAtBase', 'turnsFortified', 'fortifyCooldown', 'canHeal',
-    'supplyLine', 'lastAttackedByHostileOnTurn', 'spearWalled', 'ambushed',
+    'supplyLine', 'lastAttackedByHostileOnTurn', 'spearWalled', 'ambushed', 'hasShield',
     'level', 'upgrades', 'mountainAttritionTurns',
 ];
 
@@ -517,8 +730,6 @@ const SAVE_UNIT_FIELDS = [
 // stats/currentMove/position have no default and are always written; canHeal
 // defaults TRUE, so `false` is the meaningful case and is the one that gets stored.
 const UNIT_FIELD_DEFAULTS = {
-    isFortified: false,
-    fortifiedTileKey: null,
     hasPerformedMajorAction: false,
     isCarryingFlag: false,
     turnsFortifiedAtBase: 0,
@@ -529,6 +740,10 @@ const UNIT_FIELD_DEFAULTS = {
     lastAttackedByHostileOnTurn: 0,
     spearWalled: false,
     ambushed: false,
+    // Shield is a stored fact, not a derived one - it records that a unit sat
+    // untouched long enough to earn a sponge, which nothing on the board can
+    // reconstruct. Defaults false, so only shielded units pay for the field.
+    hasShield: false,
     level: 0,
     mountainAttritionTurns: 0,
 };
@@ -732,6 +947,17 @@ function BuildSaveObject(engineInstance, extras) {
     SAVE_ENGINE_FIELDS.forEach(field => {
         if (state[field] !== undefined) flat[field] = state[field];
     });
+
+    // Not on state, so the loop above cannot have found it. Written as the RESOLVED
+    // preset, never as null: "auto" is a lobby convenience, and a save that recorded
+    // it would re-resolve on load and could answer differently if the recommendation
+    // ever changes. A save records what was played, not what was requested.
+    if (engineInstance.settings) {
+        flat.unitSpeedPreset = (engineInstance.settings.unitSpeedPreset
+            && UNIT_SPEED_PRESETS[engineInstance.settings.unitSpeedPreset])
+            ? engineInstance.settings.unitSpeedPreset
+            : RecommendedUnitSpeedPreset(state.gridRadius);
+    }
 
     // The narrow set of client-owned values that are genuinely match state rather
     // than presentation. Passed in rather than reached for, because the engine has
@@ -1114,7 +1340,7 @@ function DescribeEventList(events, nameOf, opts, verb) {
 }
 
 // Unit ids encode their own owner and type in every era's format
-// ("u_p1_MELEE_t1_1", "unit_1_melee_1788353096603_bb04"), which matters because a
+// ("u_p1_SWORDSMAN_t1_1", "unit_1_melee_1788353096603_bb04"), which matters because a
 // unit referenced by an old ledger entry may be dead and absent from `units`.
 function UnitOwner(unitId, units) {
     const found = (units || []).find(u => u.id === unitId);
@@ -1182,7 +1408,7 @@ function ParseTypeFromUnitId(unitId) {
 // because a rebuild that disagrees with the live rule is worse than no rebuild.
 const FORTIFIED_ARCHER_DAMAGE_BONUS = 2;
 
-function RecomputeUnitStats(unit) {
+function RecomputeUnitStats(unit, speedPreset) {
     const template = UNIT_TYPES[unit.typeId];
     if (!template) return null;
 
@@ -1190,7 +1416,10 @@ function RecomputeUnitStats(unit) {
 
     const stats = {
         maxHp: template.hp,
-        speed: template.speed,
+        // The match's pool, not the template's. Rebuilding from template.speed would
+        // restore the Faster pool to every unit in a Normal match and report it as a
+        // correction, which is a cheat in the shape of an anti-cheat.
+        speed: SpeedForPreset(unit.typeId, speedPreset),
         damage: template.damage,
         defense: template.defense,
         range: unit.stats && unit.stats.range !== undefined ? unit.stats.range : 1,
@@ -1236,7 +1465,7 @@ function RecomputeUnitStats(unit) {
 
 // Returns { units, changes } - changes is a plain list of what would differ, so the same
 // function powers both the preview the player is shown and the migration itself.
-function ModerniseUnits(units) {
+function ModerniseUnits(units, speedPreset) {
     const changes = [];
 
     const modernised = (units || []).map(unit => {
@@ -1265,7 +1494,7 @@ function ModerniseUnits(units) {
             next.level = recorded;
         }
 
-        const stats = RecomputeUnitStats({ ...next, upgrades });
+        const stats = RecomputeUnitStats({ ...next, upgrades }, speedPreset);
         if (stats) {
             const differs = ['maxHp', 'speed', 'damage', 'defense']
                 .filter(key => stats[key] !== (unit.stats ? unit.stats[key] : undefined));
@@ -1287,7 +1516,9 @@ function ModerniseUnits(units) {
 // The dry run. Called before asking, so the question is only put when there is an
 // answer worth having.
 function PreviewModernisation(migratedData) {
-    return ModerniseUnits(migratedData.units).changes;
+    return ModerniseUnits(migratedData.units,
+        migratedData.unitSpeedPreset
+            || RecommendedUnitSpeedPreset(migratedData.gridRadius || migratedData.radius)).changes;
 }
 
 function AuditForKnownBugs(data, report) {
@@ -1360,7 +1591,7 @@ function DescribeContent(data) {
     const hasHistory = Array.isArray(data.matchHistory) && data.matchHistory.length > 0;
 
     // What a map file (createMapDataObject, js/client/save.js) actually omits:
-    // flags, supplyPoints, currentPlayer - everything describing a match in progress
+    // flags, rations, currentPlayer - everything describing a match in progress
     // rather than a board.
     //
     // Deliberately NOT keyed on edges: the lean schema regenerates those from the

@@ -47,8 +47,8 @@ function FilterStateForPlayer(state, recipientPlayer, fogOfWarEnabled) {
         if (unit.player === recipientPlayer) return { ...unit, hidden: false };
 
         const seen = unit.isFortified
-            ? vision.tiles.has(unit.position)
-            : vision.edges.has(unit.position);
+            ? vision.tiles.has(unit.tileKey)
+            : vision.edges.has(unit.edgeKey);
 
         if (seen) return { ...unit, hidden: false };
 
@@ -128,13 +128,14 @@ function FilterEventsForPlayer(events, recipientPlayer, fogOfWarEnabled) {
     const visible = (unit) => {
         if (!unit || !unit.position) return true;
         if (unit.player === recipientPlayer) return true;
-        return unit.isFortified ? vision.tiles.has(unit.position) : vision.edges.has(unit.position);
+        return unit.isFortified ? vision.tiles.has(unit.tileKey) : vision.edges.has(unit.edgeKey);
     };
 
     return events.filter(event => {
         switch (event.type) {
             case 'UNIT_DAMAGED':
             case 'SHIELD_GAINED':
+            case 'SHIELD_BROKEN':
                 return visible(event.unit);
             case 'FLAG_CAPTURED':
                 return event.player === recipientPlayer || visible(event.carrierUnit);

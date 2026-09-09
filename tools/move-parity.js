@@ -73,7 +73,15 @@ const VARIANTS = [
     { id: 'mp1', apply: { currentMove: 1 } },
     { id: 'mp3', apply: { currentMove: 3 } },
     { id: 'mp-high', apply: { currentMove: 99 } },
-    { id: 'fortified', apply: { isFortified: true } },
+    // Fortification is no longer a flag that can be set on a unit standing on a
+    // hexPath - that state was representable before the cutover and is not now,
+    // which was the point of it. So this variant MOVES the unit onto one of its
+    // own tile centres, which IS fortifying.
+    //
+    // A marker rather than a function, because this whole table is handed to the
+    // sandbox through JSON.stringify and a function would not survive the trip -
+    // it would arrive as undefined and the variant would silently apply nothing.
+    { id: 'fortified', apply: {}, fortifyInPlace: true },
     { id: 'spearwalled', apply: { spearWalled: true } },
     { id: 'ambushed', apply: { ambushed: true } },
     { id: 'major-action', apply: { hasPerformedMajorAction: true } },
@@ -133,7 +141,7 @@ function BuildBoard(board) {
 function RuleAnswers(unit) {
     const Safe = (fn) => { try { return fn(); } catch (e) { return 'ERR:' + String(e && e.message || e); } };
     return {
-        spearWalled: Safe(() => !!isEdgeAdjacentToSpearWall(unit, unit.position)),
+        spearWalled: Safe(() => !!isEdgeAdjacentToSpearWall(unit, unit.edgeKey)),
         combinedArms: Safe(() => !!hasCombinedArmsSupport(unit)),
         zocSuppressed: Safe(() => !!isZoCSuppressed(unit)),
         fortifyTargets: Safe(() => [...GetValidFortifyTargets(unit)].sort().join(',')),
@@ -171,7 +179,7 @@ function BuildRulesScenario() {
 
     const placed = [];
     const Place = (player, typeKey, edgeKey) => {
-        const unit = createUnit(player, UNIT_TYPES[typeKey], edgeKey);
+        const unit = createUnit(player, UNIT_TYPES[typeKey], FineKeyOfEdge(edgeKey));
         engine.state.units.push(unit);
         placed.push(unit.id);
         return unit;
@@ -179,9 +187,9 @@ function BuildRulesScenario() {
 
     // Archer plus a melee partner on one edge is the combined-arms pairing.
     Place(1, 'ARCHER', home);
-    Place(1, 'MELEE', home);
+    Place(1, 'SWORDSMAN', home);
     // An enemy on the adjacent edge gives both sides real attack targets.
-    Place(2, 'MELEE', front);
+    Place(2, 'SWORDSMAN', front);
 
     // A fortified enemy on a tile of that edge is what Spear Wall and Zone of
     // Control key off. Fortification is a tile flag plus a unit that has moved
@@ -193,10 +201,11 @@ function BuildRulesScenario() {
     });
     if (fortifyTileKey) {
         const defender = Place(2, 'PIKEMAN', front);
-        defender.isFortified = true;
-        defender.positionType = 'center';
-        defender.position = fortifyTileKey;
-        defender.fortifiedTileKey = fortifyTileKey;
+        // One write. isFortified, positionType and fortifiedTileKey are derived
+        // from the position now, so putting the unit on the tile centre IS
+        // fortifying it - the four-assignment version could set three of them and
+        // miss the fourth, which is the class of bug the cutover removed.
+        defender.position = FineKeyOfTile(fortifyTileKey);
         engine.state.tiles.get(fortifyTileKey).fortifiedByPlayer = 2;
 
         // Zone of Control needs TWO enemies across TWO different edges - two on
@@ -262,9 +271,14 @@ function RunSweep(board, variants) {
             for (const variant of variants) {
                 const unit = engine.state.units.find(u => u.id === unitId);
                 if (!unit) continue;
+                let apply = variant.apply;
+                if (variant.fortifyInPlace) {
+                    const tiles = unit.edgeKey ? getTileKeysOfEdge(unit.edgeKey) : [];
+                    apply = tiles.length ? { position: FineKeyOfTile(tiles[0]) } : {};
+                }
                 const saved = {};
-                for (const key of Object.keys(variant.apply)) saved[key] = unit[key];
-                Object.assign(unit, variant.apply);
+                for (const key of Object.keys(apply)) saved[key] = unit[key];
+                Object.assign(unit, apply);
                 // Vision is normally filled client-side, so a headless engine
                 // leaves it null and the fog branch of getPossibleMoves never
                 // runs. Filling it here is what makes fog:true mean anything.
@@ -520,7 +534,7 @@ if (verbose && health.degenerateRules.length) {
 
 if (recording) {
     const payload = {
-        note: 'Track C baseline. Re-recorded after C1 (terrain weights 1/3/5/5 with a mean combine, cap 5, pools 9/7/5/5). The pre-C1 baseline it replaced is in git history at commit 0d16792. Do not regenerate to make a failing comparison pass - a red run means behaviour moved, and only a deliberate balance change justifies a new recording.',
+        note: 'Track C baseline. Re-recorded after C1b (per-map-size movement pools: Compact and Normal boards reduce Horseman -3, Swordsman -2, Archer and Pikeman -1; Expansive keeps 9/7/5/5). That moved 176 of these 1280 cases, all of them on radius 2 and 3 boards and every one a shrink; the radius 4 cases did not move at all, which is the check that the reduction landed where it was aimed. C1b also added the overrun rule, which this corpus CANNOT see - no unit in it starts beside a cost-5 hexPath - so that rule is covered by tools/move-rules-smoke.js instead. Re-recorded again the same day for the new default placement on the Standard board (Swordsman and Horseman moved out one ring to the shoreline), which moved 128 cases, all of them on preset:Standard and none anywhere else. Re-recorded a third time for the board-space cutover (schema v11), which moved 128 cases and ONLY the |fortified variant of each: that variant used to set isFortified on a unit still standing on a hexPath, a state that is no longer representable, so it now moves the unit onto a tile centre instead - which is what fortifying is. The unfortify targets and attack range those cases record are the answers for a genuinely fortified unit rather than for an incoherent one, and every other variant on every board was byte-identical, which is the check that the cutover changed representation and not behaviour. Re-recorded a fourth time for the MELEE -> SWORDSMAN rename, which is a pure respelling: unit ids carry their type (u_p1_MELEE_t1_6), so every case KEY changed and none of the recorded answers did. Verified that way - the only differences were old ids reading undefined and new ones appearing, with no case present under both spellings answering differently. Re-recorded a FIFTH time for the C2 fortification penalty, +1 -> +2 (FORTIFICATION_MOVE_PENALTY in js/config-data.js). That moved 82 of these 1280 cases and the shape of the movement is the check that it landed where it was aimed: 10 edgeCost entries, 9 supply path costs and 64 reachable sets, every one of them a COST change of exactly +1 with NOT ONE reachable set changing size, plus a single route respelling where two supply routes that used to tie no longer do. The corpus contains no fortified units, so every one of those edges is adjacent to an enemy BASE CAMP, which carries the same penalty - which is also why the supply overhaul that landed in the same pass moved nothing here at all: this corpus fortifies one unit at a time, and per-line reach and the old shared budget only disagree when two lines compete. That difference is covered by tools/supply-smoke.js instead. Earlier baselines: post-C1 at commit ea773fd, pre-C1 at 0d16792. Do not regenerate to make a failing comparison pass - a red run means behaviour moved, and only a deliberate balance change justifies a new recording.',
         recordedAt: new Date().toISOString().slice(0, 10),
         boards,
     };

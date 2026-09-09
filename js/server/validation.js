@@ -117,7 +117,7 @@ const ACTION_SPECS = {
             // The server picks the target descriptor out of its OWN computed
             // valid-target set. The client only names which one it chose, so it
             // cannot invent a target or describe one it can't actually reach.
-            // (Melee returns [] for archers and vice versa, so the union is safe.)
+            // (Swordsman returns [] for archers and vice versa, so the union is safe.)
             const valid = getValidMeleeAttackTargets(unit).concat(getValidArcherAttackTargets(unit));
 
             let entry;

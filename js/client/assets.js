@@ -2,13 +2,13 @@
 // Client-only: `Image()` requires `document` and throws in a Worker.
 const IMAGE_ASSETS = {
     units: { // Full Res 
-        MELEE: new Image(),
+        SWORDSMAN: new Image(),
         ARCHER: new Image(),
         PIKEMAN: new Image(),
         HORSEMAN: new Image()
     },
     map_units: { // LoD
-        MELEE: new Image(),
+        SWORDSMAN: new Image(),
         ARCHER: new Image(),
         PIKEMAN: new Image(),
         HORSEMAN: new Image()
@@ -22,13 +22,13 @@ const IMAGE_ASSETS = {
 };
 
 // Full Quality Assets
-IMAGE_ASSETS.units.MELEE.src = 'assets/units/Melee.png';
+IMAGE_ASSETS.units.SWORDSMAN.src = 'assets/units/Swordsman.png';
 IMAGE_ASSETS.units.ARCHER.src = 'assets/units/Archer.png';
 IMAGE_ASSETS.units.PIKEMAN.src = 'assets/units/Pikeman.png';
 IMAGE_ASSETS.units.HORSEMAN.src = 'assets/units/Horseman.png';
 
 // LoD Assets
-IMAGE_ASSETS.map_units.MELEE.src = 'assets/units/Melee_unit.png';
+IMAGE_ASSETS.map_units.SWORDSMAN.src = 'assets/units/Swordsman_unit.png';
 IMAGE_ASSETS.map_units.ARCHER.src = 'assets/units/Archer_unit.png';
 IMAGE_ASSETS.map_units.PIKEMAN.src = 'assets/units/Pikeman_unit.png';
 IMAGE_ASSETS.map_units.HORSEMAN.src = 'assets/units/Horseman_unit.png';

@@ -21,6 +21,15 @@ let gameState = {
     dragStartX: 0, dragStartY: 0,
     dragUnitRenderX: 0, dragUnitRenderY: 0,
     dragUnitOriginalPosition: null, dragUnitOriginalType: null,
+
+    // The press-and-hold that has not become a drag yet. dragPendingUnit is what the
+    // finger is resting on; dragHoldTimer is the timeout that promotes it.
+    dragPendingUnit: null, dragHoldTimer: null,
+
+    // True from a mouse-down that selected a unit until the click it produces has been
+    // swallowed. Without it that click runs handleUnitSelectionClick, which toggles, and
+    // undoes the selection the press just made.
+    pressSelectedUnit: false,
     draggedDistance: 0,
     dragStartTime: null,
 

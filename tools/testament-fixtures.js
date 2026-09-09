@@ -215,8 +215,8 @@ files.sort().forEach(file => {
         if (!rebuiltKeys.has(key)) problems.push('regeneration lost edge ' + key);
     });
     (data.units || []).forEach(u => {
-        if (u.positionType === 'edge' && !rebuiltKeys.has(u.position)) {
-            problems.push('unit ' + u.id + ' stands on missing edge ' + u.position);
+        if (u.positionType === 'edge' && !rebuiltKeys.has(u.edgeKey)) {
+            problems.push('unit ' + u.id + ' stands on missing edge ' + u.edgeKey);
         }
     });
     // Bridges are the one thing a rebuild can't know, so they must be carried.

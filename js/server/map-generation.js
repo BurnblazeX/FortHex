@@ -283,7 +283,7 @@ function PlaceUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
             const swap = landEdges[i]; landEdges[i] = landEdges[j]; landEdges[j] = swap;
         }
         const usedEdgesFallback = new Set();
-        const allUnitTypes = [UNIT_TYPES.MELEE, UNIT_TYPES.ARCHER, UNIT_TYPES.PIKEMAN, UNIT_TYPES.HORSEMAN];
+        const allUnitTypes = [UNIT_TYPES.SWORDSMAN, UNIT_TYPES.ARCHER, UNIT_TYPES.PIKEMAN, UNIT_TYPES.HORSEMAN];
 
         const placeFallbackTeam = (player) => {
             // Place up to unitLimit
@@ -294,7 +294,7 @@ function PlaceUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
                 
                 for (const edgeKey of landEdges) {
                     if (!usedEdgesFallback.has(edgeKey)) {
-                        engine.state.units.push(createUnit(player, typeToPlace, edgeKey));
+                        engine.state.units.push(createUnit(player, typeToPlace, FineKeyOfEdge(edgeKey)));
                         usedEdgesFallback.add(edgeKey);
                         placed = true;
                         break;
@@ -326,7 +326,7 @@ function PlaceUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
         p2CandidateEdges.sort((a, b) => p1IsLeft ? b.q - a.q : a.q - b.q);
 
         const usedEdges = new Set();
-        const allUnitTypes = [UNIT_TYPES.MELEE, UNIT_TYPES.ARCHER, UNIT_TYPES.PIKEMAN, UNIT_TYPES.HORSEMAN];
+        const allUnitTypes = [UNIT_TYPES.SWORDSMAN, UNIT_TYPES.ARCHER, UNIT_TYPES.PIKEMAN, UNIT_TYPES.HORSEMAN];
 
         const placeTeam = (playerNum, candidates) => {
             let placedCount = 0;
@@ -335,7 +335,7 @@ function PlaceUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
                 if (!usedEdges.has(cand.key)) {
                     // Cycle types based on placement index
                     const typeToPlace = allUnitTypes[placedCount % allUnitTypes.length];
-                    engine.state.units.push(createUnit(playerNum, typeToPlace, cand.key));
+                    engine.state.units.push(createUnit(playerNum, typeToPlace, FineKeyOfEdge(cand.key)));
                     usedEdges.add(cand.key);
                     placedCount++;
                 }
@@ -344,7 +344,7 @@ function PlaceUnitsOnNewGeneratedMap(unitLimit = getMaxUnitsForCurrentMap()) {
                 const fallbackEdge = landEdges.find(e => !usedEdges.has(e));
                 if(fallbackEdge) {
                      const typeToPlace = allUnitTypes[placedCount % allUnitTypes.length];
-                     engine.state.units.push(createUnit(playerNum, typeToPlace, fallbackEdge));
+                     engine.state.units.push(createUnit(playerNum, typeToPlace, FineKeyOfEdge(fallbackEdge)));
                      usedEdges.add(fallbackEdge);
                      placedCount++;
                 } else {
@@ -569,7 +569,13 @@ function InitializeGridDimensions(newRadius, baseCampRotation = '3') {
                     };
                     Object.defineProperty(newEdge, 'units', {
                         get: function() {
-                            return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey);
+                            // Board space: a hexPath's fine key is the SUM of its two
+                            // tile coordinates, and a unit standing there stores exactly
+                            // that string. No positionType test is needed any more - a
+                            // hexCenter key has both coordinates even and can never equal
+                            // a hexPath key, so the comparison alone is unambiguous.
+                            const fineKey = (tile.q + n_coord.q) + ',' + (tile.r + n_coord.r);
+                            return engine.state.units.filter(u => u.position === fineKey);
                         },
                         configurable: true,
                         enumerable: false
@@ -664,7 +670,7 @@ function PlaceUnitInEditor(player, unitType, edgeKey) {
         return { placed: false, reason: 'type_cap', limit: cap, typeName: unitType.name };
     }
 
-    engine.state.units.push(createUnit(player, unitType, edgeKey));
+    engine.state.units.push(createUnit(player, unitType, FineKeyOfEdge(edgeKey)));
     return { placed: true, reason: 'ok' };
 }
 

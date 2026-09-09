@@ -3,7 +3,7 @@
 // Before the engine.state cutover a save was just `{...gameState}` plus the
 // tiles/edges Maps, because gameState held everything. It doesn't any more, so
 // spreading it silently dropped every engine-owned field (units, currentPlayer,
-// flags, supplyPoints, gridRadius...) out of both the autosave and the .fhsave
+// flags, rations, gridRadius...) out of both the autosave and the .fhsave
 // file, and loading rebuilt an empty radius-3 board. These two helpers are the
 // single place that knows which fields live on which side.
 //
@@ -17,7 +17,7 @@
 const ENGINE_SAVE_FIELDS = [
     'gameMode', 'playerSide', 'gridRadius', 'playerColorSelections',
     'units', 'currentPlayer', 'globalTurnNumber', 'actionLog', 'matchHistory',
-    'unitIdCounter', 'flags', 'respawnQueue', 'unitCounts', 'supplyPoints',
+    'unitIdCounter', 'flags', 'respawnQueue', 'unitCounts', 'reach', 'rations',
     'baseCampPositions', 'gameOver', 'arcadeTotalTurns', 'isTrainingMode',
     'mapMakerMode', 'playerActionTaken',
 
@@ -290,6 +290,32 @@ async function LoadThroughTestamentAsked(data, fileName) {
     return LoadThroughTestament(data, { modernise });
 }
 
+// Loading a save REPLACES the board. In a hosted match the board is not this
+// client's to replace - the authoritative one lives in the host's worker, and
+// every client renders a filtered view of it.
+//
+// Nothing stopped the HOST doing it. The guest's Load button is disabled per frame
+// (js/client/render.js), but the host's is left enabled on the reasoning that the
+// host owns the match. That is true of New Map and Save and false of Load: a local
+// load wrote a whole board into engine.state while the worker carried on with the
+// real one, so the next sync overwrote half of it and the interface was left
+// describing a match that existed nowhere - the symptom Burn hit.
+//
+// Refused rather than routed. Making it work means restarting the match FROM the
+// save, which the lobby already does properly (Create Room -> Resume a saved match),
+// with both players re-seated and told. Silently swapping the board under an
+// opponent mid-turn is not the same feature.
+function RefuseIfHostedMatch(what) {
+    if (typeof IsRemoteMatch !== 'function' || !IsRemoteMatch()) return false;
+
+    const isHost = typeof IsRemoteHost === 'function' && IsRemoteHost();
+    ShowAlert(isHost
+        ? what + ' is not available during an online match. To play from a save, '
+          + 'end this match and create a room with "Resume a saved match".'
+        : what + ' is not available during an online match - the board belongs to the host.');
+    return true;
+}
+
 function LoadThroughTestament(data, options = {}) {
     const outcome = MigrateSave(data, options);
     // The action log is rebuilt from matchHistory rather than stored, so expansion
@@ -331,7 +357,10 @@ function createMapDataObject() {
         units: engine.state.units.map(u => ({
             id: u.id,
             player: u.player,
-            typeName: (u.type && u.type.name) ? u.type.name.toUpperCase() : (u.typeId || 'MELEE'),
+            typeName: (u.type && u.type.name) ? u.type.name.toUpperCase() : (u.typeId || 'SWORDSMAN'),
+            // Board space, matching everything else that stores a position. Map files
+            // written by older builds hold an edge key instead; loadMapData accepts
+            // both and tells them apart by the underscore.
             position: u.position
         })),
         baseCampPositions: engine.state.baseCampPositions
@@ -340,6 +369,10 @@ function createMapDataObject() {
 }
 
 function loadAutoSave() {
+    // Checked here rather than only on the button, because the button is not the only
+    // way in - the console helpers and the keyboard shortcut both land here.
+    if (RefuseIfHostedMatch('Loading a save')) return;
+
     console.group("[LoadAutosave] Process Started");
 
     if (engine.state.mapMakerMode) {
@@ -405,7 +438,7 @@ function loadAutoSave() {
                 ui.endTurnButton.style.background = `linear-gradient(to right, ${activeColor} ${pct}%, ${emptyColor} ${pct}%)`;
                 ui.endTurnButton.textContent = `End Turn (${Math.ceil(timerVal)}s)`;
                 
-                const supplyContainer = document.getElementById('supplyPointsContainer');
+                const supplyContainer = document.getElementById('rationsContainer');
                 if (supplyContainer) supplyContainer.style.display = 'block';
             } else {
                 ui.endTurnButton.classList.remove('arcade-timer-active');
@@ -520,6 +553,9 @@ function rehydrateGameState() {
                 enumerable: true
             });
 
+            // And the derived position accessors - see AttachDerivedUnitAccessors.
+            AttachDerivedUnitAccessors(unit);
+
             // Ensure Linkage
             if (!unit.typeId && unit.typeName) unit.typeId = unit.typeName;
             if (!unit.type) console.warn("Unknown Unit Type ID:", unit.typeId);
@@ -541,7 +577,8 @@ function rehydrateGameState() {
         engine.state.edges.forEach((edge, edgeKey) => {
             Object.defineProperty(edge, 'units', {
                 get: function() { 
-                    return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edgeKey);
+                    const fineKey = (edge.q1 + edge.q2) + ',' + (edge.r1 + edge.r2);
+                    return engine.state.units.filter(u => u.position === fineKey);
                 },
                 configurable: true,
                 enumerable: false
@@ -639,12 +676,18 @@ function loadMapFromDataObject(mapData) {
         const unitType = UNIT_TYPES[typeKey];
         
         if (unitType) {
-            const newUnit = createUnit(unitInfo.player, unitType, unitInfo.position, unitInfo.id);
+            // A map file stores an EDGE key, because that is what a human editing
+            // one writes; a game save stores board space. Told apart by shape - only
+            // an edge key contains an underscore - which is the same test the v11
+            // migration uses and for the same reason.
+            const boardSpaceKey = unitInfo.position && unitInfo.position.includes('_')
+                ? FineKeyOfEdge(unitInfo.position)
+                : unitInfo.position;
+            const newUnit = createUnit(unitInfo.player, unitType, boardSpaceKey, unitInfo.id);
             engine.state.units.push(newUnit);
-            const edge = engine.state.edges.get(unitInfo.position);
-            if (edge) {
-                edge.units.push(newUnit);
-            }
+            // No edge.units.push here. It was always a no-op: edge.units is a derived
+            // getter that recomputes from engine.state.units and returns a fresh array,
+            // so pushing onto it wrote to a temporary and vanished.
         } else {
             console.warn(`Skipped unknown unit type: ${unitInfo.typeName}`);
         }
@@ -747,7 +790,7 @@ function ExportMatchHistory(label = 'reference') {
             turn: engine.state.globalTurnNumber,
             currentPlayer: engine.state.currentPlayer,
             gameOver: engine.state.gameOver,
-            supplyPoints: engine.state.supplyPoints,
+            rations: engine.state.rations,
             units: engine.state.units
                 .map(u => ({ id: u.id, player: u.player, type: u.type.name, hp: u.hp,
                              pos: u.position, fortified: !!u.isFortified }))

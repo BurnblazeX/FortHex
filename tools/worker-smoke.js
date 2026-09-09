@@ -48,12 +48,12 @@ const HARNESS = `
         const a = CreateEngineInstance();
         const b = CreateEngineInstance();
         a.state.currentPlayer = 2;
-        a.state.supplyPoints.player1 = 99;
-        if (b.state.currentPlayer !== 1 || b.state.supplyPoints.player1 !== 10) {
+        a.state.rations.player1 = 99;
+        if (b.state.currentPlayer !== 1 || b.state.rations.player1 !== 10) {
             throw new Error('engine instances share state');
         }
         a.state.currentPlayer = 1;
-        a.state.supplyPoints.player1 = 10;
+        a.state.rations.player1 = 10;
 
         globalThis.engine = a;
         await step('InitializeGrid', () => InitializeGrid());
@@ -63,7 +63,7 @@ const HARNESS = `
         await step('getPossibleMoves',              () => getPossibleMoves(a.state.units[0]));
         await step('computePlayerVision',           () => computePlayerVision(1));
         await step('recalculatePlayerSupplyNetwork',() => recalculatePlayerSupplyNetwork(1));
-        await step('SpawnUnit',                     () => SpawnUnit(1, UNIT_TYPES.MELEE));
+        await step('SpawnUnit',                     () => SpawnUnit(1, UNIT_TYPES.SWORDSMAN));
 
         // --- turn lifecycle ---
         await step('CheckVictoryCondition',      () => CheckVictoryCondition());
@@ -91,7 +91,7 @@ const HARNESS = `
         const moveAck = await step('action:move', () => transport.Send(
             MakeActionMessage('move', { unitId: mover.id, targetEdgeKey: dest })));
         if (!moveAck.ok) throw new Error('legal move rejected: ' + moveAck.error);
-        if (mover.position !== dest) throw new Error('engine state did not change');
+        if (mover.edgeKey !== dest) throw new Error('engine state did not change');
 
         const sync = received.find(m => m.type === 'state-sync');
         if (!sync) throw new Error('no state-sync came back');
@@ -177,8 +177,8 @@ const HARNESS = `
         if (badStat.ok) throw new Error('an unknown statType was accepted');
         specCoverage['upgrade-unit(bad stat)'] = badStat.error;
         await drive('swap-class',   { unitId: anyUnit.id, newTypeName: 'ARCHER' });
-        await drive('spawn-unit',   { player: a.state.currentPlayer, unitTypeName: 'MELEE' });
-        await drive('attack',       { unitId: anyUnit.id, targetUnitId: 12345, attackType: 'Melee' });
+        await drive('spawn-unit',   { player: a.state.currentPlayer, unitTypeName: 'SWORDSMAN' });
+        await drive('attack',       { unitId: anyUnit.id, targetUnitId: 12345, attackType: 'Swordsman' });
 
         // Session actions, on an engine where nobody is absent: a heartbeat with
         // no deadline to check is a no-op, and a resolution nobody asked for is
@@ -190,7 +190,7 @@ const HARNESS = `
         await drive('paint-tile',   { tileKey: anyTile, tileTypeName: 'FOREST' });
         await drive('erase-tile',   { tileKey: anyTile });
         await drive('flood-fill',   { startQ: 0, startR: 0, tileTypeName: 'PLAINS' });
-        await drive('place-unit',   { player: 1, unitTypeName: 'MELEE', edgeKey: anyEdge });
+        await drive('place-unit',   { player: 1, unitTypeName: 'SWORDSMAN', edgeKey: anyEdge });
         await drive('remove-unit',  { unitId: anyUnit.id });
         await drive('toggle-base-camp', { player: 1, tileKey: anyTile });
         await drive('set-base-camp-rotation', { rotation: '3' });
@@ -225,13 +225,14 @@ const HARNESS = `
             InitializeGrid();
 
             const arch = probe.state.units.find(u => u.id === 'u_p2_ARCHER_t1_6');
-            arch.position = '0,1'; arch.positionType = 'center'; arch.isFortified = true;
+            arch.position = FineKeyOfTile('0,1');   // a hexCenter, so: fortified
             probe.state.tiles.get('0,1').fortifiedByPlayer = 2;
 
-            const [m, a2, h] = ['u_p1_MELEE_t1_1', 'u_p1_ARCHER_t1_2', 'u_p1_HORSEMAN_t1_4']
+            const [m, a2, h] = ['u_p1_SWORDSMAN_t1_1', 'u_p1_ARCHER_t1_2', 'u_p1_HORSEMAN_t1_4']
                 .map(id => probe.state.units.find(u => u.id === id));
-            m.position = '-1,1_0,1'; a2.position = '-1,1_0,1'; h.position = '0,1_1,0';
-            [m, a2, h].forEach(u => { u.positionType = 'edge'; });
+            m.position = FineKeyOfEdge('-1,1_0,1');
+            a2.position = FineKeyOfEdge('-1,1_0,1');
+            h.position = FineKeyOfEdge('0,1_1,0');
 
             const hpStart = h.hp;
             ApplyFortificationDamageOnMove(h, '0,1_1,0');
@@ -330,7 +331,7 @@ const HARNESS = `
             const snap = fogBack.resync;
             if (!snap || !snap.filtered) throw new Error('a fog-on resync came back unfiltered');
             const leaked = snap.units.some(u => u.player !== 2 && !u.hidden &&
-                !snap.visibleEdges.includes(u.position) && !snap.visibleTiles.includes(u.position));
+                !snap.visibleEdges.includes(u.edgeKey) && !snap.visibleTiles.includes(u.tileKey));
             if (leaked) throw new Error('the resync leaked a fogged enemy position');
             const redacted = snap.units.filter(u => u.hidden).length;
             probe.settings.fogOfWarEnabled = false;
@@ -453,8 +454,8 @@ const HARNESS = `
             }
             probe.state.units.forEach(u => {
                 if (u.positionType !== 'edge') return;
-                if (!expanded.edges.some(([k]) => k === u.position)) {
-                    throw new Error('unit ' + u.id + ' lost its edge ' + u.position);
+                if (!expanded.edges.some(([k]) => k === u.edgeKey)) {
+                    throw new Error('unit ' + u.id + ' lost its edge ' + u.edgeKey);
                 }
             });
             // The log is rebuilt from the ledger rather than stored.
@@ -765,7 +766,7 @@ const HARNESS = `
             const attacker = probe.state.units.find(u => u.player === probe.state.currentPlayer);
             // ApplyAttack is async (it waits out the animation duration), so this
             // has to be awaited or the assertions below run before the bridge falls.
-            await ApplyAttack(attacker, { edgeKey: bridgeEdgeKey, isBridgeTarget: true, unit: null }, 'Melee', 0);
+            await ApplyAttack(attacker, { edgeKey: bridgeEdgeKey, isBridgeTarget: true, unit: null }, 'Swordsman', 0);
 
             const bridgeGone = since().find(e => e.type === 'BRIDGE_DESTROYED');
             if (!bridgeGone) throw new Error('destroying a bridge wrote no BRIDGE_DESTROYED entry');
@@ -777,9 +778,13 @@ const HARNESS = `
             // easiest to leave un-instrumented: a stolen flag wipes every line for
             // that player and exits before the normal diff at the end.
             mark = probe.state.matchHistory.length;
-            const fortified = probe.state.units.find(u => u.player === 1);
-            fortified.isFortified = true;
-            fortified.supplyLine = { cost: 1, path: [fortified.position] };
+            const fortified = probe.state.units.find(u => u.player === 1 && u.edgeKey);
+            // Fortified WHERE IT STANDS: moving it onto one of its own two tile
+            // centres is what fortifying is now, and picking a tile it is already
+            // beside keeps the fixture on a real board position rather than
+            // teleporting it to an arbitrary one that another unit may also hold.
+            fortified.position = FineKeyOfTile(getTileKeysOfEdge(fortified.edgeKey)[0]);
+            fortified.supplyLine = { cost: 1, path: [fortified.edgeKey] };
 
             probe.state.flags.p1_flag.status = 'carried';
             recalculatePlayerSupplyNetwork(1);
@@ -804,11 +809,14 @@ const HARNESS = `
             // --- 5. siege status ---------------------------------------------
             mark = probe.state.matchHistory.length;
             probe.state.flags.p1_flag.status = 'at_base';
-            const besieged = probe.state.units.find(u => u.player === probe.state.currentPlayer);
+            const besieged = probe.state.units.find(u => u.player === probe.state.currentPlayer && u.edgeKey);
             const enemyEdge = probe.state.units.find(u => u.player !== besieged.player &&
                 u.positionType === 'edge');
-            besieged.isFortified = true;
-            besieged.supplyLine = { cost: 1, path: [enemyEdge.position] };
+            besieged.position = FineKeyOfTile(getTileKeysOfEdge(besieged.edgeKey)[0]);
+            // The supply path is a list of EDGE keys - LogSiegeStatus looks each one
+            // up in engine.state.edges - so it takes the enemy's edgeKey, not its
+            // board-space position.
+            besieged.supplyLine = { cost: 1, path: [enemyEdge.edgeKey] };
             LogSiegeStatus();
 
             const siege = since().find(e => e.type === 'SIEGE_STATUS');

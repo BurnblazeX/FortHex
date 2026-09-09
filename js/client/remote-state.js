@@ -116,7 +116,8 @@ function ApplyRemoteView(view) {
             };
             Object.defineProperty(rebuilt, 'units', {
                 get: function () {
-                    return engine.state.units.filter(u => u.positionType === 'edge' && u.position === edge.key);
+                    const fineKey = (edge.q1 + edge.q2) + ',' + (edge.r1 + edge.r2);
+                    return engine.state.units.filter(u => u.position === fineKey);
                 },
                 configurable: true,
                 enumerable: false,
@@ -199,7 +200,8 @@ function ApplyRemoteView(view) {
 
     if (view.currentPlayer !== undefined) engine.state.currentPlayer = view.currentPlayer;
     if (view.globalTurnNumber !== undefined) engine.state.globalTurnNumber = view.globalTurnNumber;
-    if (view.supplyPoints) engine.state.supplyPoints = { ...view.supplyPoints };
+    if (view.reach) engine.state.reach = { ...view.reach };
+    if (view.rations) engine.state.rations = { ...view.rations };
     if (view.flags !== undefined) engine.state.flags = view.flags;
     if (view.gameOver !== undefined) engine.state.gameOver = view.gameOver;
 

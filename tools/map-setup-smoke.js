@@ -224,10 +224,10 @@ if (snapshot) {
         // redaction. That has happened once already.
         Check('edge.units is a NON-enumerable getter', resumed.Read(
             "(() => { const d = Object.getOwnPropertyDescriptor("
-            + "engine.state.edges.get(engine.state.units[0].position), 'units');"
+            + "engine.state.edges.get(engine.state.units[0].edgeKey), 'units');"
             + " return !!(d && d.get) && d.enumerable === false; })()"));
         Check('edges find their units',
-            resumed.Read('engine.state.edges.get(engine.state.units[0].position).units.length') > 0);
+            resumed.Read('engine.state.edges.get(engine.state.units[0].edgeKey).units.length') > 0);
 
         Check('the fine grid was rebuilt', resumed.Read('engine.state.fineGrid.size') > 0,
             'size ' + resumed.Read('engine.state.fineGrid.size'));

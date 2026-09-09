@@ -56,6 +56,25 @@ const log = JSON.parse(fs.readFileSync(logPath, 'utf8'));
 const HARNESS = `
 (async () => {
     const { parentPort } = require('worker_threads');
+
+    // Positions in a log are whatever the build that wrote it spelled them as. A log
+    // captured before the v11 cutover carries a tile key ("q,r") or an edge key
+    // ("q1,r1_q2,r2"); the live engine answers in board space ("fq,fr"). Normalised
+    // here at READ time rather than on disk, because a log is the evidence of what a
+    // build actually did and re-spelling it would be the backporting Testament refuses.
+    //
+    // Told apart by shape, the same test the v10->v11 migration uses: only an edge key
+    // contains an underscore. A bare "a,b" is genuinely ambiguous - it could be an old
+    // tile key or a new board-space key - so it is left alone, which is right for the
+    // common case: a unit standing on an edge is what almost every entry records, and
+    // a fortified one is rare enough to name explicitly when it bites.
+    const ToBoardSpace = (pos) => {
+        if (typeof pos !== 'string' || !pos.includes('_')) return pos;
+        const p = pos.split('_').map(x => x.split(',').map(Number));
+        const flat = [].concat.apply([], p);
+        if (flat.some(n => !Number.isFinite(n))) return pos;
+        return (p[0][0] + p[1][0]) + ',' + (p[0][1] + p[1][1]);
+    };
     const log = ${JSON.stringify(log)};
     const process = { env: ${JSON.stringify({FH_DUMP_AT: process.env.FH_DUMP_AT})} };
     const REPLAYABLE_TYPES = ${JSON.stringify(Object.keys(REPLAYABLE))};
@@ -81,7 +100,7 @@ const HARNESS = `
 
         const attackTypeFor = (unitId) => {
             const u = engine.state.units.find(x => x.id === unitId);
-            return u && u.type.attackType === 'melee' ? 'Melee' : 'Archer';
+            return u && u.type.attackType === 'melee' ? 'Swordsman' : 'Archer';
         };
 
         for (let i = 0; i < log.matchHistory.length; i++) {
@@ -157,7 +176,7 @@ const HARNESS = `
                     problems.push('#' + i + ' ' + entry.type + ': ' + snap.id + ' vanished after its own action');
                 } else {
                     for (const f of ['hp', 'pos', 'isFortified']) {
-                        const want = f === 'pos' ? snap.pos : snap[f];
+                        const want = f === 'pos' ? ToBoardSpace(snap.pos) : snap[f];
                         const got  = f === 'pos' ? live.position : (f === 'hp' ? live.hp : !!live.isFortified);
                         if (JSON.stringify(want) !== JSON.stringify(got)) {
                             problems.push('#' + i + ' ' + entry.type + ' ' + snap.id + '.' + f +
@@ -184,7 +203,7 @@ const HARNESS = `
         })).sort((a, b) => a.id.localeCompare(b.id));
 
         const expected = [...log.outcome.units].map(u => ({
-            id: u.id, hp: u.hp, pos: u.pos, fortified: u.fortified
+            id: u.id, hp: u.hp, pos: ToBoardSpace(u.pos), fortified: u.fortified
         })).sort((a, b) => a.id.localeCompare(b.id));
 
         if (JSON.stringify(finalBoard) !== JSON.stringify(expected)) {
@@ -201,10 +220,15 @@ const HARNESS = `
             problems.push('gameOver: log ' + log.outcome.gameOver + ' vs replay ' + engine.state.gameOver +
                           (log.outcome.gameOver ? '  (the match-ending condition did not fire on replay)' : ''));
         }
+        // Reach, not rations. This is the number the logs recorded as supplyPoints
+        // - the line budget - and it is the one a replay can reproduce, because it is
+        // derived from the board. Rations are a consumable with no predecessor in any
+        // recorded log, so there is nothing to compare them against.
+        const loggedReach = log.outcome.reach || log.outcome.supplyPoints || {};
         for (const p of ['player1', 'player2']) {
-            if (engine.state.supplyPoints[p] !== log.outcome.supplyPoints[p]) {
-                problems.push('supply ' + p + ': log ' + log.outcome.supplyPoints[p] +
-                              ' vs replay ' + engine.state.supplyPoints[p] +
+            if (engine.state.reach[p] !== loggedReach[p]) {
+                problems.push('reach ' + p + ': log ' + loggedReach[p] +
+                              ' vs replay ' + engine.state.reach[p] +
                               '  (0 means that flag is being carried)');
             }
         }
@@ -217,7 +241,7 @@ const HARNESS = `
         parentPort.postMessage({ ok: problems.length === 0, applied, turnsAdvanced, skipped, problems,
                                  survivors: finalBoard.length, expectedSurvivors: expected.length,
                                  gameOver: engine.state.gameOver, flags,
-                                 supply: engine.state.supplyPoints });
+                                 supply: engine.state.reach });
     } catch (err) {
         parentPort.postMessage({ ok: false, applied, turnsAdvanced, skipped,
                                  problems: ['THREW: ' + err.message, ...err.stack.split(String.fromCharCode(10)).slice(1, 4)] });

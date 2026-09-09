@@ -50,7 +50,7 @@ function initializeGrid(tileLayoutMap = null, customUnits = null, baseCampData =
     if (engine.state.gameMode === 'arcade') {
         ui.endTurnButton.classList.add('arcade-timer-active');
     }
-    document.getElementById('supplyPointsContainer').style.display = 'block';
+    document.getElementById('supplyPanel').style.display = 'block';
 
     InitializeGrid(tileLayoutMap, customUnits, baseCampData);
 

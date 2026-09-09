@@ -64,11 +64,11 @@ function DetermineVictoryText() {
 
                 if (Array.isArray(carrierHomeBaseData)) {
                     if (unit.positionType === 'center') {
-                        if (carrierHomeBaseData.includes(unit.position)) {
+                        if (carrierHomeBaseData.includes(unit.tileKey)) {
                             isHome = true;
                         }
                     } else {
-                        const [h1, h2] = parseEdgeKey(unit.position);
+                        const [h1, h2] = parseEdgeKey(unit.edgeKey);
                         if (!isNaN(h1.q) && !isNaN(h2.q)) {
                             const t1 = getTileKey(h1.q, h1.r);
                             const t2 = getTileKey(h2.q, h2.r);
@@ -78,13 +78,16 @@ function DetermineVictoryText() {
                         }
                     }
                 } else {
-                    if (unit.position === carrierHomeBaseData) {
+                    // carrierHomeBaseData is an EDGE key here, so this arm asks
+                    // "is the carrier standing on the home edge"; the arm below asks
+                    // "is it fortified on one of that edge's two tiles".
+                    if (unit.edgeKey === carrierHomeBaseData) {
                         isHome = true;
                     } else if (unit.positionType === 'center') {
                         const [h1, h2] = parseEdgeKey(carrierHomeBaseData);
                         const t1 = getTileKey(h1.q, h1.r);
                         const t2 = getTileKey(h2.q, h2.r);
-                        if (unit.position === t1 || unit.position === t2) {
+                        if (unit.tileKey === t1 || unit.tileKey === t2) {
                             isHome = true;
                         }
                     }
@@ -98,15 +101,35 @@ function DetermineVictoryText() {
         }
 
         if (!victoryText) {
-            const player1Units = engine.state.units.filter(u => u.player === 1);
-            const player2Units = engine.state.units.filter(u => u.player === 2);
+            // A PLAYER WITH REINFORCEMENTS COMING IS NOT ANNIHILATED.
+            //
+            // Outside arcade, a destroyed unit goes into respawnQueue and comes back a
+            // few turns later, so "no units on the board" and "out of the match" are
+            // different facts. Counting only live units conflated them, and the turn
+            // START is exactly where they come apart: ApplyRespawnQueueTick runs FIRST,
+            // then ZoC damage, then mountain attrition. A player whose last unit dies to
+            // ZoC or attrition on the same turn a reinforcement became ready was
+            // declared annihilated while their replacement was queued and waiting for
+            // them to pick it - and worse, if both players were momentarily empty it
+            // called the match a draw.
+            //
+            // Arcade has no respawn queue at all (ApplyRespawnQueueTick returns early),
+            // so the queues are empty there and this reads exactly as it always did.
+            const StillInTheMatch = (player) => {
+                if (engine.state.units.some(u => u.player === player)) return true;
+                const queue = engine.state.respawnQueue && engine.state.respawnQueue['player' + player];
+                return !!(queue && queue.length > 0);
+            };
+
+            const p1Alive = StillInTheMatch(1);
+            const p2Alive = StillInTheMatch(2);
 
             if (engine.state.tiles.size > 0) {
-                if (player1Units.length === 0 && player2Units.length > 0) {
+                if (!p1Alive && p2Alive) {
                     victoryText = "Player 2 Wins by Annihilation!";
-                } else if (player2Units.length === 0 && player1Units.length > 0) {
+                } else if (!p2Alive && p1Alive) {
                     victoryText = "Player 1 Wins by Annihilation!";
-                } else if (player1Units.length === 0 && player2Units.length === 0) {
+                } else if (!p1Alive && !p2Alive) {
                     victoryText = "It's a Draw!";
                 }
             }
@@ -283,7 +306,7 @@ function ApplyStartOfTurnZoCDamage() {
         if (unit.player !== enemyPlayer) return;
 
         if (unit.positionType === 'edge' && !unit.isFortified) {
-            const edgeKey = unit.position;
+            const edgeKey = unit.edgeKey;
             const edgeTileCoords = parseEdgeKey(edgeKey);
             if (edgeTileCoords.some(coord => isNaN(coord.q))) return;
 
@@ -297,41 +320,41 @@ function ApplyStartOfTurnZoCDamage() {
                 if (activePlayerBaseTiles.includes(tKey)) return true;
 
                 if (tile.fortifiedByPlayer === activePlayer) {
-                    const fortUnit = engine.state.units.find(u => u.isFortified && u.position === tKey && u.player === activePlayer);
+                    const fortUnit = engine.state.units.find(u => u.tileKey === tKey && u.player === activePlayer);
                     if (fortUnit && !isZoCSuppressed(fortUnit)) return true;
                 }
                 return false;
             };
 
             if (checkTileZoC(tile1, tile1Key) || checkTileZoC(tile2, tile2Key)) {
-                unit.hp -= FORTIFICATION_DAMAGE;
-                engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
+                const zocDealt = ApplyDamageToUnit(unit, FORTIFICATION_DAMAGE, 'ZoC');
+                if (zocDealt > 0) engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
 
                 zocEvents.push({
                     unitId: unit.id,
-                    damage: FORTIFICATION_DAMAGE,
+                    damage: zocDealt,
                     remainingHp: unit.hp,
                     isFatal: unit.hp <= 0
                 });
 
-                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
+                if (zocDealt > 0) engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes start-of-turn ZoC. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
                 if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
                     unitsToDestroy.push(unit);
                 }
             }
         } else if (unit.positionType === 'center' && unit.isFortified) {
             if (activePlayerBaseTiles.includes(unit.fortifiedTileKey)) {
-                unit.hp -= FORTIFICATION_DAMAGE;
-                engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
+                const baseZocDealt = ApplyDamageToUnit(unit, FORTIFICATION_DAMAGE, 'Base Camp ZoC');
+                if (baseZocDealt > 0) engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
 
                 zocEvents.push({
                     unitId: unit.id,
-                    damage: FORTIFICATION_DAMAGE,
+                    damage: baseZocDealt,
                     remainingHp: unit.hp,
                     isFatal: unit.hp <= 0
                 });
 
-                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes Base Camp ZoC. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
+                if (baseZocDealt > 0) engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes Base Camp ZoC. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
                 if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
                     unitsToDestroy.push(unit);
                 }
@@ -363,10 +386,10 @@ function ApplyMountainAttrition() {
     engine.state.units.forEach(unit => {
         if (unit.player !== activePlayer || !isUnitOnMountainPeak(unit)) return;
 
-        const playerFlag = engine.state.flags ? engine.state.flags[`p${unit.player}_flag`] : null;
-        const flagStolen = !!(playerFlag && playerFlag.status === 'carried');
-
-        if (!flagStolen && isUnitSupplied(unit)) {
+        // Attrition asked this by hand - supplied AND the flag still home - which is
+        // what CanUnitDrawOnSupply now names. Kept as one definition so the healing,
+        // shield and attrition branches cannot drift apart about what supply means.
+        if (CanUnitDrawOnSupply(unit)) {
             unit.mountainAttritionTurns = 0;
             return;
         }
@@ -374,17 +397,17 @@ function ApplyMountainAttrition() {
         unit.mountainAttritionTurns = (unit.mountainAttritionTurns || 0) + 1;
         const damage = unit.mountainAttritionTurns;
 
-        unit.hp -= damage;
-        engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
+        const attritionDealt = ApplyDamageToUnit(unit, damage, 'mountain attrition');
+        if (attritionDealt > 0) engine.Emit({ type: 'UNIT_DAMAGED', unit, attackStatus: 'normal' });
 
         attritionEvents.push({
             unitId: unit.id,
-            damage: damage,
+            damage: attritionDealt,
             remainingHp: unit.hp,
             isFatal: unit.hp <= 0
         });
 
-        engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes ${damage} mountain attrition. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
+        if (attritionDealt > 0) engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} takes ${damage} mountain attrition. HP: ${unit.hp}`, player: activePlayer, duration: 3500 });
 
         if (unit.hp <= 0 && !unitsToDestroy.find(u => u.id === unit.id)) {
             unitsToDestroy.push(unit);
@@ -410,52 +433,128 @@ function ApplyMountainAttrition() {
 function ApplyStartOfTurnHealing() {
     if (engine.state.gameMode === 'arcade') return {};
 
-    const playerFlag = engine.state.flags[`p${engine.state.currentPlayer}_flag`];
-    if (playerFlag && playerFlag.status === 'carried') {
-        return {};
-    }
-
+    // A STOLEN FLAG STOPS HEALING, NOT SHIELDS.
+    //
+    // This used to return outright, which was correct while shield was the top rung of
+    // the healing ladder and is wrong now that it is a separate thing. Losing your flag
+    // cuts your supply - SetRationsForFlagStatus zeroes the pool - and being cut
+    // off is precisely the case the shield rework exists to cover: no recovery, but a
+    // buffer. Blocking both would make the flag the one form of being cut off that
+    // gives you nothing, which is the opposite of what the rule says.
     let healingEvents = [];
 
+    // RATIONS ARE SPENT HERE, and this is the only place they are spent.
+    //
+    // Counted rather than decremented in the loop, so the regeneration rule below has
+    // a single honest answer to "did this player spend anything at all this turn".
+    const activePlayer = engine.state.currentPlayer;
+    let rationsSpent = 0;
+
+    // HEALING AND SHIELD ARE NOW SEPARATE THINGS.
+    //
+    // Shield used to be the 1 HP of overheal at the top of the healing ladder, which
+    // made it a reward for being safe AND supplied AND already whole - the position
+    // that needs help least. It is now a one-hit sponge (ApplyDamageToUnit), granted
+    // to a fortified unit that has gone a turn untouched and is EITHER at full health
+    // on supply OR cut off entirely. That second branch is the point of the rework:
+    // an unsupplied unit cannot heal, so it gets a buffer instead of recovery.
+    //
+    // Healing therefore stops at maxHp. Nothing overheals any more.
     engine.state.units.forEach(unit => {
-        if (unit.player !== engine.state.currentPlayer || !unit.isFortified || unit.hp >= (unit.maxHp + 1)) {
+        if (unit.player !== engine.state.currentPlayer || !unit.isFortified) {
             return;
         }
 
+        // One clear turn, for both. Being hit interrupts a shield exactly as it
+        // interrupts healing - the sponge is what you get for being left alone.
         const recentlyAttacked = engine.state.globalTurnNumber < unit.lastAttackedByHostileOnTurn + 2;
         if (recentlyAttacked) {
             return;
         }
 
-        if (isUnitOnMountainPeak(unit)) {
+        // ONE definition, shared with CanUnitGainShield - the healing branch and the
+        // shield branch must agree about what supply means, or a unit falls between them.
+        const canDrawOnSupply = CanUnitDrawOnSupply(unit);
+
+        // AN INTERCEPTED LINE STILL DRAINS. The ration is spent - stolen - and the unit
+        // at the far end heals nothing. Checked BEFORE the healing branch because
+        // CanUnitDrawOnSupply answers false for an intercepted unit, so it would
+        // otherwise fall straight through to the shield branch and cost the enemy
+        // nothing at all. This is what makes interception an attack on the economy
+        // rather than a simple block.
+        //
+        // Only a unit that would otherwise have healed is worth intercepting, so a
+        // unit already at full health does not drain anything.
+        if (!canDrawOnSupply && unit.hp < unit.maxHp && IsSupplyLineIntercepted(unit)) {
+            if (SpendRation(unit.player, RATION_COST_PER_HEAL)) {
+                rationsSpent += RATION_COST_PER_HEAL;
+                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name}'s supply was intercepted - the rations are lost.`, player: activePlayer, duration: 3000 });
+            }
             return;
         }
 
-        if (isUnitSupplied(unit)) {
-            const oldHp = unit.hp;
-            unit.hp++;
-            const activePlayer = engine.state.currentPlayer;
+        // Peaks are excluded from healing as they always were, and now from shield
+        // too - see CanUnitGainShield for why the archer on the mountain is the one
+        // position that gets neither.
+        if (canDrawOnSupply && !isUnitOnMountainPeak(unit) && unit.hp < unit.maxHp) {
+            // Healing COSTS one ration. An empty pool means it simply does not happen -
+            // the unit falls through to the shield branch below, which is the correct
+            // outcome: a player who cannot feed a unit is a player whose unit is cut
+            // off, and a cut-off unit gets the buffer instead.
+            if (SpendRation(unit.player, RATION_COST_PER_HEAL)) {
+                rationsSpent += RATION_COST_PER_HEAL;
+                unit.hp++;
 
-            let type = 'HEAL';
-            if (unit.hp === unit.maxHp + 1) type = 'SHIELD';
+                healingEvents.push({ unitId: unit.id, type: 'HEAL', amount: 1, finalHp: unit.hp });
 
-            healingEvents.push({
-                unitId: unit.id,
-                type: type,
-                amount: 1,
-                finalHp: unit.hp
-            });
-
-            if (oldHp < unit.maxHp && unit.hp === unit.maxHp) {
-                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} healed to full HP.`, player: activePlayer, duration: 2500 });
-            } else if (unit.hp === unit.maxHp + 1) {
-                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} gained a shield!`, player: activePlayer, duration: 2500 });
-                engine.Emit({ type: 'SHIELD_GAINED', unit });
-            } else {
-                engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} healed 1 HP.`, player: activePlayer, duration: 2500 });
+                if (unit.hp === unit.maxHp) {
+                    engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} healed to full HP.`, player: activePlayer, duration: 2500 });
+                } else {
+                    engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} healed 1 HP.`, player: activePlayer, duration: 2500 });
+                }
+                return;
             }
         }
+
+        // Asked AFTER healing, so the turn a unit reaches full health is spent
+        // healing and the next one earns the shield. Granting both in one tick would
+        // let a unit walk out of a fight and be whole plus sponged a turn later.
+        if (CanUnitGainShield(unit)) {
+            unit.hasShield = true;
+
+            healingEvents.push({ unitId: unit.id, type: 'SHIELD', amount: 0, finalHp: unit.hp });
+
+            engine.Emit({ type: 'LOG', text: `P${unit.player} ${unit.type.name} gained a shield!`, player: activePlayer, duration: 2500 });
+            engine.Emit({ type: 'SHIELD_GAINED', unit });
+        }
     });
+
+    // REGENERATION: +1 for a turn in which nothing was spent at all.
+    //
+    // Spending and regenerating are mutually exclusive rather than concurrent, so a
+    // player who heals every turn never recovers and the pool refills by RESTING. The
+    // condition is "spent nothing", not "healed nobody", and the two differ in exactly
+    // one place: an intercepted line drains without healing anyone, and that is a turn
+    // in which the player's economy was attacked - not a rest.
+    //
+    // Blocked while the flag is stolen, which is redundant with SetRations clamping a
+    // zeroed pool but is stated anyway, because "a stolen flag stops regeneration" is a
+    // rule and not an emergent property of the clamp.
+    const playerFlag = engine.state.flags ? engine.state.flags[`p${activePlayer}_flag`] : null;
+    const flagStolen = !!(playerFlag && playerFlag.status === 'carried');
+
+    if (rationsSpent === 0 && !flagStolen) {
+        SetRations(activePlayer, RationsFor(activePlayer) + RATION_REGEN_PER_REST_TURN);
+    }
+
+    // AT ZERO, EVERY LINE IS CUT. The pool is what keeps a network alive, not what
+    // pays for its geometry - so running out is not merely "no more healing", it is
+    // the network collapsing. recalculatePlayerSupplyNetwork refuses to re-grant while
+    // the pool is empty, so this stays true until the player rests back above zero.
+    if (RationsFor(activePlayer) <= 0) {
+        SeverSupplyLinesForPlayer(activePlayer);
+        engine.Emit({ type: 'LOG', text: `P${activePlayer} is out of rations - every supply line is cut.`, player: activePlayer, duration: 4000 });
+    }
 
     if (healingEvents.length > 0 && typeof engine !== 'undefined') {
         engine.actionManager.RecordHistory({
@@ -580,15 +679,33 @@ async function AdvanceTurn() {
         turnNumberAdvanced = true;
     }
 
+    // THE TURN CHANGING IS ITSELF AN EVENT, and it has to be said out loud.
+    //
+    // LocalTransport.Flush returns null when the queue is empty (js/transport.js), so a
+    // turn that emits nothing sends no state-sync at all and a remote client never
+    // learns the turn passed. Until now this never happened, by accident:
+    // recalculatePlayerSupplyNetwork emitted SUPPLY_CHANGED on EVERY call whether the
+    // number moved or not, which acted as an unintended heartbeat. The supply overhaul
+    // made that event honest - it now fires only when the pool actually changes - and
+    // the heartbeat went with it. tools/host-smoke.js caught it immediately.
+    //
+    // Emitted unconditionally, because unlike the pool this genuinely did change every
+    // time this line is reached. Note arcade mode has always skipped the supply
+    // recalculation entirely, so an uneventful arcade turn had this bug all along.
+    engine.Emit({
+        type: 'TURN_ADVANCED',
+        player: engine.state.currentPlayer,
+        previousPlayer: previousPlayer,
+        globalTurnNumber: engine.state.globalTurnNumber,
+    });
+
     engine.state.units.forEach(unit => {
         if (unit.player === engine.state.currentPlayer) {
             unit.hasPerformedMajorAction = false;
             unit.spearWalled = false;
             unit.ambushed = false;
 
-            let baseMoveForTurn = unit.stats.speed;
-            if (unit.isCarryingFlag) { baseMoveForTurn -= 1; }
-            unit.currentMove = Math.max(0, baseMoveForTurn);
+            unit.currentMove = TurnStartMovePool(unit);
 
             if (unit.isFortified) {
                 unit.turnsFortified++;

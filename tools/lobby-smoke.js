@@ -255,7 +255,7 @@ async function Main() {
     if (aliceSync && aliceSync.view) {
         const moved = aliceSync.view.units.find(u => u.id === plan.unitId);
         check('the mover sees their unit at the edge it moved to',
-            !!moved && moved.position === plan.targetEdgeKey);
+            !!moved && moved.edgeKey === plan.targetEdgeKey);
         check('the board arrived over the socket intact',
             aliceSync.view.tiles.length > 0 && aliceSync.view.edges.length > 0);
     }

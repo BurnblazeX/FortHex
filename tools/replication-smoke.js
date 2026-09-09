@@ -133,7 +133,7 @@ async function Main() {
         const movedUnit = views[0].units.find(u => u.id === plan.unitId);
         check('the moving unit appears in its own view', !!movedUnit);
         check('and it is reported at the edge it moved to',
-            !!movedUnit && movedUnit.position === plan.targetEdgeKey);
+            !!movedUnit && movedUnit.edgeKey === plan.targetEdgeKey);
     }
 
     // --- 3. the edge getter did not smuggle units through ------------------
@@ -312,9 +312,9 @@ async function Main() {
         const staged = JSON.parse(vm.runInContext([
             "(() => {",
             "  const a = engine.state.units.find(u => u.player === 1 && u.type.attackType === 'melee');",
-            "  const spot = getRotationallyAdjacentEdges(a.position)[0];",
+            "  const spot = getRotationallyAdjacentEdges(a.edgeKey)[0];",
             "  const b = engine.state.units.find(u => u.player === 2 && u.type.attackType === 'melee');",
-            "  b.position = spot; b.positionType = 'edge';",
+            "  b.position = FineKeyOfEdge(spot);",
             "  return JSON.stringify({ attacker: a.id });",
             "})()",
         ].join('\n'), server));

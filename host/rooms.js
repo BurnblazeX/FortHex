@@ -128,6 +128,15 @@ class RoomRegistry {
             settings: {
                 fogOfWarEnabled: !!settings.fogOfWarEnabled,
 
+                // Which movement pools the match runs on. Validated against the known
+                // preset names here rather than passed through, because it reaches the
+                // engine and decides how far every unit may move - an unrecognised
+                // string would fall back per-caller and could resolve differently on
+                // the two sides. Anything else becomes null, which means "let the board
+                // recommend".
+                unitSpeedPreset: (settings.unitSpeedPreset === 'normal'
+                    || settings.unitSpeedPreset === 'faster') ? settings.unitSpeedPreset : null,
+
                 // A preset map is a NAME. The worker has config-data.js and looks it
                 // up itself, so nothing about the board travels.
                 mapName: typeof settings.mapName === 'string' ? settings.mapName.slice(0, 60) : null,
@@ -488,6 +497,7 @@ class RoomRegistry {
                 state: room.state,
                 locked: room.visibility === 'private',
                 fogOfWar: !!room.settings.fogOfWarEnabled,
+                unitSpeedPreset: room.settings.unitSpeedPreset || null,
                 hosting: room.hosting || 'server',
                 mapName: DescribeRoomBoard(room),
                 resuming: !!room.settings.resumeSave,
@@ -531,6 +541,7 @@ class RoomRegistry {
             isHost: this.IsHost(room, forClientId, forProfileId),
             state: room.state,
             fogOfWar: !!room.settings.fogOfWarEnabled,
+            unitSpeedPreset: room.settings.unitSpeedPreset || null,
             hosting: room.hosting || 'server',
             // The name only. A client that needs the board either has the preset
             // already or is the host who loaded the file.

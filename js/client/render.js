@@ -8,10 +8,16 @@
 // suppressing the zone it walked into only when the player happened to be
 // dragging. The rule is fixed and the hook is gone; the hiding lives here now,
 // where it always belonged.
+// A unit in flight is drawn by the animation, not by the board underneath it.
+function IsUnitAnimating(unit) {
+    return gameState.activeAnimations.some(a => (a.unit || a.attacker) === unit);
+}
+
 function DrawableUnitsOnEdge(edge) {
     if (!edge) return [];
-    if (!gameState.draggingUnit) return edge.units;
-    return edge.units.filter(u => u.id !== gameState.draggingUnit.id);
+    const onBoard = edge.units.filter(u => !IsUnitAnimating(u));
+    if (!gameState.draggingUnit) return onBoard;
+    return onBoard.filter(u => u.id !== gameState.draggingUnit.id);
 }
 
 function getPerspectivePlayer() {
@@ -428,12 +434,15 @@ function getPerspectivePlayer() {
             }
         }
 
-        function drawUnitHealthBar(ctx, unitX, unitY, ringOuterRadius, ringThickness, currentHp, maxHp) {
+        // hasShield is passed rather than inferred, because it USED to be inferrable:
+        // shield was the single point of overheal, so `currentHp > maxHp` said it. It is
+        // a one-hit sponge on the unit now, and nothing about the HP numbers reveals it.
+        function drawUnitHealthBar(ctx, unitX, unitY, ringOuterRadius, ringThickness, currentHp, maxHp, hasShield) {
             if (gameState.isPassDeviceTransition) return;
             if (maxHp <= 0) return;
             
             const displayHpPercentage = Math.max(0, Math.min(1, currentHp / maxHp)); 
-            const isShielded = currentHp > maxHp;
+            const isShielded = !!hasShield;
 
             const startAngle = -Math.PI / 2; 
             const fullAngle = 2 * Math.PI;
@@ -556,9 +565,9 @@ function drawFortificationOutlines() {
                 if (!allUnitsSamePlayer) return;
 
                 const hasArcher = edgeUnits.some(u => u.type.name === 'Archer');
-                const hasMelee = edgeUnits.some(u => u.type.name === 'Melee');
+                const hasSwordsman = edgeUnits.some(u => u.type.name === 'Swordsman');
                 
-                if (!hasArcher || !hasMelee) return;
+                if (!hasArcher || !hasSwordsman) return;
 
                 const opponentPlayer = playerOnEdge === 1 ? 2 : 1;
                 const tile1 = engine.state.tiles.get(getTileKey(edge.q1, edge.r1));
@@ -880,7 +889,7 @@ const TINTED_IMAGE_CACHE = {};
 function getTintedImage(img, color) {
     if (!img || !img.complete || img.naturalWidth === 0) return img;
     
-    // Create a unique key (e.g., "assets/units/Melee_unit.png_#FFC020")
+    // Create a unique key (e.g., "assets/units/Swordsman_unit.png_#FFC020")
     const cacheKey = img.src + '_' + color;
     if (TINTED_IMAGE_CACHE[cacheKey]) return TINTED_IMAGE_CACHE[cacheKey];
 
@@ -904,7 +913,7 @@ function getTintedImage(img, color) {
 }
 
 const UNIT_IMAGE_CONFIG = {
-    MELEE:    { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
+    SWORDSMAN:    { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
     ARCHER:   { widthScale: 0.75, heightScale: 0.75, offsetX: 0, offsetY: 0 },
     PIKEMAN:  { widthScale: 0.75, heightScale: 0.7, offsetX: 0, offsetY: 0 },
     HORSEMAN: { widthScale: 0.66, heightScale: 0.66, offsetX: 0, offsetY: 0 }, 
@@ -969,7 +978,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
 
             if (!isPalette && unit.maxHp > 0) { // Only draw health bar if not in palette
                 const healthBarVisualThickness = radius * 0.3;
-                drawUnitHealthBar(ctx, x, y, radius, healthBarVisualThickness, unit.hp, unit.maxHp);
+                drawUnitHealthBar(ctx, x, y, radius, healthBarVisualThickness, unit.hp, unit.maxHp, unit.hasShield);
             }
             
             ctx.beginPath();
@@ -1034,7 +1043,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     edgeUnitsOnly.forEach((unit, index) => {
                         if (animatedUnitIds.has(unit.id)) return;
                         if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
-                            if (unit.player !== getPerspectivePlayer() && !engine.visionCache.edges.has(unit.position)) return;
+                            if (unit.player !== getPerspectivePlayer() && !engine.visionCache.edges.has(unit.edgeKey)) return;
                         }
                         let unitX = mid.x, unitY = mid.y;
                         if (edgeUnitsOnly.length > 1) {
@@ -1051,9 +1060,9 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 if (animatedUnitIds.has(unit.id)) return;
                 if (unit.isFortified && unit.positionType === 'center' && (!isEffectivelyDragging || unit.id !== gameState.draggingUnit.id)) {
                     if (engine.settings.fogOfWarEnabled && engine.state.gameMode !== 'arcade' && !engine.state.mapMakerMode && engine.visionCache) {
-                        if (unit.player !== getPerspectivePlayer() && !engine.visionCache.tiles.has(unit.position)) return;
+                        if (unit.player !== getPerspectivePlayer() && !engine.visionCache.tiles.has(unit.tileKey)) return;
                     }
-                    const tile = engine.state.tiles.get(unit.position);
+                    const tile = engine.state.tiles.get(unit.tileKey);
                     if (tile) {
                         const {x, y} = axialToPixel(tile.q, tile.r);
                         
@@ -1128,7 +1137,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             const highlightRadius = (HEX_SIZE * 0.2) * gameState.renderScale; // SCALED SIZE
 
             gameState.currentReachableMoves.forEach((data, edgeKey) => {
-                if (!gameState.isDragging && edgeKey === unitForHighlights.position) return;
+                if (!gameState.isDragging && edgeKey === unitForHighlights.edgeKey) return;
                 const edge = engine.state.edges.get(edgeKey);
                 if (edge) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
@@ -1352,6 +1361,39 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 });
             }
 
+            // 4. THE FINE COORDINATE ITSELF, last so it sits over every fill.
+            //
+            // This is what turns the overlay from a picture of the model into a
+            // map-editing tool: the label IS the fineGrid key, so a position can
+            // be read off the board and typed straight into map data with no
+            // arithmetic in between and no counting hexes from the origin.
+            //
+            // Skipped when the board is drawn small enough that the labels would
+            // overlap into an unreadable smear - a wrong coordinate read
+            // confidently off a crowded overlay is worse than no coordinate.
+            if (fineHexRadius >= 14) {
+                const labelSize = Math.max(8, Math.round(fineHexRadius * 0.36));
+                ctx.font = 'bold ' + labelSize + 'px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+                ctx.fillStyle = '#FFFFFF';
+
+                // Sat low in the cell rather than dead centre. Units draw AFTER
+                // this overlay and are centred on their own cell, so a centred
+                // label would be hidden underneath exactly the units whose
+                // position you most want to read.
+                const labelDrop = fineHexRadius * 0.5;
+
+                engine.state.fineGrid.forEach((cell, key) => {
+                    const parts = key.split(',');
+                    const { x, y } = axialToPixel(Number(parts[0]) / 2, Number(parts[1]) / 2);
+                    ctx.strokeText(key, x, y + labelDrop);
+                    ctx.fillText(key, x, y + labelDrop);
+                });
+            }
+
             ctx.restore();
         }
 
@@ -1360,7 +1402,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             // Get the unit's screen position and size for the effect
             let targetX, targetY, targetRadius;
             if (targetUnit.isFortified) {
-                const tile = engine.state.tiles.get(targetUnit.position);
+                const tile = engine.state.tiles.get(targetUnit.tileKey);
                 if (tile) {
                     const center = axialToPixel(tile.q, tile.r);
                     targetX = center.x;
@@ -1368,7 +1410,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     targetRadius = FORTIFIED_UNIT_DRAW_SIZE;
                 }
             } else {
-                const edge = engine.state.edges.get(targetUnit.position);
+                const edge = engine.state.edges.get(targetUnit.edgeKey);
                 if (edge) {
                     const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                     targetX = mid.x;
@@ -1477,6 +1519,18 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             ctx.strokeStyle = ringColor;
             ctx.lineWidth = 3 + (4 * (1 - progress));
             ctx.stroke();
+        } else if (effect.type === 'shield_break') {
+            const startRadius = effect.unitRadius * 2.0;
+            const endRadius = effect.unitRadius;
+
+            const currentRadius = startRadius + (endRadius - startRadius) * progress;
+            const opacity = 1.0 - progress;
+
+            ctx.beginPath();
+            ctx.arc(effect.x, effect.y, currentRadius, 0, 2 * Math.PI);
+            ctx.strokeStyle = `rgba(48, 196, 196, ${opacity})`;
+            ctx.lineWidth = 2 + (4 * progress);
+            ctx.stroke();
         } else if (effect.type === 'shield_ring') {
             const startRadius = effect.unitRadius;
             const endRadius = startRadius * 2.0;
@@ -1503,7 +1557,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             if (isVisible) {
                 let unitX, unitY, unitRadius;
                 if (unit.isFortified) {
-                    const tile = engine.state.tiles.get(unit.position);
+                    const tile = engine.state.tiles.get(unit.tileKey);
                     if (tile) {
                         const center = axialToPixel(tile.q, tile.r);
                         unitX = center.x;
@@ -1511,7 +1565,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                         unitRadius = FORTIFIED_UNIT_DRAW_SIZE;
                     }
                 } else {
-                    const edge = engine.state.edges.get(unit.position);
+                    const edge = engine.state.edges.get(unit.edgeKey);
                     if (edge) {
                         const mid = getEdgeMidpoint(edge.q1, edge.r1, edge.q2, edge.r2);
                         unitX = mid.x;
@@ -1601,8 +1655,16 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 onComplete: null,
             };
 
-        // The unit is now "in animation" and not on any specific edge or tile.
-            unit.positionType = 'animating';
+            // The unit is now "in animation" and not on any specific edge or
+            // tile. This used to be stamped on as positionType = 'animating', a
+            // third value that nothing ever read - its whole effect was to fail
+            // the `positionType === 'edge'` test in the edge.units getter and so
+            // hide the unit from the board while it flew. Board space has no such
+            // spare value (a fine key is a position, not a state), and the getter
+            // no longer asks about positionType at all, so the hide is derived
+            // from the animation list instead - see IsUnitAnimating. Derived also
+            // means it cannot get stuck on: an interrupted animation leaves no
+            // flag behind to clear.
     
             gameState.activeAnimations.push(animation);
             return animation;
@@ -1833,7 +1895,7 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                 if (engine.state.flags && engine.state.gridRadius === 4) {
                     const myFlag = engine.state.flags[`p${u.player}_flag`];
                     if (myFlag && myFlag.status === 'at_base' && Array.isArray(myFlag.homePosition)) {
-                        const tile = engine.state.tiles.get(u.position);
+                        const tile = engine.state.tiles.get(u.tileKey);
                         if (tile) {
                             const {x, y} = axialToPixel(tile.q, tile.r);
                             const flagPos = calculateBaseCentroid(myFlag.homePosition);
@@ -1867,7 +1929,39 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
             gameLoop();
         }
 
+        // A selection is a reference to a unit, and a unit can stop existing without
+        // this client being the one that killed it - Zone of Control damage and mountain
+        // attrition both resolve during turn lifecycle, a respawn timer can expire, and
+        // in an ONLINE match every death happens on the host and arrives as a view.
+        //
+        // js/client/actions.js clears the selection when the LOCAL destroy path runs,
+        // which covers exactly the deaths this client caused and none of the others. So
+        // a dead unit stayed selected: its stat card kept reporting hp, and the action
+        // buttons stayed live against a unit no longer on the board.
+        //
+        // Asserted per frame rather than hooked onto each death, for the same reason the
+        // button gates above are: there are half a dozen ways a unit leaves the board and
+        // only one way it gets drawn.
+        function PruneStaleSelection() {
+            const selected = gameState.selectedUnit;
+            if (!selected) return;
+
+            // Identity by id, not by reference: ApplyRemoteView rebuilds the unit list
+            // every sync, so the selected OBJECT is stale even when the unit is alive.
+            const live = engine.state.units.find(u => u.id === selected.id);
+            if (live && live.hp > 0) {
+                // Re-point at the current object so the panel reads live numbers.
+                if (live !== selected) gameState.selectedUnit = live;
+                return;
+            }
+
+            clearSelectionAndDebugState();
+            gameState.mustUnfortify = false;
+            gameState.needsRedraw = true;
+        }
+
         function gameLoop() {
+            PruneStaleSelection();
 
             // 1. DELTA TIME CALCULATION 
             const currentTime = Date.now();
@@ -1890,6 +1984,13 @@ function drawUnitSymbol(ctx, unit, x, y, radius, symbolColor) {
                     const button = document.getElementById(id);
                     if (button && !button.disabled) button.disabled = true;
                 });
+            } else if (IsRemoteMatch()) {
+                // The HOST keeps New Map and Save - both act on a match that is
+                // genuinely theirs. Load does not: it replaces the board, and the board
+                // lives in the worker, so a local load desyncs the two immediately. See
+                // RefuseIfHostedMatch in js/client/save.js for the whole reasoning.
+                const button = document.getElementById('loadGameButton');
+                if (button && !button.disabled) button.disabled = true;
             }
 
             // 1b. HOSTED MATCH: the opponent's turn is not yours to end.
